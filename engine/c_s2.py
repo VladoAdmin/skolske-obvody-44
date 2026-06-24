@@ -115,11 +115,17 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
         )
     else:
         total_overlap = sum(d["overlap_m2"] for d in overlap_details)
+        # Methodology demote (PRD §16, METHODOLOGY Š2): when geometry confidence is not 'high',
+        # overlaps are a method artefact (concave-hull street sharing), not a VZN policy
+        # violation. Report as INCOMPLETE with evidence rather than FAIL.
+        geom_conf = (district.get('geometry_confidence') or '').lower()
+        verdict_value = V.INCOMPLETE if geom_conf in ('low', 'medium') else V.FAIL
+        verdict_conf = 0.3 if geom_conf in ('low', 'medium') else 0.7
         return Verdict(
             district_id=district_id,
             condition_code="S2",
-            value=V.FAIL,
-            confidence=0.7,
+            value=verdict_value,
+            confidence=verdict_conf,
             data_completeness=0.7,
             provenance={
                 "source": "district geometries (q6)",
@@ -131,7 +137,7 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             },
             methodology=_METHODOLOGY,
             evidence_text=(
-                f"FAIL: {n_overlaps} prekryv(ov) s obvodmi rovnakého typu {school_type}/{teaching_language}. "
+                f'{("INCOMPLETE" if geom_conf in ("low","medium") else "FAIL")}: {n_overlaps} prekryv(ov) s obvodmi rovnakého typu {school_type}/{teaching_language}. '
                 f"Celková plocha prekryvu: {round(total_overlap, 1)} m². "
                 "Hraničné ulice medzi obvodmi môžu spôsobovať analytické dvojité pokrytie."
             ),

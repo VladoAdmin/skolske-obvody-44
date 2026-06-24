@@ -43,7 +43,7 @@ def _fetch_districts(municipality_id: str) -> list[dict]:
     rows = query_sql(f"""
         SELECT
             d.id, d.name, d.school_id, d.school_type, d.teaching_language,
-            d.municipality_id,
+            d.municipality_id, d.geometry_confidence, d.geometry_quality,
             s.name AS school_name,
             s.type AS school_type_check,
             s.student_count,

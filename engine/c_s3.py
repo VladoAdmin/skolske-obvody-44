@@ -93,20 +93,46 @@ def check_s3(district: dict) -> Verdict:
         )
         confidence = 0.75 if fk_inside else 0.55  # lower if FK doesn't match spatial
     elif spatial_count == 0:
-        value = V.FAIL
-        evidence = (
-            f"FAIL: 0 verejných škôl typu {school_type} priestorovo v obvode. "
-            f"FK-priradená škola ({school_id}) je v geometrii: {fk_inside}. "
-            "Geometria obvodu môže nepresne pokrývať polohu školy (q6)."
-        )
-        confidence = 0.6
-    else:  # > 1
-        value = V.FAIL
-        evidence = (
-            f"FAIL: {spatial_count} verejných škôl typu {school_type} v obvode "
-            "(očakáva sa práve 1)."
-        )
-        confidence = 0.7
+        # METHODOLOGY demote: if FK school is assigned and geometry is not 'high' confidence,
+        # spatial mismatch is a geometry-approximation artefact (concave-hull misses the school point
+        # just outside the polygon), not a VZN policy issue. Report as INCOMPLETE.
+        geom_conf = (district.get('geometry_confidence') or '').lower()
+        if school_id and geom_conf in ('low', 'medium'):
+            value = V.INCOMPLETE
+            evidence = (
+                f"INCOMPLETE: 0 verejných škôl v priestorovom teste, ale FK-priradená škola existuje "
+                f"({school_id}). Geometria obvodu je `{geom_conf}` (q6/q7) — spatial miss je metóda, "
+                "nie VZN porušenie."
+            )
+            confidence = 0.3
+        else:
+            value = V.FAIL
+            evidence = (
+                f"FAIL: 0 verejných škôl typu {school_type} priestorovo v obvode. "
+                f"FK-priradená škola ({school_id}) je v geometrii: {fk_inside}. "
+                "Geometria obvodu môže nepresne pokrývať polohu školy (q6)."
+            )
+            confidence = 0.6
+    else:  # spatial_count > 1
+        # METHODOLOGY demote: if FK school is the assigned one and geometry confidence is not 'high',
+        # multiple-school detection is the consequence of coarse concave-hull polygons enclosing
+        # nearby schools, not a VZN policy of >1 school per district. Demote to INCOMPLETE.
+        geom_conf = (district.get('geometry_confidence') or '').lower()
+        if school_id and fk_inside and geom_conf in ('low', 'medium'):
+            value = V.INCOMPLETE
+            evidence = (
+                f"INCOMPLETE: priestorový test našiel {spatial_count} škôl v obvode, ale "
+                f"FK-priradená škola ({school_id}) je v polygóne. Geometria je `{geom_conf}` "
+                f"(q6/q7) — viac škôl je dôsledok hrubého polygónu, nie VZN porušenia."
+            )
+            confidence = 0.4
+        else:
+            value = V.FAIL
+            evidence = (
+                f"FAIL: {spatial_count} verejných škôl typu {school_type} v obvode "
+                "(očakáva sa práve 1)."
+            )
+            confidence = 0.7
 
     return Verdict(
         district_id=district_id,

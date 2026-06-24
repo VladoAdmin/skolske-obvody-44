@@ -73,11 +73,10 @@ def _call_google_routes(
         "travelMode": "TRANSIT",
         "departureTime": departure_time,
         "transitPreferences": {
-            "allowedTravelModes": ["BUS", "RAIL", "SUBWAY", "FERRY", "TRAM"],
+            "allowedTravelModes": ["BUS", "RAIL", "SUBWAY"],
             "routingPreference": "LESS_WALKING",
         },
         "computeAlternativeRoutes": False,
-        "routeModifiers": {"transitMaxTransfers": 2},
     }
 
     headers = {
