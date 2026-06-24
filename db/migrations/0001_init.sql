@@ -8,8 +8,14 @@
 DROP SCHEMA IF EXISTS skolske_obvody CASCADE;
 CREATE SCHEMA skolske_obvody;
 
+-- Ensure required extensions are installed (this older Supabase project did not
+-- have PostGIS or pg_trgm; install into the default location = public schema).
+-- gen_random_uuid() is built into pg_catalog since Postgres 13, no extension needed.
+CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- Per-session search_path (function bodies must NOT rely on this; they set their own).
-SET search_path = skolske_obvody, extensions, public;
+SET search_path = skolske_obvody, public;
 
 -- ========================================
 -- 00001_extensions.sql
@@ -19,12 +25,7 @@ SET search_path = skolske_obvody, extensions, public;
 --   psql $DATABASE_URL -f db/schema/00001_extensions.sql
 
 -- Extensions are pre-installed by Supabase in the `extensions` schema:
---   postgis     → spatial geometry + geography types, ST_* functions
---   pgcrypto    → gen_random_uuid() for primary keys
---   pg_trgm     → trigram indexes for fuzzy text search on VZN names
--- No CREATE EXTENSION calls needed here:
--- CREATE EXTENSION IF NOT EXISTS postgis;
--- CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- (postgis, pg_trgm installed at top of this file; gen_random_uuid is in pg_catalog)
 
 -- ========================================
 -- 00002_core_tables.sql
@@ -64,19 +65,19 @@ CREATE TABLE IF NOT EXISTS user_roles (
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS regions (
-  id         UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code       TEXT UNIQUE NOT NULL,   -- e.g. 'PSK'
   name       TEXT NOT NULL,
-  geom       extensions.geometry(MultiPolygon, 4326),
+  geom       public.geometry(MultiPolygon, 4326),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS municipalities (
-  id           UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   region_id    UUID NOT NULL REFERENCES regions(id),
   code         TEXT UNIQUE NOT NULL,  -- REGOB / UPVS code
   name         TEXT NOT NULL,
-  geom         extensions.geometry(MultiPolygon, 4326),
+  geom         public.geometry(MultiPolygon, 4326),
   -- Language minority flag (needed for P-d)
   minority_language TEXT,             -- 'HU' | 'RU' | NULL
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -91,7 +92,7 @@ CREATE INDEX IF NOT EXISTS municipalities_geom_idx ON municipalities USING GIST(
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS founders (
-  id              UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   name            TEXT NOT NULL,
   ico             TEXT,               -- IČO (business ID)
@@ -106,7 +107,7 @@ CREATE INDEX IF NOT EXISTS founders_municipality_id_idx ON founders(municipality
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS schools (
-  id              UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   founder_id      UUID REFERENCES founders(id),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   -- From WFS / Register škôl
@@ -117,7 +118,7 @@ CREATE TABLE IF NOT EXISTS schools (
   teaching_language TEXT,             -- 'SK' | 'HU' | 'RU'
   capacity        INTEGER,            -- NULL if unavailable (EDUZBER GAP)
   student_count   INTEGER,            -- last known headcount
-  geom            extensions.geometry(Point, 4326),
+  geom            public.geometry(Point, 4326),
   source_name     TEXT,               -- dataset provenance
   source_date     DATE,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -133,7 +134,7 @@ CREATE INDEX IF NOT EXISTS schools_geom_idx ON schools USING GIST(geom);
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS districts (
-  id              UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   school_id       UUID REFERENCES schools(id),  -- NULL if unresolved
   -- VZN metadata
@@ -143,7 +144,7 @@ CREATE TABLE IF NOT EXISTS districts (
   school_type     TEXT NOT NULL,      -- 'ZS' | 'MS' (same as Š2 grouping)
   teaching_language TEXT,
   -- Geometry (WGS-84; re-project from VZN text via geocoding)
-  geom            extensions.geometry(MultiPolygon, 4326) NOT NULL,
+  geom            public.geometry(MultiPolygon, 4326) NOT NULL,
   -- Provenance
   source_name     TEXT NOT NULL,
   source_date     DATE NOT NULL,
@@ -162,19 +163,19 @@ CREATE INDEX IF NOT EXISTS districts_geom_idx ON districts USING GIST(geom);
 -- Topology constraint: geometry must be valid (no self-intersections)
 ALTER TABLE districts
   ADD CONSTRAINT districts_geom_valid
-  CHECK (extensions.ST_IsValid(geom));
+  CHECK (public.ST_IsValid(geom));
 
 -- ============================================================
 -- ADDRESS POINTS (adresné body — MV SR Register adries)
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS address_points (
-  id              UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   street          TEXT,
   house_number    TEXT,
   postal_code     TEXT,
-  geom            extensions.geometry(Point, 4326) NOT NULL,
+  geom            public.geometry(Point, 4326) NOT NULL,
   -- Populated by spatial join with districts (computed)
   district_id     UUID REFERENCES districts(id),
   -- Data quality (adresné body are q9 when available)
@@ -192,7 +193,7 @@ CREATE INDEX IF NOT EXISTS address_points_geom_idx ON address_points USING GIST(
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS datasets (
-  id           UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key          TEXT UNIQUE NOT NULL,   -- e.g. 'wfs_schools_psk', 'vzn_presov_1_2023'
   name         TEXT NOT NULL,
   source_url   TEXT,
@@ -216,7 +217,7 @@ CREATE TABLE IF NOT EXISTS datasets (
 
 -- Provenance log (append-only)
 CREATE TABLE IF NOT EXISTS dataset_events (
-  id         UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dataset_id UUID NOT NULL REFERENCES datasets(id),
   event_type TEXT NOT NULL,  -- 'fetch' | 'validate' | 'activate' | 'reject'
   actor_id   UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -229,7 +230,7 @@ CREATE TABLE IF NOT EXISTS dataset_events (
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS verdicts (
-  id                  UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   district_id         UUID NOT NULL REFERENCES districts(id),
   condition_code      TEXT NOT NULL,   -- 'S1' | 'S2' | 'S3' | 'Pa' | 'Pb' | 'Pc' | 'Pd' | 'Pe' | 'Pf'
   -- Five-tuple
@@ -261,7 +262,7 @@ CREATE INDEX IF NOT EXISTS verdicts_computed_at_idx ON verdicts(computed_at);
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS findings (
-  id             UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   verdict_id     UUID NOT NULL REFERENCES verdicts(id),
   district_id    UUID NOT NULL REFERENCES districts(id),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
@@ -285,7 +286,7 @@ CREATE INDEX IF NOT EXISTS findings_status_idx ON findings(status);
 -- Depends on: 00002_core_tables.sql
 
 CREATE TABLE IF NOT EXISTS vzns (
-  id              UUID PRIMARY KEY DEFAULT extensions.gen_random_uuid(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   reference       TEXT NOT NULL,      -- e.g. 'VZN 1/2023'
   title           TEXT,
@@ -352,7 +353,7 @@ ALTER TABLE user_roles      ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION current_user_role()
 RETURNS TEXT
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = skolske_obvody, auth, extensions, pg_temp
+SET search_path = skolske_obvody, auth, public, pg_temp
 AS $$
   -- Returns the highest-privilege role for auth.uid()
   -- Priority: super_admin > data_admin > analyst > municipality_editor
@@ -372,7 +373,7 @@ $$;
 CREATE OR REPLACE FUNCTION current_municipality_id()
 RETURNS UUID
 LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = skolske_obvody, auth, extensions, pg_temp
+SET search_path = skolske_obvody, auth, public, pg_temp
 AS $$
   SELECT municipality_id
   FROM skolske_obvody.user_roles
