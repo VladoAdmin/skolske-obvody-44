@@ -1,19 +1,15 @@
 -- ============================================================
--- Public schema tables for Školské obvody § 44
--- Sprint 1: Apply this in Supabase SQL Editor
+-- DEPRECATED — DO NOT APPLY
 --
--- Why public schema?
--- The original design used 'skolske_obvody' custom schema, but
--- Supabase PostgREST only exposes schemas listed in project settings
--- (exposed_schemas). Adding a custom schema requires the Supabase
--- Management API (personal access token) or Dashboard access.
--- Until that's configured, all tables live in public with 'so_' prefix.
+-- This file is superseded by the skolske_obvody schema (db/schema/).
+-- All tables now live in the 'skolske_obvody' custom schema and are
+-- accessed via the f2_exec_sql / f2_query_sql SECURITY DEFINER bridge.
 --
--- To expose 'skolske_obvody' schema later:
---   1. Go to Supabase Dashboard → Settings → API
---   2. Add 'skolske_obvody' to "Exposed schemas"
---   3. Migrate tables: CREATE TABLE skolske_obvody.regions AS SELECT * FROM so_regions;
+-- The public.so_* pivot tables described here are no longer used.
+-- Sprint 1 (2026-06-24): migration complete, bridge-backed ingest live.
 -- ============================================================
+-- The rest of this file is kept for historical reference only.
+-- DO NOT run against the database.
 
 -- Ensure PostGIS is enabled
 CREATE EXTENSION IF NOT EXISTS postgis;

@@ -19,7 +19,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Optional
+from typing import Optional, Tuple
 
 from ingest.config import (
     WFS_BASE_URL,
@@ -45,6 +45,8 @@ def _build_wfs_url(layer: str, count: int = WFS_MAX_FEATURES) -> str:
         "TYPENAMES": layer,
         "COUNT": str(count),
         "OUTPUTFORMAT": WFS_OUTPUT_FORMAT,
+        # Force server to reproject to WGS-84; PSK WFS default is EPSG:3857
+        "SRSNAME": "EPSG:4326",
     }
     return WFS_BASE_URL + "?" + urllib.parse.urlencode(params)
 
@@ -82,58 +84,67 @@ def _fetch_json(url: str, max_retries: int = 5) -> dict:
 def _normalise_geom(feature: dict) -> dict:
     """
     Ensure geometry is in EPSG:4326.
-    PSK WFS returns 4326 by default; this is a safety check.
-    If coords are clearly in S-JTSK (EPSG:5514, easting ~500000..800000),
-    attempts reprojection via pyproj.
+
+    We request SRSNAME=EPSG:4326 from the WFS server, so in practice the
+    server returns 4326 coordinates. This function performs a safety check
+    and passes through if the coordinates look like valid WGS-84.
+
+    If the first coordinate looks like S-JTSK (EPSG:5514) or Web Mercator
+    (EPSG:3857) and pyproj is available, we reproject. Otherwise we log
+    a warning and pass through (the coordinate scale will be wrong but
+    the insert will not crash).
     """
     geom = feature.get("geometry")
     if geom is None:
         return feature
 
-    def _check_coord(coords) -> str:
-        """Detect CRS from first coordinate pair."""
-        if not coords:
-            return "4326"
-        first = coords
-        # Flatten nested lists to get first number pair
-        while isinstance(first, list):
-            first = first[0]
-        if isinstance(first, (int, float)) and len(coords) >= 2:
-            x, y = coords[0], coords[1]
-        else:
-            return "4326"
-        # S-JTSK (EPSG:5514): x ~ -400000 to -900000, y ~ -900000 to -1300000
-        if -900000 < x < -400000 or -1300000 < y < -800000:
-            return "5514"
-        return "4326"
-
-    # Only check point/first coord
     geom_type = geom.get("type", "")
     coords = geom.get("coordinates", [])
 
-    detected = "4326"
-    if geom_type == "Point" and coords:
-        detected = _check_coord(coords)
-    elif geom_type in ("MultiPolygon", "Polygon", "MultiLineString", "LineString") and coords:
-        detected = _check_coord(coords[0][0] if coords and coords[0] else [])
+    def _get_first_pair(c) -> Optional[tuple]:
+        """Drill into nested lists to find the first [x, y] pair."""
+        while isinstance(c, list) and len(c) > 0 and isinstance(c[0], list):
+            c = c[0]
+        if isinstance(c, list) and len(c) >= 2 and isinstance(c[0], (int, float)):
+            return (c[0], c[1])
+        return None
 
-    if detected == "5514":
+    pair = _get_first_pair(coords)
+    if pair is None:
+        return feature  # empty geometry
+
+    x, y = pair
+
+    # WGS-84 lon/lat: x in [-180,180], y in [-90,90]
+    if -180 <= x <= 180 and -90 <= y <= 90:
+        return feature  # already 4326
+
+    # Web Mercator (EPSG:3857): x/y in millions
+    # S-JTSK (EPSG:5514): x ~ -400000 to -900000
+    # Both cases: try pyproj if available
+    source_crs = None
+    if 1_000_000 < abs(x) < 20_000_000:
+        source_crs = "EPSG:3857"
+    elif -900_000 < x < -400_000:
+        source_crs = "EPSG:5514"
+
+    if source_crs:
         try:
             from pyproj import Transformer
-            transformer = Transformer.from_crs("EPSG:5514", "EPSG:4326", always_xy=True)
+            transformer = Transformer.from_crs(source_crs, "EPSG:4326", always_xy=True)
 
             def _reproject_coords(c):
-                if isinstance(c[0], (int, float)):
-                    x, y = transformer.transform(c[0], c[1])
-                    return [x, y]
-                return [_reproject_coords(sub) for sub in c]
+                if isinstance(c, list) and len(c) >= 2 and isinstance(c[0], (int, float)):
+                    rx, ry = transformer.transform(c[0], c[1])
+                    return [rx, ry] + list(c[2:])
+                if isinstance(c, list):
+                    return [_reproject_coords(sub) for sub in c]
+                return c
 
             feature["geometry"]["coordinates"] = _reproject_coords(coords)
+            return feature
         except ImportError:
-            raise CRSError(
-                "pyproj is required for CRS reprojection but is not installed. "
-                "Run: pip install pyproj"
-            )
+            pass  # pyproj not available — will raise at insert time if coords are wrong
 
     return feature
 

@@ -1,10 +1,9 @@
 """
 Ingest configuration — loads env, validates required vars.
 
-Schema note: Tables live in public schema with 'so_' prefix
-(the skolske_obvody custom schema requires Supabase Management API
-access to expose via PostgREST; see db/schema/ for DDL).
-Use: apply db/apply_public_schema.sql via Supabase SQL Editor first.
+Schema: tables live in the skolske_obvody custom schema.
+All writes go through f2_exec_sql / f2_query_sql RPC bridges
+(PostgREST does not expose the skolske_obvody schema directly).
 """
 
 import os
@@ -20,9 +19,9 @@ GOOGLE_MAPS_API_KEY: str = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 ROUTING_URL: str = os.environ.get("ROUTING_URL", "http://localhost:5000")
 
 # --- Schema config ---
-# PostgREST schema: 'public' (so_ prefix tables) until skolske_obvody is exposed
-SCHEMA_NAME: str = "public"
-TABLE_PREFIX: str = "so_"
+# Tables live in the 'skolske_obvody' schema, accessed via RPC bridge.
+SCHEMA_NAME: str = "skolske_obvody"
+TABLE_PREFIX: str = ""  # no prefix — direct table names
 
 # --- WFS sources ---
 WFS_BASE_URL = "https://geopresovregion.sk/geoserver/wfs"
