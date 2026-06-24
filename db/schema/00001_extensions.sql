@@ -5,8 +5,8 @@
 -- PostGIS: spatial geometry + geography types, ST_* functions
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- uuid-ossp: uuid_generate_v4() for primary keys
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- uuid-ossp: gen_random_uuid() for primary keys
+-- uuid-ossp not needed: using built-in gen_random_uuid() (pgcrypto, ships with Supabase)
 
 -- pg_trgm: trigram indexes for fuzzy text search on VZN names
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

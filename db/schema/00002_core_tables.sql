@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS regions (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   code       TEXT UNIQUE NOT NULL,   -- e.g. 'PSK'
   name       TEXT NOT NULL,
   geom       GEOMETRY(MultiPolygon, 4326),
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS regions (
 );
 
 CREATE TABLE IF NOT EXISTS municipalities (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   region_id    UUID NOT NULL REFERENCES regions(id),
   code         TEXT UNIQUE NOT NULL,  -- REGOB / UPVS code
   name         TEXT NOT NULL,
@@ -60,7 +60,7 @@ CREATE INDEX IF NOT EXISTS municipalities_geom_idx ON municipalities USING GIST(
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS founders (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   name            TEXT NOT NULL,
   ico             TEXT,               -- IČO (business ID)
@@ -75,7 +75,7 @@ CREATE INDEX IF NOT EXISTS founders_municipality_id_idx ON founders(municipality
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS schools (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   founder_id      UUID REFERENCES founders(id),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   -- From WFS / Register škôl
@@ -102,7 +102,7 @@ CREATE INDEX IF NOT EXISTS schools_geom_idx ON schools USING GIST(geom);
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS districts (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   school_id       UUID REFERENCES schools(id),  -- NULL if unresolved
   -- VZN metadata
@@ -138,7 +138,7 @@ ALTER TABLE districts
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS address_points (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
   street          TEXT,
   house_number    TEXT,
@@ -161,7 +161,7 @@ CREATE INDEX IF NOT EXISTS address_points_geom_idx ON address_points USING GIST(
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS datasets (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key          TEXT UNIQUE NOT NULL,   -- e.g. 'wfs_schools_psk', 'vzn_presov_1_2023'
   name         TEXT NOT NULL,
   source_url   TEXT,
@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS datasets (
 
 -- Provenance log (append-only)
 CREATE TABLE IF NOT EXISTS dataset_events (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   dataset_id UUID NOT NULL REFERENCES datasets(id),
   event_type TEXT NOT NULL,  -- 'fetch' | 'validate' | 'activate' | 'reject'
   actor_id   UUID,
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS dataset_events (
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS verdicts (
-  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   district_id         UUID NOT NULL REFERENCES districts(id),
   condition_code      TEXT NOT NULL,   -- 'S1' | 'S2' | 'S3' | 'Pa' | 'Pb' | 'Pc' | 'Pd' | 'Pe' | 'Pf'
   -- Five-tuple
@@ -230,7 +230,7 @@ CREATE INDEX IF NOT EXISTS verdicts_computed_at_idx ON verdicts(computed_at);
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS findings (
-  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   verdict_id     UUID NOT NULL REFERENCES verdicts(id),
   district_id    UUID NOT NULL REFERENCES districts(id),
   municipality_id UUID NOT NULL REFERENCES municipalities(id),
