@@ -478,7 +478,7 @@ CREATE POLICY user_roles_admin_write ON skolske_obvody.user_roles
 CREATE POLICY datasets_active_read ON skolske_obvody.datasets
   FOR SELECT
   USING (
-    status = 'active'
+    (auth.uid() IS NOT NULL AND status = 'active')
     OR skolske_obvody.current_user_role() IN ('data_admin', 'super_admin')
   );
 
@@ -495,7 +495,8 @@ CREATE POLICY address_points_admin_read ON skolske_obvody.address_points FOR SEL
   USING (skolske_obvody.current_user_role() IN ('analyst', 'data_admin', 'super_admin'));
 
 CREATE POLICY address_points_admin_write ON skolske_obvody.address_points FOR ALL
-  USING (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'));
+  USING (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'))
+  WITH CHECK (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'));
 
 -- ============================================================
 -- FINDINGS: analyst/admin read; admin write
@@ -505,7 +506,8 @@ CREATE POLICY findings_admin_read ON skolske_obvody.findings FOR SELECT
   USING (skolske_obvody.current_user_role() IN ('analyst', 'data_admin', 'super_admin'));
 
 CREATE POLICY findings_admin_write ON skolske_obvody.findings FOR ALL
-  USING (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'));
+  USING (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'))
+  WITH CHECK (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'));
 
 -- ============================================================
 -- VZNs: analyst/admin read; admin write
@@ -515,19 +517,54 @@ CREATE POLICY vzns_admin_read ON skolske_obvody.vzns FOR SELECT
   USING (skolske_obvody.current_user_role() IN ('analyst', 'data_admin', 'super_admin'));
 
 CREATE POLICY vzns_admin_write ON skolske_obvody.vzns FOR ALL
-  USING (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'));
+  USING (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'))
+  WITH CHECK (skolske_obvody.current_user_role() IN ('data_admin', 'super_admin'));
 
 -- ============================================================
 -- GRANTs for Supabase REST API (PostgREST)
 -- ============================================================
 
-GRANT USAGE ON SCHEMA skolske_obvody TO anon, authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA skolske_obvody TO authenticated, service_role;
-GRANT SELECT ON ALL TABLES IN SCHEMA skolske_obvody TO anon;  -- RLS still gates per-row
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA skolske_obvody TO anon, authenticated, service_role;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA skolske_obvody TO authenticated, service_role;
+-- ============================================================
+-- GRANTs for Supabase REST API
+-- Principle: service_role bypasses RLS and gets full DML; authenticated gets
+-- read-only on app-exposed tables (writes go through server-side service_role);
+-- anon and authenticated NEVER touch internal `roles` or `dataset_events`
+-- (the latter is the audit log).
+-- ============================================================
 
-ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT SELECT ON TABLES TO anon;
-ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
-ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT USAGE, SELECT ON SEQUENCES TO authenticated, service_role;
+GRANT USAGE ON SCHEMA skolske_obvody TO anon, authenticated, service_role;
+
+-- service_role: full DML on all tables (RLS bypassed by Supabase for this role).
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA skolske_obvody TO service_role;
+GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA skolske_obvody TO service_role;
+
+-- authenticated: read-only on app-exposed tables (per-row RLS still gates).
+-- Writes are intentionally NOT granted here — all mutations route through server
+-- actions using service_role (audit log + data_admin role checks happen there).
+GRANT SELECT ON
+  skolske_obvody.regions,
+  skolske_obvody.municipalities,
+  skolske_obvody.founders,
+  skolske_obvody.schools,
+  skolske_obvody.districts,
+  skolske_obvody.vzns,
+  skolske_obvody.address_points,
+  skolske_obvody.verdicts,
+  skolske_obvody.findings,
+  skolske_obvody.datasets,
+  skolske_obvody.user_roles
+TO authenticated;
+
+-- anon: no table access. Public pages render via server actions using
+-- service_role on a curated subset (or via authenticated read).
+
+-- Helper functions are safe to expose.
+GRANT EXECUTE ON FUNCTION skolske_obvody.current_user_role() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION skolske_obvody.current_municipality_id() TO authenticated, service_role;
+
+-- Default privileges for future tables: deny by default for anon/authenticated;
+-- service_role keeps DML. Any new table must opt-in to `authenticated` SELECT
+-- by an explicit GRANT in its migration (forces a conscious choice).
+ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA skolske_obvody GRANT EXECUTE ON FUNCTIONS TO authenticated, service_role;
