@@ -137,6 +137,28 @@ export interface SoPskMunicipality {
   districts_count: number
 }
 
+export interface SoDistrictGeocodedGeom {
+  id: string
+  name: string
+  geom_geojson: Record<string, unknown> | null
+  geom_google_metadata: {
+    ok_points?: number
+    partial_match_points?: number
+    built_at?: string
+  } | null
+}
+
+export interface SoStreetGeocode {
+  district_id: string
+  street: string
+  lat: number
+  lon: number
+  status: string
+  partial_match: boolean | null
+  formatted_address: string | null
+  point_geojson: Record<string, unknown> | null
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

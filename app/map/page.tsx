@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -88,14 +88,40 @@ async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   }
 }
 
+async function fetchGeocodedGeom(): Promise<SoDistrictGeocodedGeom[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_geocoded_geom').select('*')
+    if (error) throw error
+    return (data ?? []) as SoDistrictGeocodedGeom[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchStreetGeocodes(): Promise<SoStreetGeocode[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_street_geocodes')
+      .select('district_id,street,lat,lon,status,partial_match,formatted_address,point_geojson')
+    if (error) throw error
+    return (data ?? []) as SoStreetGeocode[]
+  } catch {
+    return []
+  }
+}
+
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, municipalities] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, municipalities, geocodedGeom, streetGeocodes] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
     fetchFindings(),
     fetchOverlaps(),
     fetchMunicipalities(),
+    fetchGeocodedGeom(),
+    fetchStreetGeocodes(),
   ])
   const isEmpty = features.length === 0
 
@@ -140,6 +166,8 @@ export default async function MapPage() {
                 findings={findings}
                 overlaps={overlaps}
                 municipalities={municipalities}
+                geocodedGeom={geocodedGeom}
+                streetGeocodes={streetGeocodes}
                 initialMode="sk"
               />
             </Suspense>
@@ -158,6 +186,10 @@ export default async function MapPage() {
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span> Škola</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#dc2626', opacity: 0.25 }}></span> Prekryv obvodov: svetlejšie = 1, tmavšie = viac</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-dashed" style={{ borderColor: '#10b981', background: 'transparent' }}></span> Google hull (Sprint G)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body (Google)</span>
         </p>
       </div>
 
