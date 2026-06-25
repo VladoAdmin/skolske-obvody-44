@@ -79,29 +79,20 @@ export default async function Home() {
         </dl>
       </section>
 
-      {/* CTA */}
-      <section>
-        <Link
-          href="/map"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Otvoriť mapu PSK →
-        </Link>
-      </section>
-
-      {/* Quick nav */}
+      {/* Portal section cards */}
       <section aria-labelledby="quick-access-heading" className="space-y-4">
         <h2 id="quick-access-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Sekcie portálu
         </h2>
         <nav aria-label="Hlavné sekcie portálu">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 list-none p-0 m-0">
-            {NAV_ITEMS.map((item) => (
+            {PORTAL_CARDS.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="block rounded-lg border border-border p-4 hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block rounded-lg border border-border p-5 hover:border-primary hover:bg-accent/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
+                  <span className="block text-lg mb-1">{item.icon}</span>
                   <span className="block font-medium text-sm">{item.label}</span>
                   <span className="block text-xs text-muted-foreground mt-1">{item.description}</span>
                 </Link>
@@ -114,9 +105,9 @@ export default async function Home() {
   )
 }
 
-const NAV_ITEMS = [
-  { href: '/map', label: 'Mapa PSK', description: 'Farebná mapa 12 školských obvodov so semaforom' },
-  { href: '/findings', label: 'Register nálezov', description: 'Filtrovaný zoznam odchýlok a rizík' },
-  { href: '/municipalities', label: 'Zriaďovatelia', description: 'Súhrnný scorecard per obec' },
-  { href: '/o-metodike', label: 'O metodike', description: 'Podmienky § 44, semaforová logika, GAP-y' },
+const PORTAL_CARDS = [
+  { href: '/map', icon: '🗺️', label: 'Mapa', description: 'Interaktívna GIS mapa s obvodmi, školami, MRK lokalitami a nálezmi' },
+  { href: '/findings', icon: '📋', label: 'Register nálezov', description: '102 nálezov so závažnosťou Kritická/Vysoká/Stredná' },
+  { href: '/municipalities', icon: '🏛️', label: 'Zriaďovatelia', description: 'Zoznam obcí s pokrytím obvodov a otvorenými nálezmi' },
+  { href: '/o-metodike', icon: '📖', label: 'O metodike', description: '§ 44 zákona, podmienky Š1-Š3 a indikátory P-a až P-f' },
 ] as const
