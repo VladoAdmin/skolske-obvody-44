@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import type { FindingPublic } from '@/lib/supabase/types'
 import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
