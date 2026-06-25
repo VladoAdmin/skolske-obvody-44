@@ -4,6 +4,13 @@ export const PSK_CENTER: [number, number] = [49.0, 21.25] // [lat, lon] for Leaf
 export const PSK_DEFAULT_ZOOM = 12
 export const PRESOV_MUNICIPALITY_SLUG = 'presov'
 
+// Slovakia overview constants
+export const SK_CENTER: [number, number] = [48.74, 19.69] // [lat, lon] for Leaflet
+export const SK_DEFAULT_ZOOM = 7
+
+// PSK name variations for GeoJSON matching
+export const PSK_KRAJ_NAMES = ['Prešovský samosprávny kraj', 'PSK', 'Prešov', 'Prešovský']
+
 // Composition color map — Tailwind classes + fill opacity
 export const COMPOSITION_COLOR_MAP: Record<string, { fill: string; stroke: string; fillOpacity: number; symbol: string }> = {
   GREEN:  { fill: '#16a34a', stroke: '#15803d', fillOpacity: 0.3, symbol: '✓' },

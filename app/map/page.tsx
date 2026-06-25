@@ -12,7 +12,7 @@ import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 export const revalidate = 60
 
 export const metadata = {
-  title: 'Mapa PSK — Kontrola § 44',
+  title: 'Mapa Slovenska — Školské obvody § 44',
 }
 
 async function fetchFeatures(): Promise<DistrictMapFeature[]> {
@@ -76,9 +76,9 @@ export default async function MapPage() {
       <DisclaimerBanner />
 
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">Mapa PSK</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Mapa Slovenska — Školské obvody § 44</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Školské obvody mesta Prešov — semaforová kompozícia podľa § 44
+          Zobrazenie podľa krajov. Aktívne dáta: Prešovský samosprávny kraj
         </p>
       </div>
 
@@ -104,6 +104,7 @@ export default async function MapPage() {
               schools={schools}
               mrkOverlays={mrkOverlays}
               findings={findings}
+              initialMode="sk"
             />
           </Suspense>
         </div>

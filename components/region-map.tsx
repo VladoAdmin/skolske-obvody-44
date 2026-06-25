@@ -8,6 +8,7 @@ interface RegionMapProps {
   schools: SoSchoolMarker[]
   mrkOverlays: SoMrkOverlay[]
   findings: SoFindingsPanelItem[]
+  initialMode?: 'sk' | 'psk'
 }
 
 const RegionMapDynamic = dynamic(
@@ -18,6 +19,6 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, findings }: RegionMapProps) {
-  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} findings={findings} />
+export function RegionMap({ features, schools, mrkOverlays, findings, initialMode = 'sk' }: RegionMapProps) {
+  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} findings={findings} initialMode={initialMode} />
 }
