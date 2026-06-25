@@ -119,6 +119,15 @@ export interface SoFindingsPanelItem {
   district_geom_centroid_lat: number | null
 }
 
+export interface SoDistrictOverlap {
+  district_a_id: string
+  district_a_name: string
+  district_b_id: string
+  district_b_name: string
+  overlap_geojson: Record<string, unknown> | null
+  overlap_area_m2: number
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

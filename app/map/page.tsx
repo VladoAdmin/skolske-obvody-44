@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -63,12 +63,24 @@ async function fetchFindings(): Promise<SoFindingsPanelItem[]> {
   }
 }
 
+async function fetchOverlaps(): Promise<SoDistrictOverlap[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_overlaps').select('*')
+    if (error) throw error
+    return (data ?? []) as SoDistrictOverlap[]
+  } catch {
+    return []
+  }
+}
+
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
     fetchFindings(),
+    fetchOverlaps(),
   ])
   const isEmpty = features.length === 0
 
@@ -102,12 +114,26 @@ export default async function MapPage() {
                 schools={schools}
                 mrkOverlays={mrkOverlays}
                 findings={findings}
+                overlaps={overlaps}
                 initialMode="sk"
               />
             </Suspense>
           }
           panelSlot={<FindingsPanel findings={findings} />}
         />
+      </div>
+
+      {/* Map legend */}
+      <div className="hidden md:block">
+        <p className="text-xs text-muted-foreground mt-2">
+          Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'hsl(40,65%,60%)', opacity: 0.5 }}></span> Obvod (kategorická farba)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3" style={{ background: 'repeating-linear-gradient(45deg, #7c3aed, #7c3aed 2px, transparent 2px, transparent 5px)' }}></span> MRK lokalita</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span> Škola</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 border-2 border-red-700 border-dashed"></span> Prekryv obvodov</span>
+        </p>
       </div>
 
       {/* A11y fallback table */}

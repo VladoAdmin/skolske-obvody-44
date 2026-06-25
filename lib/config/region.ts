@@ -37,3 +37,9 @@ export function isAllowedHost(url: string | null | undefined): boolean {
     return false
   }
 }
+
+// Per-district categorical hue using golden ratio rotation — deterministic, well-distributed
+export function getDistrictHue(index: number): number {
+  const GOLDEN_RATIO_CONJUGATE = 0.61803398875
+  return Math.round(((index * GOLDEN_RATIO_CONJUGATE) % 1) * 360)
+}
