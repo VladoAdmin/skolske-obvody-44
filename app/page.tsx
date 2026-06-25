@@ -31,26 +31,26 @@ export default async function Home() {
 
       <section aria-labelledby="portal-heading">
         <h1 id="portal-heading" className="text-2xl font-semibold tracking-tight mb-3">
-          Kontrola § 44 — Školské obvody
+          Školské obvody — kontrola podľa § 44
         </h1>
         <div className="prose prose-sm text-muted-foreground space-y-3 max-w-none">
           <p>
-            Zákon č. 596/2003 Z. z. (§ 44) ukladá mestám a obciam povinnosť určiť školské obvody
-            pre žiakov základných škôl. Obvody musia spĺňať požiadavky na dostupnosť školy
-            (vzdialenosť, pešia trasa, MHD), topolologickú konzistentnosť hraníc a demografickú
-            a sociálnu primeranosť.
+            Každá obec na Slovensku má zo zákona (§ 44 zák. č. 596/2003 Z. z.) povinnosť určiť
+            školské obvody pre základné školy. Obvod presne vymedzuje, ktoré ulice a adresy patria
+            ku konkrétnej škole — žiak má právo nastúpiť do školy v obvode svojho trvalého pobytu.
           </p>
           <p>
-            Tento analytický portál overuje súlad školských obvodov mesta <strong>Prešov</strong>{' '}
-            s podmienkami § 44. Pilot pokrýva <strong>12 schulských obvodov</strong> v 9 merateľných
-            podmienkach (Š1–Š3 zákonné, P-a až P-f rizikové indikátory). Výsledky sú informatívne
-            a slúžia ako podklad pre rozhodovanie — nie ako záväzný právny výklad.
+            Tento portál vám ukáže, ako <strong>12 školských obvodov mesta Prešov</strong> obstojí
+            v 9 merateľných podmienkach: tri zákonné požiadavky (Š1–Š3) a šesť analytických
+            indikátorov dostupnosti (P-a až P-f). Dáta máme zatiaľ len pre Prešov. Výsledky sú
+            informatívne — nie záväzný právny výklad.
           </p>
           <p>
-            Semaforová kompozícia: <strong>ČERVENÁ</strong> = zákonné podmienky nesplnené,{' '}
-            <strong>ORANŽOVÁ</strong> = neúplné dáta alebo rizikové indikátory,{' '}
-            <strong>ZELENÁ</strong> = všetky zákonné podmienky splnené. Sivá = engine ešte
-            nezhodnotil.
+            Každý obvod dostane farbu:{' '}
+            <strong>🔴 červená</strong> = zákonné podmienky nesplnené,{' '}
+            <strong>🟠 oranžová</strong> = dáta chýbajú alebo sú rizikové indikátory,{' '}
+            <strong>🟢 zelená</strong> = všetko v poriadku,{' '}
+            <strong>⚪ sivá</strong> = obvod sme ešte nehodnotili.
           </p>
         </div>
       </section>
@@ -64,17 +64,17 @@ export default async function Home() {
           <KpiCard
             label="Posúdených obvodov"
             value={summary?.districts_count ?? meta?.districts_count ?? '—'}
-            description="Prešovský samosprávny kraj"
+            description="Mesto Prešov, pilotné pokrytie"
           />
           <KpiCard
             label="Spracovaných verdiktov"
             value={meta?.verdicts_count ?? '—'}
-            description="9 podmienok × obvody"
+            description="12 obvodov × 9 podmienok"
           />
           <KpiCard
             label="Otvorených nálezov"
             value={summary?.open_findings_count ?? meta?.open_findings_count ?? '—'}
-            description="Stav k poslednému engine behu"
+            description="Stav po poslednom výpočte"
           />
         </dl>
       </section>
@@ -106,8 +106,8 @@ export default async function Home() {
 }
 
 const PORTAL_CARDS = [
-  { href: '/map', icon: '🗺️', label: 'Mapa', description: 'Interaktívna GIS mapa s obvodmi, školami, MRK lokalitami a nálezmi' },
-  { href: '/findings', icon: '📋', label: 'Register nálezov', description: '102 nálezov so závažnosťou Kritická/Vysoká/Stredná' },
-  { href: '/municipalities', icon: '🏛️', label: 'Zriaďovatelia', description: 'Zoznam obcí s pokrytím obvodov a otvorenými nálezmi' },
-  { href: '/o-metodike', icon: '📖', label: 'O metodike', description: '§ 44 zákona, podmienky Š1-Š3 a indikátory P-a až P-f' },
+  { href: '/map', icon: '🗺️', label: 'Mapa obvodov', description: 'Zobrazte si obvody na mape — kde sú školy, kde žijú deti a kde sú nálezy' },
+  { href: '/findings', icon: '📋', label: 'Register nálezov', description: 'Prehľad konkrétnych problémov — každý nález má závažnosť a dôkaz' },
+  { href: '/municipalities', icon: '🏛️', label: 'Zriaďovatelia', description: 'Ktoré obce sme preverili a koľko otvorených nálezov majú' },
+  { href: '/o-metodike', icon: '📖', label: 'Ako hodnotíme', description: 'Čo sú podmienky Š1–Š3, čo sú indikátory P-a až P-f a ako funguje semafor' },
 ] as const

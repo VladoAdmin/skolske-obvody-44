@@ -46,12 +46,12 @@ export function DisclaimerBannerClient({ alwaysShow, methodologyVersion, engineV
     >
       <AlertTitle className="font-semibold">Demo — nie oficiálny výklad</AlertTitle>
       <AlertDescription className="mt-1 text-sm">
-        Toto demo zobrazuje analytické výstupy nad čiastočnými verejnými dátami pre 12 školských
+        Toto demo zobrazuje analytické výstupy nad verejne dostupnými dátami pre 12 školských
         obvodov mesta Prešov.{' '}
-        <strong>Nie je oficiálnym výkladom súladu s § 44 zákona č. 596/2003.</strong> Hodnoty{' '}
+        <strong>Nie je oficiálnym výkladom súladu so § 44 zákona č. 596/2003.</strong> Hodnoty{' '}
         <code className="rounded bg-amber-100 px-1 font-mono text-xs">INCOMPLETE</code> /{' '}
         <code className="rounded bg-amber-100 px-1 font-mono text-xs">INSUFFICIENT_DATA</code>{' '}
-        znamenajú <strong>dátovú medzeru</strong>, nie nesúlad. Verzia metodiky:{' '}
+        znamenajú <strong>chýbajúce dáta</strong>, nie porušenie. Verzia metodiky:{' '}
         <code className="font-mono text-xs">{methodologyVersion}</code>. Verzia enginu:{' '}
         <code className="font-mono text-xs">{engineVersion}</code>.
       </AlertDescription>
