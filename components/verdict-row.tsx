@@ -1,10 +1,20 @@
 import type { DistrictScorecardRow } from '@/lib/supabase/types'
 import { getColorClass, getColorSymbol } from '@/lib/compliance/colors'
+import { getConditionDescription } from '@/lib/compliance/labels'
 import { ProvenanceLink } from './provenance-link'
 import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 interface VerdictRowProps {
   row: DistrictScorecardRow
+}
+
+const VALUE_DESCRIPTIONS: Record<string, string> = {
+  PASS:              'Podmienka splnená — všetky dostupné dáta sú v poriadku.',
+  FAIL:              'Podmienka nesplnená — zákonná požiadavka nie je dodržaná.',
+  INCOMPLETE:        'Chýbajú vstupné dáta — výsledok zatiaľ nevieme určiť.',
+  RISK:              'Rizikový signál — indikátor poukazuje na potenciálny problém.',
+  INSUFFICIENT_DATA: 'Príliš málo dát — výsledok nemá dostatočnú výpovednú hodnotu.',
 }
 
 function ValueBadge({ value }: { value: string }) {
@@ -16,10 +26,18 @@ function ValueBadge({ value }: { value: string }) {
     INSUFFICIENT_DATA: 'bg-blue-100 text-blue-800 border-blue-300',
   }
   const cls = classMap[value] ?? 'bg-gray-100 text-gray-700 border-gray-300'
-  return (
+  const description = VALUE_DESCRIPTIONS[value]
+  const badge = (
     <span className={`inline-flex items-center rounded border px-1.5 py-0.5 font-mono text-xs font-medium ${cls}`}>
       {value}
     </span>
+  )
+  if (!description) return badge
+  return (
+    <Tooltip>
+      <TooltipTrigger>{badge}</TooltipTrigger>
+      <TooltipContent>{description}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -52,7 +70,16 @@ export function VerdictRow({ row }: VerdictRowProps) {
       {/* Condition */}
       <td className="px-3 py-2 align-top">
         <div className="flex flex-col gap-0.5">
-          <code className="font-mono text-xs font-medium">{row.condition_code}</code>
+          {getConditionDescription(row.condition_code) ? (
+            <Tooltip>
+              <TooltipTrigger className="font-mono text-xs font-medium cursor-help underline decoration-dotted">
+                {row.condition_code}
+              </TooltipTrigger>
+              <TooltipContent>{getConditionDescription(row.condition_code)}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <code className="font-mono text-xs font-medium">{row.condition_code}</code>
+          )}
           <span className="text-xs text-muted-foreground">{row.condition_label_sk}</span>
         </div>
       </td>

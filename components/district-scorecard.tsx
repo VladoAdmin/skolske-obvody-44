@@ -1,5 +1,6 @@
 import type { DistrictScorecardRow } from '@/lib/supabase/types'
 import { VerdictRow } from './verdict-row'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
 interface DistrictScorecardProps {
   rows: DistrictScorecardRow[]
@@ -15,13 +16,28 @@ export function DistrictScorecard({ rows }: DistrictScorecardProps) {
               Podmienka
             </th>
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">
-              Hodnota
+              <Tooltip>
+                <TooltipTrigger className="cursor-help underline decoration-dotted">
+                  Hodnota
+                </TooltipTrigger>
+                <TooltipContent>Výsledok podmienky: PASS, FAIL, INCOMPLETE, RISK alebo INSUFFICIENT_DATA</TooltipContent>
+              </Tooltip>
             </th>
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">
-              Dôvera
+              <Tooltip>
+                <TooltipTrigger className="cursor-help underline decoration-dotted">
+                  Dôvera
+                </TooltipTrigger>
+                <TooltipContent>Miera istoty výsledku — závisí od kvality vstupných dát (0 % = neoveriteľné, 100 % = plne potvrdené)</TooltipContent>
+              </Tooltip>
             </th>
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">
-              Úplnosť
+              <Tooltip>
+                <TooltipTrigger className="cursor-help underline decoration-dotted">
+                  Úplnosť
+                </TooltipTrigger>
+                <TooltipContent>Koľko potrebných dát pre túto podmienku sa nám podarilo získať (100 % = máme všetko)</TooltipContent>
+              </Tooltip>
             </th>
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">
               Semafor
