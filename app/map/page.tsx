@@ -1,10 +1,11 @@
 import { Suspense } from 'react'
 import { RegionMap } from '@/components/region-map'
+import { FindingsPanel } from '@/components/findings-panel'
 import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -25,8 +26,49 @@ async function fetchFeatures(): Promise<DistrictMapFeature[]> {
   }
 }
 
+async function fetchSchools(): Promise<SoSchoolMarker[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_school_markers').select('*')
+    if (error) throw error
+    return (data ?? []) as SoSchoolMarker[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchMrkOverlays(): Promise<SoMrkOverlay[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_mrk_overlays').select('*')
+    if (error) throw error
+    return (data ?? []) as SoMrkOverlay[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchFindings(): Promise<SoFindingsPanelItem[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_findings_panel')
+      .select('*')
+      .order('severity_rank', { ascending: true })
+    if (error) throw error
+    return (data ?? []) as SoFindingsPanelItem[]
+  } catch {
+    return []
+  }
+}
+
 export default async function MapPage() {
-  const features = await fetchFeatures()
+  const [features, schools, mrkOverlays, findings] = await Promise.all([
+    fetchFeatures(),
+    fetchSchools(),
+    fetchMrkOverlays(),
+    fetchFindings(),
+  ])
   const isEmpty = features.length === 0
 
   return (
@@ -48,15 +90,31 @@ export default async function MapPage() {
         </Alert>
       )}
 
-      {/* Map container */}
-      <div
-        className="rounded-lg border border-border overflow-hidden"
-        style={{ height: '60vh', minHeight: 400 }}
-        aria-describedby="map-fallback-table"
-      >
-        <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
-          <RegionMap features={features} />
-        </Suspense>
+      {/* Map + findings panel layout */}
+      <div className="flex flex-col md:flex-row gap-4">
+        {/* Map container */}
+        <div
+          className="flex-1 rounded-lg border border-border overflow-hidden"
+          style={{ height: '60vh', minHeight: 400 }}
+          aria-describedby="map-fallback-table"
+        >
+          <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
+            <RegionMap
+              features={features}
+              schools={schools}
+              mrkOverlays={mrkOverlays}
+              findings={findings}
+            />
+          </Suspense>
+        </div>
+
+        {/* Findings sidebar */}
+        <div
+          className="w-full md:w-80 flex-shrink-0 rounded-lg border border-border overflow-hidden"
+          style={{ height: '60vh', minHeight: 400 }}
+        >
+          <FindingsPanel findings={findings} />
+        </div>
       </div>
 
       {/* A11y fallback table */}
