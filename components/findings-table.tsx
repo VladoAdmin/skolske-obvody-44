@@ -84,13 +84,15 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
                     {getConditionLabel(finding.condition_code)}
                   </span>
                 </TableCell>
-                <TableCell className="max-w-xs text-xs text-muted-foreground">
-                  {finding.evidence_public_text ?? '—'}
+                <TableCell className="max-w-[300px] text-xs text-muted-foreground truncate overflow-hidden whitespace-nowrap">
+                  <span title={finding.evidence_public_text ?? undefined}>
+                    {finding.evidence_public_text ?? '—'}
+                  </span>
                 </TableCell>
-                <TableCell className="text-xs">
+                <TableCell className="text-xs whitespace-nowrap overflow-hidden">
                   {STATUS_LABELS[finding.status] ?? finding.status}
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground">
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap overflow-hidden">
                   {relativeTime(finding.created_at)}
                 </TableCell>
               </TableRow>

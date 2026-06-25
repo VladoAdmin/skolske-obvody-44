@@ -38,10 +38,10 @@ export function FindingsFilters() {
     <div className="flex flex-wrap gap-3" role="search" aria-label="Filtre nálezov">
       {/* Severity filter */}
       <div>
-        <label htmlFor="filter-severity" className="sr-only">Závažnosť</label>
+        <label htmlFor="filter-severity" className="text-xs text-muted-foreground block mb-1">Závažnosť</label>
         <Select value={severityVal as string} onValueChange={(v: string | null) => updateParam('severity', v ?? ALL)}>
           <SelectTrigger id="filter-severity" className="w-40 h-8 text-xs">
-            <SelectValue placeholder="Závažnosť" />
+            <SelectValue placeholder="Všetky závažnosti" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Všetky závažnosti</SelectItem>
@@ -56,10 +56,10 @@ export function FindingsFilters() {
 
       {/* Status filter */}
       <div>
-        <label htmlFor="filter-status" className="sr-only">Stav</label>
+        <label htmlFor="filter-status" className="text-xs text-muted-foreground block mb-1">Stav</label>
         <Select value={statusVal as string} onValueChange={(v: string | null) => updateParam('status', v ?? ALL)}>
           <SelectTrigger id="filter-status" className="w-36 h-8 text-xs">
-            <SelectValue placeholder="Stav" />
+            <SelectValue placeholder="Všetky stavy" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Všetky stavy</SelectItem>
@@ -73,10 +73,10 @@ export function FindingsFilters() {
 
       {/* Condition filter */}
       <div>
-        <label htmlFor="filter-condition" className="sr-only">Podmienka</label>
+        <label htmlFor="filter-condition" className="text-xs text-muted-foreground block mb-1">Podmienka</label>
         <Select value={conditionVal as string} onValueChange={(v: string | null) => updateParam('condition', v ?? ALL)}>
           <SelectTrigger id="filter-condition" className="w-52 h-8 text-xs">
-            <SelectValue placeholder="Podmienka" />
+            <SelectValue placeholder="Všetky podmienky" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Všetky podmienky</SelectItem>
