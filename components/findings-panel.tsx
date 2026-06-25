@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import type { SoFindingsPanelItem } from '@/lib/supabase/types'
+import type { SoFindingsPanelItem, DistrictMapFeature } from '@/lib/supabase/types'
+import { DistrictTogglePanel } from '@/components/district-toggle-panel'
 
 interface FindingsPanelProps {
   findings: SoFindingsPanelItem[]
+  features?: DistrictMapFeature[]
 }
 
 type SeverityFilter = 'critical' | 'high' | 'medium'
@@ -23,7 +25,7 @@ const SEVERITY_BADGE: Record<SeverityFilter, string> = {
 
 const ALL_SEVERITIES: SeverityFilter[] = ['critical', 'high', 'medium']
 
-export function FindingsPanel({ findings }: FindingsPanelProps) {
+export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
   const [activeFilters, setActiveFilters] = useState<Set<SeverityFilter>>(
     new Set(ALL_SEVERITIES)
   )
@@ -66,6 +68,9 @@ export function FindingsPanel({ findings }: FindingsPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-background">
+      {/* District toggle panel — collapsible above findings */}
+      {features.length > 0 && <DistrictTogglePanel features={features} />}
+
       {/* Header */}
       <div className="px-3 py-2 border-b border-border flex-shrink-0">
         <p className="text-xs font-semibold text-foreground">Nálezy</p>

@@ -5,8 +5,8 @@ import { MapWithPanel } from '@/components/map/map-with-panel'
 import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap } from '@/lib/supabase/types'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -74,13 +74,28 @@ async function fetchOverlaps(): Promise<SoDistrictOverlap[]> {
   }
 }
 
+async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
+  try {
+    const sb = createPublicClient()
+    // Fetch without geom to keep payload small — geom only for map rendering
+    const { data, error } = await sb
+      .from('so_psk_municipalities')
+      .select('id,name,slug,geom_geojson,schools_count,districts_count')
+    if (error) throw error
+    return (data ?? []) as SoPskMunicipality[]
+  } catch {
+    return []
+  }
+}
+
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, municipalities] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
     fetchFindings(),
     fetchOverlaps(),
+    fetchMunicipalities(),
   ])
   const isEmpty = features.length === 0
 
@@ -103,6 +118,15 @@ export default async function MapPage() {
         </Alert>
       )}
 
+      {/* Geometry disclaimer — PSK data */}
+      <Alert className="border-yellow-300 bg-yellow-50 text-yellow-900">
+        <AlertTitle className="text-yellow-800">⚠ Hranice obvodov sú odhad</AlertTitle>
+        <AlertDescription className="text-yellow-800 text-xs">
+          Hranice obvodov sú odhad z OSM building hull, nie zo zákonných ulíc Prešovského VZN 1/2023.
+          Bez prístupu k Registru adries nevieme rekonštruovať presné polygóny — preto sú obvody &bdquo;roztiahnuté&ldquo; a Š2/Š3 verdikty INCOMPLETE.
+        </AlertDescription>
+      </Alert>
+
       {/* Map + findings panel layout — responsive via MapWithPanel */}
       <div aria-describedby="map-fallback-table">
         <MapWithPanel
@@ -115,11 +139,12 @@ export default async function MapPage() {
                 mrkOverlays={mrkOverlays}
                 findings={findings}
                 overlaps={overlaps}
+                municipalities={municipalities}
                 initialMode="sk"
               />
             </Suspense>
           }
-          panelSlot={<FindingsPanel findings={findings} />}
+          panelSlot={<FindingsPanel findings={findings} features={features} />}
         />
       </div>
 
@@ -132,7 +157,7 @@ export default async function MapPage() {
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span> Škola</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 border-2 border-red-700 border-dashed"></span> Prekryv obvodov</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#dc2626', opacity: 0.25 }}></span> Prekryv obvodov: svetlejšie = 1, tmavšie = viac</span>
         </p>
       </div>
 

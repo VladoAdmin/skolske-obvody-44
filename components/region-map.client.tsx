@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
 
 interface RegionMapClientProps {
@@ -12,6 +12,7 @@ interface RegionMapClientProps {
   mrkOverlays: SoMrkOverlay[]
   findings: SoFindingsPanelItem[]
   overlaps?: SoDistrictOverlap[]
+  municipalities?: SoPskMunicipality[]
   initialMode?: 'sk' | 'psk'
 }
 
@@ -20,13 +21,16 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layersRef = useRef<{ sk?: any; psk?: any }>({})
+  // Per-district layer map: id -> L.GeoJSON layer
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const districtLayersRef = useRef<Map<string, any>>(new Map())
   const [mode, setMode] = useState<'sk' | 'psk'>(initialMode)
   const [mapReady, setMapReady] = useState(false)
   const modeRef = useRef(mode)
@@ -70,6 +74,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
       mrkPane.style.zIndex = '460'
       const overlapsPane = map.createPane('overlaps')
       overlapsPane.style.zIndex = '470'
+      // Apply multiply blend mode so stacked overlap polygons darken additively
+      overlapsPane.style.mixBlendMode = 'multiply'
       const schoolsPane = map.createPane('schools')
       schoolsPane.style.zIndex = '700'
 
@@ -101,8 +107,44 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
       }
       window.addEventListener('so:flyto', flyToHandler)
 
+      // --- CustomEvent: toggle individual district visibility ---
+      const toggleDistrictHandler = (e: Event) => {
+        const { id, visible } = (e as CustomEvent<{ id: string; visible: boolean }>).detail
+        const layer = districtLayersRef.current.get(id)
+        if (!layer) return
+        if (visible) {
+          map.addLayer(layer)
+        } else {
+          map.removeLayer(layer)
+        }
+      }
+      window.addEventListener('so:toggle-district', toggleDistrictHandler)
+
+      // --- CustomEvent: select district (highlight + flyTo centroid) ---
+      const selectDistrictHandler = (e: Event) => {
+        const { id } = (e as CustomEvent<{ id: string }>).detail
+        districtLayersRef.current.forEach((layer, layerId) => {
+          const featureIndex = features.findIndex((f) => f.id === layerId)
+          const hue = getDistrictHue(featureIndex >= 0 ? featureIndex : 0)
+          if (layerId === id) {
+            layer.setStyle({ fillOpacity: 0.4, fillColor: `hsl(${hue}, 65%, 60%)` })
+            try {
+              const bounds = layer.getBounds()
+              if (bounds.isValid()) {
+                map.flyToBounds(bounds, { padding: [30, 30], duration: 1 })
+              }
+            } catch { /* ignore */ }
+          } else {
+            layer.setStyle({ fillOpacity: 0 })
+          }
+        })
+      }
+      window.addEventListener('so:select-district', selectDistrictHandler)
+
       return () => {
         window.removeEventListener('so:flyto', flyToHandler)
+        window.removeEventListener('so:toggle-district', toggleDistrictHandler)
+        window.removeEventListener('so:select-district', selectDistrictHandler)
       }
     }).catch(console.error)
 
@@ -111,6 +153,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
         mapRef.current.remove()
         mapRef.current = null
         layersRef.current = {}
+        districtLayersRef.current = new Map()
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,6 +172,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
         if (layersRef.current.psk) {
           layersRef.current.psk.forEach((l: unknown) => map.removeLayer(l))
           layersRef.current.psk = null
+          districtLayersRef.current = new Map()
         }
 
         // Show SK overview layer — load once
@@ -137,6 +181,27 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             .then((r) => r.json())
             .then((geojson) => {
               const skGroup = L.featureGroup()
+
+              // (C) PSK municipalities as grey context polygons — SK overview only
+              const muniGroup = L.featureGroup()
+              municipalities.forEach((muni) => {
+                if (!muni.geom_geojson) return
+                const geoJsonLayer = L.geoJSON(muni.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+                  style: {
+                    fillColor: '#9ca3af',
+                    fillOpacity: 0.05,
+                    color: '#6b7280',
+                    weight: 0.5,
+                  },
+                })
+                geoJsonLayer.bindTooltip(
+                  `${muni.name} · ${muni.schools_count} škôl · ${muni.districts_count} VZN obvodov`,
+                  { sticky: true }
+                )
+                geoJsonLayer.addTo(muniGroup)
+              })
+
+              muniGroup.addTo(skGroup)
 
               L.geoJSON(geojson, {
                 style: (feature) => {
@@ -163,6 +228,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                 },
               }).addTo(skGroup)
 
+              // Layer control for SK overview
+              L.control.layers(
+                undefined,
+                { 'Obce PSK (665)': muniGroup },
+                { collapsed: false }
+              ).addTo(map)
+
               skGroup.addTo(map)
               layersRef.current.sk = skGroup
 
@@ -182,40 +254,52 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
         // Build PSK layers if not yet built
         if (!layersRef.current.psk) {
-          // (A) Districts with per-district unique hue + semafor stroke
+          // (A) Districts: borders-only by default, per-district hue
           const districtsGroup = L.featureGroup()
+          const newDistrictLayersMap = new Map()
 
           if (features.length > 0) {
             features.forEach((feature, index) => {
               if (!feature.geom_geojson) return
 
-              const colorConfig = COMPOSITION_COLOR_MAP[feature.composition_color] ?? COMPOSITION_COLOR_MAP.NONE
-              const symbol = colorConfig.symbol
               const hue = getDistrictHue(index)
-              const isRed = feature.composition_color === 'RED'
+              const borderColor = `hsl(${hue}, 65%, 45%)`
 
               const geoJsonLayer = L.geoJSON(feature.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
                 style: {
-                  color: colorConfig.stroke,
-                  weight: isRed ? 3.5 : 2,
+                  color: borderColor,
+                  weight: 2.5,
                   fillColor: `hsl(${hue}, 65%, 60%)`,
-                  fillOpacity: 0.30,
+                  fillOpacity: 0, // borders-only by default
                 },
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 pane: 'districts' as any,
               })
+
+              const colorConfig = COMPOSITION_COLOR_MAP[feature.composition_color] ?? COMPOSITION_COLOR_MAP.NONE
+              const symbol = colorConfig.symbol
 
               geoJsonLayer.bindTooltip(
                 `<strong>${feature.name}</strong><br/>${symbol} ${feature.composition_color ?? 'NONE'}${feature.composition_reason ? `<br/><em>${feature.composition_reason}</em>` : ''}`,
                 { sticky: true }
               )
 
+              geoJsonLayer.on('mouseover', () => {
+                geoJsonLayer.setStyle({ weight: 4 })
+              })
+              geoJsonLayer.on('mouseout', () => {
+                geoJsonLayer.setStyle({ weight: 2.5 })
+              })
+
               geoJsonLayer.on('click', () => {
                 router.push(`/districts/${feature.id}`)
               })
 
               geoJsonLayer.addTo(districtsGroup)
+              newDistrictLayersMap.set(feature.id, geoJsonLayer)
             })
+
+            districtLayersRef.current = newDistrictLayersMap
 
             try {
               const bounds = districtsGroup.getBounds()
@@ -276,7 +360,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
           schoolsGroup.addTo(map)
 
-          // (B) MRK overlays with hatch pattern
+          // MRK overlays with hatch pattern
           const mrkGroup = L.featureGroup()
 
           mrkOverlays.forEach((mrk) => {
@@ -301,7 +385,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
           mrkGroup.addTo(map)
 
-          // (C) Overlap polygons
+          // (B-heatmap) Overlap polygons — multiply blend mode applied on the pane itself
+          // Each overlap polygon is a light red with no border; stacking = visual darkening
           const overlapsGroup = L.featureGroup()
 
           overlaps.forEach((overlap) => {
@@ -309,24 +394,21 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             const geoJsonLayer = L.geoJSON(overlap.overlap_geojson as unknown as GeoJSON.GeoJsonObject, {
               style: {
                 fillColor: '#dc2626',
-                fillOpacity: 0.45,
-                color: '#991b1b',
-                weight: 2,
-                dashArray: '4 4',
+                fillOpacity: 0.10,
+                color: 'transparent',
+                weight: 0,
               },
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'overlaps' as any,
             })
             geoJsonLayer.bindTooltip(
-              `Prekryv obvodov: ${overlap.district_a_name} × ${overlap.district_b_name}<br/>Plocha: ${(overlap.overlap_area_m2 / 10000).toFixed(2)} ha`,
+              `Prekryv obvodov: ${overlap.district_a_name} × ${overlap.district_b_name}<br/>Plocha: ${(overlap.overlap_area_m2 / 10000).toFixed(2)} ha<br/><em>1 prekryv (2 obvody)</em>`,
               { sticky: true }
             )
             geoJsonLayer.addTo(overlapsGroup)
           })
 
-          overlapsGroup.addTo(map)
-
-          // Layer control with all 4 layers
+          // Layer control — overlaps OFF by default (visually heavy)
           L.control.layers(
             undefined,
             {
@@ -338,11 +420,20 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             { collapsed: false }
           ).addTo(map)
 
+          // Only add overlapsGroup if it has content, but OFF by default = don't addTo(map)
+          districtsGroup.addTo(map)
+          // overlapsGroup is NOT added — user enables from layer control
+          mrkGroup.addTo(map)
+          schoolsGroup.addTo(map)
+
           layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup]
         } else {
-          layersRef.current.psk.forEach((l: unknown) => (l as { addTo: (m: unknown) => void }).addTo(map))
+          const [districtsGroup, schoolsGroup, mrkGroup] = layersRef.current.psk
+          // Re-add active layers (not overlapsGroup by default)
+          districtsGroup.addTo(map)
+          schoolsGroup.addTo(map)
+          mrkGroup.addTo(map)
           if (features.length > 0) {
-            const districtsGroup = layersRef.current.psk[0]
             try {
               const bounds = districtsGroup.getBounds()
               if (bounds.isValid()) {

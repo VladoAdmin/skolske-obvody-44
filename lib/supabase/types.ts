@@ -128,6 +128,15 @@ export interface SoDistrictOverlap {
   overlap_area_m2: number
 }
 
+export interface SoPskMunicipality {
+  id: string
+  name: string
+  slug: string | null
+  geom_geojson: Record<string, unknown> | null
+  schools_count: number
+  districts_count: number
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature
