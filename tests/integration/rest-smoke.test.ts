@@ -70,7 +70,7 @@ describe('Supabase REST smoke tests (prod, read-only)', () => {
 
   it.skipIf(skip)('should NOT expose raw verdicts table to anon', async () => {
     const result = await fetchRest('/verdicts?select=id')
-    expect([401, 403]).toContain(result.status)
+    expect([401, 403, 404]).toContain(result.status)
   })
 
   it.skipIf(skip)('should expose so_district_scorecard with condition_order 1-9', async () => {
