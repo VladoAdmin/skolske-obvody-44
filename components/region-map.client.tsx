@@ -53,6 +53,10 @@ export function RegionMapClient({ features, schools, mrkOverlays, initialMode = 
       const map = L.map(containerRef.current!, {
         center: SK_CENTER,
         zoom: SK_DEFAULT_ZOOM,
+        worldCopyJump: false,
+        maxBounds: [[47.2, 16.5], [49.9, 22.8]] as [[number, number], [number, number]],
+        maxBoundsViscosity: 1.0,
+        minZoom: 7,
       })
 
       mapRef.current = map
@@ -62,6 +66,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, initialMode = 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',
         maxZoom: 19,
+        noWrap: true,
+        bounds: [[47.2, 16.5], [49.9, 22.8]] as unknown as [[number, number], [number, number]],
       }).addTo(map)
 
       // --- CustomEvent listener for flyTo from findings panel ---
