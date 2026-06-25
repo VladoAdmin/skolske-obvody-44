@@ -68,7 +68,7 @@ AS $$
           coalesce(t, ''),
           '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '[email]', 'g'
         ),
-        '\+?\d{2,4}[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2,3}', '[tel]', 'g'
+        '(?:\+421|00421)[\s\-]?\d{1,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}|0\d{1,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}', '[tel]', 'g'
       ),
       '\d{6}\s*/\s*\d{3,4}', '[rč]', 'g'
     ),
@@ -172,12 +172,12 @@ SELECT
   dc.composition_reason,
   CASE
     WHEN d.geom IS NOT NULL
-    THEN ST_AsGeoJSON(ST_SimplifyPreserveTopology(d.geom, 0.0001))::jsonb
+    THEN public.ST_AsGeoJSON(public.ST_SimplifyPreserveTopology(d.geom, 0.0001))::jsonb
     ELSE NULL
   END AS geom_geojson,
   CASE
     WHEN s.geom IS NOT NULL
-    THEN ST_AsGeoJSON(s.geom)::jsonb
+    THEN public.ST_AsGeoJSON(s.geom)::jsonb
     ELSE NULL
   END AS school_geom_geojson,
   s.name AS school_name
