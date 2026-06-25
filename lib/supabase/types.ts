@@ -184,6 +184,17 @@ export interface SoHousePoint {
   validation_reason: string | null
 }
 
+export interface SoDistrictIsland {
+  district_id: string
+  island_index: number
+  area_m2: number | null
+  street_count: number | null
+  house_count: number | null
+  streets: string[] | null
+  house_numbers: string[] | null
+  geom_geojson: Record<string, unknown> | null
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature
