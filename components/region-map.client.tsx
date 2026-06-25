@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
 
 interface RegionMapClientProps {
@@ -13,7 +13,6 @@ interface RegionMapClientProps {
   findings: SoFindingsPanelItem[]
   overlaps?: SoDistrictOverlap[]
   municipalities?: SoPskMunicipality[]
-  geocodedGeom?: SoDistrictGeocodedGeom[]
   streetGeocodes?: SoStreetGeocode[]
   housePoints?: SoHousePoint[]
   voronoiGeom?: SoDistrictVoronoi[]
@@ -25,7 +24,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], geocodedGeom = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -274,9 +273,9 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               const geoJsonLayer = L.geoJSON(feature.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
                 style: {
                   color: borderColor,
-                  weight: 2.5,
+                  weight: 3,
                   fillColor: `hsl(${hue}, 65%, 60%)`,
-                  fillOpacity: 0, // borders-only by default
+                  fillOpacity: 0.2, // sýta per-district fill
                 },
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 pane: 'districts' as any,
@@ -291,10 +290,10 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               )
 
               geoJsonLayer.on('mouseover', () => {
-                geoJsonLayer.setStyle({ weight: 4 })
+                geoJsonLayer.setStyle({ weight: 5 })
               })
               geoJsonLayer.on('mouseout', () => {
-                geoJsonLayer.setStyle({ weight: 2.5 })
+                geoJsonLayer.setStyle({ weight: 3 })
               })
 
               geoJsonLayer.on('click', () => {
@@ -414,28 +413,6 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             geoJsonLayer.addTo(overlapsGroup)
           })
 
-          // (G) Google-geocoded hull layer
-          const googleHullGroup = L.featureGroup()
-          geocodedGeom.forEach((g) => {
-            if (!g.geom_geojson) return
-            const layer = L.geoJSON(g.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
-              style: {
-                fillColor: 'transparent',
-                color: '#10b981',
-                weight: 2.5,
-                dashArray: '6 3',
-              },
-            })
-            const meta = g.geom_google_metadata
-            const pts = meta?.ok_points ?? '?'
-            const partial = meta?.partial_match_points ?? 0
-            layer.bindTooltip(
-              `<strong>${g.name}</strong><br/>Google hull (Sprint G)<br/>${pts} adresných bodov${partial ? `, ${partial} partial match` : ''}`,
-              { sticky: true }
-            )
-            layer.addTo(googleHullGroup)
-          })
-
           // (G) Street geocode points layer
           const streetPointsGroup = L.featureGroup()
           streetGeocodes.forEach((sg) => {
@@ -515,41 +492,33 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             layer.addTo(voronoiGroup)
           })
 
-          // Layer control — overlaps OFF by default (visually heavy)
+          // Layer control — MVP demo view: only obvody + školy + prekryvy ON by default.
+          // Voronoi is engine input only and is hidden from the user-facing control.
           L.control.layers(
             undefined,
             {
-              'Obvody (12)': districtsGroup,
-              [`Voronoi hranice (Sprint K) [${voronoiGeom.length}]`]: voronoiGroup,
-              'Google Geocoded hull (Sprint G/I)': googleHullGroup,
-              'Adresy z VZN (Google)': streetPointsGroup,
-              'Domy z VZN (Google)': housePointsGroup,
-              'Prekryvy obvodov': overlapsGroup,
-              'MRK lokality': mrkGroup,
-              'Školy (26)': schoolsGroup,
+              [`Obvody (${features.length})`]: districtsGroup,
+              [`Školy (${schools.length})`]: schoolsGroup,
+              'Prekryvy obvodov (kde 2+ obvodov hovorí o tej istej adrese)': overlapsGroup,
+              'MRK lokality (Atlas marginalizovaných rómskych komunít)': mrkGroup,
+              'Domy z VZN (Google geokódovanie, 460 platných)': housePointsGroup,
             },
             { collapsed: false }
           ).addTo(map)
 
-          // Only add overlapsGroup if it has content, but OFF by default = don't addTo(map)
+          // Default ON: obvody + školy + prekryvy (ak má content).
+          // Default OFF: voronoi, MRK, adresy/domy z VZN.
           districtsGroup.addTo(map)
-          // Voronoi layer — ON by default in PSK mode (Sprint K)
-          if (voronoiGeom.length > 0) voronoiGroup.addTo(map)
-          // Google layers — OFF by default now that Voronoi is primary
-          // googleHullGroup.addTo(map)  — keep off; user can enable for comparison
-          // streetPointsGroup/housePointsGroup — kept off by default (heavy payload)
-          // overlapsGroup is NOT added — user enables from layer control
-          mrkGroup.addTo(map)
           schoolsGroup.addTo(map)
+          if (overlaps.length > 0) overlapsGroup.addTo(map)
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, googleHullGroup, streetPointsGroup, housePointsGroup, voronoiGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup]
         } else {
-          const [districtsGroup, schoolsGroup, mrkGroup, , , , , voronoiGroup] = layersRef.current.psk
-          // Re-add active layers (not overlapsGroup/google layers by default)
+          const [districtsGroup, schoolsGroup, , overlapsGroup] = layersRef.current.psk
+          // Re-add active layers (obvody + školy + prekryvy ON by default)
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
-          mrkGroup.addTo(map)
-          if (voronoiGroup && voronoiGeom.length > 0) voronoiGroup.addTo(map)
+          if (overlaps.length > 0) overlapsGroup.addTo(map)
           if (features.length > 0) {
             try {
               const bounds = districtsGroup.getBounds()

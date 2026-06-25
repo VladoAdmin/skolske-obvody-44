@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -88,17 +88,6 @@ async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   }
 }
 
-async function fetchGeocodedGeom(): Promise<SoDistrictGeocodedGeom[]> {
-  try {
-    const sb = createPublicClient()
-    const { data, error } = await sb.from('so_district_geocoded_geom').select('*')
-    if (error) throw error
-    return (data ?? []) as SoDistrictGeocodedGeom[]
-  } catch {
-    return []
-  }
-}
-
 async function fetchStreetGeocodes(): Promise<SoStreetGeocode[]> {
   try {
     const sb = createPublicClient()
@@ -137,14 +126,13 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, municipalities, geocodedGeom, streetGeocodes, housePoints, voronoiGeom] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, municipalities, streetGeocodes, housePoints, voronoiGeom] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
     fetchFindings(),
     fetchOverlaps(),
     fetchMunicipalities(),
-    fetchGeocodedGeom(),
     fetchStreetGeocodes(),
     fetchHousePoints(),
     fetchVoronoiGeom(),
@@ -170,17 +158,16 @@ export default async function MapPage() {
         </Alert>
       )}
 
-      {/* Sprint K KPI — Voronoi tessellation */}
-      {voronoiGeom.length > 0 && (
-        <Alert className="border-blue-300 bg-blue-50 text-blue-900">
-          <AlertTitle className="text-blue-800">Sprint K — Voronoi tessellation (matematicky disjoint)</AlertTitle>
-          <AlertDescription className="text-blue-800 text-xs">
-            Voronoi obvody: {voronoiGeom.length} obvodov · celky PostGIS ST_VoronoiPolygons ·{' '}
-            <strong>0 prekryvov</strong> (Sprint J: ~200 km² baseline).{' '}
-            Vrstva &ldquo;Voronoi hranice (Sprint K)&rdquo; je predvolene zapnutá.
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Map overview — what the default view shows */}
+      <Alert className="border-blue-300 bg-blue-50 text-blue-900">
+        <AlertTitle className="text-blue-800">Ako čítať mapu</AlertTitle>
+        <AlertDescription className="text-blue-800 text-xs">
+          Mapa ukazuje {features.length} školských obvodov v Prešove farebne odlíšené.
+          Sýto vyfarbené hranice = oblasť pridelená danej škole podľa VZN.
+          Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
+          Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
+        </AlertDescription>
+      </Alert>
       {/* Sprint I KPI — overlap reduction */}
       {housePoints.length > 0 && voronoiGeom.length === 0 && (
         <Alert className="border-green-300 bg-green-50 text-green-900">
@@ -214,7 +201,6 @@ export default async function MapPage() {
                 findings={findings}
                 overlaps={overlaps}
                 municipalities={municipalities}
-                geocodedGeom={geocodedGeom}
                 streetGeocodes={streetGeocodes}
                 housePoints={housePoints}
                 voronoiGeom={voronoiGeom}
