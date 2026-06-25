@@ -40,11 +40,58 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
         Zobrazujem {start}–{end} z {totalCount} nálezov
       </p>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      {/* Card stack — only on xs (< sm, < 640px) */}
+      <div className="block sm:hidden space-y-2">
+        {findings.map((finding) => (
+          <div
+            key={finding.finding_id}
+            className="rounded-lg border border-border p-3 space-y-1.5 bg-background"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span
+                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
+              >
+                {getSeverityLabel(finding.severity)}
+              </span>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {STATUS_LABELS[finding.status] ?? finding.status}
+              </span>
+            </div>
+            <div>
+              <Link
+                href={`/districts/${finding.district_id}`}
+                className="text-sm font-medium text-primary underline hover:text-primary/80"
+              >
+                {finding.district_name}
+              </Link>
+              {finding.municipality_name && (
+                <p className="text-xs text-muted-foreground">{finding.municipality_name}</p>
+              )}
+            </div>
+            <div>
+              <code className="font-mono text-xs">{finding.condition_code}</code>
+              <p className="text-xs text-muted-foreground">
+                {getConditionLabel(finding.condition_code)}
+              </p>
+            </div>
+            {finding.evidence_public_text && (
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {finding.evidence_public_text}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {relativeTime(finding.created_at)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Table — sm and above */}
+      <div className="hidden sm:block overflow-x-auto rounded-lg border border-border">
         <Table aria-label="Register nálezov">
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs">Závažnosť</TableHead>
+              <TableHead className="text-xs sticky left-0 bg-background z-10">Závažnosť</TableHead>
               <TableHead className="text-xs">Obec</TableHead>
               <TableHead className="text-xs">Obvod</TableHead>
               <TableHead className="text-xs">Podmienka</TableHead>
@@ -61,7 +108,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
                 onClick={() => {}}
                 aria-label={`Nález pre obvod ${finding.district_name}`}
               >
-                <TableCell>
+                <TableCell className="sticky left-0 bg-background z-10">
                   <span
                     className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
                   >

@@ -35,12 +35,12 @@ export function FindingsFilters() {
   const conditionVal: string = condition
 
   return (
-    <div className="flex flex-wrap gap-3" role="search" aria-label="Filtre nálezov">
+    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3" role="search" aria-label="Filtre nálezov">
       {/* Severity filter */}
-      <div>
+      <div className="sm:w-auto w-full">
         <label htmlFor="filter-severity" className="text-xs text-muted-foreground block mb-1">Závažnosť</label>
         <Select value={severityVal === ALL ? undefined : severityVal} onValueChange={(v: string | null) => updateParam('severity', v ?? ALL)}>
-          <SelectTrigger id="filter-severity" className="w-40 h-8 text-xs">
+          <SelectTrigger id="filter-severity" className="w-full sm:w-40 h-8 text-xs">
             <SelectValue placeholder="Všetky závažnosti" />
           </SelectTrigger>
           <SelectContent>
@@ -55,10 +55,10 @@ export function FindingsFilters() {
       </div>
 
       {/* Status filter */}
-      <div>
+      <div className="sm:w-auto w-full">
         <label htmlFor="filter-status" className="text-xs text-muted-foreground block mb-1">Stav</label>
         <Select value={statusVal === ALL ? undefined : statusVal} onValueChange={(v: string | null) => updateParam('status', v ?? ALL)}>
-          <SelectTrigger id="filter-status" className="w-36 h-8 text-xs">
+          <SelectTrigger id="filter-status" className="w-full sm:w-36 h-8 text-xs">
             <SelectValue placeholder="Všetky stavy" />
           </SelectTrigger>
           <SelectContent>
@@ -72,10 +72,10 @@ export function FindingsFilters() {
       </div>
 
       {/* Condition filter */}
-      <div>
+      <div className="sm:w-auto w-full">
         <label htmlFor="filter-condition" className="text-xs text-muted-foreground block mb-1">Podmienka</label>
         <Select value={conditionVal === ALL ? undefined : conditionVal} onValueChange={(v: string | null) => updateParam('condition', v ?? ALL)}>
-          <SelectTrigger id="filter-condition" className="w-52 h-8 text-xs">
+          <SelectTrigger id="filter-condition" className="w-full sm:w-52 h-8 text-xs">
             <SelectValue placeholder="Všetky podmienky" />
           </SelectTrigger>
           <SelectContent>

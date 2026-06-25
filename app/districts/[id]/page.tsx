@@ -131,8 +131,10 @@ export default async function DistrictPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Mini map */}
-      <DistrictMiniMap feature={mapFeature} />
+      {/* Mini map — full-width on mobile, constrained on desktop */}
+      <div className="w-full lg:max-w-2xl">
+        <DistrictMiniMap feature={mapFeature} />
+      </div>
 
       {/* Scorecard or empty state */}
       {sorted.length > 0 ? (
