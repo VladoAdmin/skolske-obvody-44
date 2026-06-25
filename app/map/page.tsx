@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode, SoHousePoint } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -112,8 +112,21 @@ async function fetchStreetGeocodes(): Promise<SoStreetGeocode[]> {
   }
 }
 
+async function fetchHousePoints(): Promise<SoHousePoint[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_house_points')
+      .select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson')
+    if (error) throw error
+    return (data ?? []) as SoHousePoint[]
+  } catch {
+    return []
+  }
+}
+
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, municipalities, geocodedGeom, streetGeocodes] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, municipalities, geocodedGeom, streetGeocodes, housePoints] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -122,6 +135,7 @@ export default async function MapPage() {
     fetchMunicipalities(),
     fetchGeocodedGeom(),
     fetchStreetGeocodes(),
+    fetchHousePoints(),
   ])
   const isEmpty = features.length === 0
 
@@ -168,6 +182,7 @@ export default async function MapPage() {
                 municipalities={municipalities}
                 geocodedGeom={geocodedGeom}
                 streetGeocodes={streetGeocodes}
+                housePoints={housePoints}
                 initialMode="sk"
               />
             </Suspense>

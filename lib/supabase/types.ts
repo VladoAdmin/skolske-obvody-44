@@ -159,6 +159,18 @@ export interface SoStreetGeocode {
   point_geojson: Record<string, unknown> | null
 }
 
+export interface SoHousePoint {
+  district_id: string
+  street: string
+  house_number: string
+  lat: number
+  lon: number
+  status: string
+  partial_match: boolean | null
+  formatted_address: string | null
+  point_geojson: Record<string, unknown> | null
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

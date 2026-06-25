@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode, SoHousePoint } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
 
 interface RegionMapClientProps {
@@ -15,6 +15,7 @@ interface RegionMapClientProps {
   municipalities?: SoPskMunicipality[]
   geocodedGeom?: SoDistrictGeocodedGeom[]
   streetGeocodes?: SoStreetGeocode[]
+  housePoints?: SoHousePoint[]
   initialMode?: 'sk' | 'psk'
 }
 
@@ -23,7 +24,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], geocodedGeom = [], streetGeocodes = [], initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], geocodedGeom = [], streetGeocodes = [], housePoints = [], initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -450,6 +451,24 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             marker.addTo(streetPointsGroup)
           })
 
+          // (H) House points layer — per-house geocodes from VZN ranges
+          const housePointsGroup = L.featureGroup()
+          housePoints.forEach((hp) => {
+            if (hp.lat == null || hp.lon == null) return
+            const marker = L.circleMarker([hp.lat, hp.lon], {
+              radius: 2,
+              fillColor: '#10b981',
+              color: '#065f46',
+              weight: 0.5,
+              fillOpacity: 0.7,
+            })
+            marker.bindTooltip(
+              `${hp.street} ${hp.house_number}${hp.formatted_address ? `<br/>${hp.formatted_address}` : ''}`,
+              { sticky: true }
+            )
+            marker.addTo(housePointsGroup)
+          })
+
           // Layer control — overlaps OFF by default (visually heavy)
           L.control.layers(
             undefined,
@@ -457,6 +476,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               'Obvody (12)': districtsGroup,
               'Google Geocoded hull (Sprint G)': googleHullGroup,
               'Adresy z VZN (Google)': streetPointsGroup,
+              'Domy z VZN (Google)': housePointsGroup,
               'Prekryvy obvodov': overlapsGroup,
               'MRK lokality': mrkGroup,
               'Školy (26)': schoolsGroup,
@@ -469,19 +489,21 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           // Google layers — ON by default so Vlado sees comparison immediately
           googleHullGroup.addTo(map)
           streetPointsGroup.addTo(map)
+          housePointsGroup.addTo(map)
           // overlapsGroup is NOT added — user enables from layer control
           mrkGroup.addTo(map)
           schoolsGroup.addTo(map)
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, googleHullGroup, streetPointsGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, googleHullGroup, streetPointsGroup, housePointsGroup]
         } else {
-          const [districtsGroup, schoolsGroup, mrkGroup, , googleHullGroup, streetPointsGroup] = layersRef.current.psk
+          const [districtsGroup, schoolsGroup, mrkGroup, , googleHullGroup, streetPointsGroup, housePointsGroup] = layersRef.current.psk
           // Re-add active layers (not overlapsGroup by default)
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
           mrkGroup.addTo(map)
           if (googleHullGroup) googleHullGroup.addTo(map)
           if (streetPointsGroup) streetPointsGroup.addTo(map)
+          if (housePointsGroup) housePointsGroup.addTo(map)
           if (features.length > 0) {
             try {
               const bounds = districtsGroup.getBounds()
