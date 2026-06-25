@@ -1,0 +1,270 @@
+[
+  {
+    "district_id": "09c36255-5f36-5d04-94cc-65eb6cc648ed",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Bajkalská",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "9e03d391-cd6c-5902-b41f-dc17883910aa",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Bajzova",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "f24f8a53-ba8c-5f8e-ae9f-e71dd0ff7468",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Budovateľská",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "ade01b72-cf3b-54a5-8666-8df3b46826cc",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Curie",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "fc009dc8-67a4-5634-beab-1ff45862c6c4",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Francisciho",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "2d2309b3-fbe6-58d5-94c6-da23a66f5541",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Fučíkova",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "df30fd40-9ef7-51f1-810d-d6b29a0be3bc",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Holého",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "0872fabe-c277-54ad-a6d9-1852ed402043",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Kúpeľná",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "59676613-00e1-5b25-a9b1-7808e26873a8",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Lesnícka",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "4c93d7ef-2ead-5a1f-94ab-f1dfaf2ab33e",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Obrancov mieru",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "9c8f6de2-c553-5965-9423-df0888207a68",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Prostějovská",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "a0864f32-4cc5-549d-94ff-0aa92981c82d",
+    "kind": "real_placeholder",
+    "name": "Obvod ZŠ Šrobárova",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "fd1db26b-42e1-5c2a-891f-cc9cb53e41f1",
+    "kind": "synthetic",
+    "name": "synth_all_pass",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "GREEN"
+  },
+  {
+    "district_id": "eea8eafb-32b2-5414-b913-296a3ffb4eae",
+    "kind": "synthetic",
+    "name": "synth_s1_fail",
+    "verdicts": {
+      "S1": "FAIL",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "RED"
+  },
+  {
+    "district_id": "a3fcb71d-9150-51ff-b28b-20fbbc989eb6",
+    "kind": "synthetic",
+    "name": "synth_s2_incomplete",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "INCOMPLETE",
+      "S3": "PASS",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "ORANGE"
+  },
+  {
+    "district_id": "3aaba3d9-a149-544d-991b-81a0d7488799",
+    "kind": "synthetic",
+    "name": "synth_s3_fail",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "FAIL",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "RED"
+  },
+  {
+    "district_id": "55a1b75f-000d-5b14-81ac-9579aec8f067",
+    "kind": "synthetic",
+    "name": "synth_pa_fail",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "FAIL",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "GREEN"
+  },
+  {
+    "district_id": "f1e940c8-b6a2-5494-9aa3-cc64330fe3ce",
+    "kind": "synthetic",
+    "name": "synth_pc_risk",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "RISK",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "ORANGE"
+  },
+  {
+    "district_id": "ee4091f1-dbaf-557d-a161-3ae273f713e7",
+    "kind": "synthetic",
+    "name": "synth_pc_risk_illustrative",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "RISK",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {
+      "Pc": true
+    },
+    "expected": "GREEN"
+  },
+  {
+    "district_id": "ec7bf512-508e-5310-b933-5e90343f42a6",
+    "kind": "synthetic",
+    "name": "synth_pe_signal_only",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "PASS",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "SIGNAL",
+      "Pf": "NOT_EVALUATED"
+    },
+    "is_illustrative": {},
+    "expected": "GREEN"
+  },
+  {
+    "district_id": "1e6ca3a9-a879-5c01-b6af-eae29e9ac307",
+    "kind": "synthetic",
+    "name": "synth_empty",
+    "verdicts": {},
+    "is_illustrative": {},
+    "expected": "NONE"
+  },
+  {
+    "district_id": "b4399e84-d543-5129-9751-3589d4e12f12",
+    "kind": "synthetic",
+    "name": "synth_pa_insufficient",
+    "verdicts": {
+      "S1": "PASS",
+      "S2": "PASS",
+      "S3": "PASS",
+      "Pa": "INSUFFICIENT_DATA",
+      "Pb": "PASS",
+      "Pc": "PASS",
+      "Pd": "PASS",
+      "Pe": "PASS",
+      "Pf": "PASS"
+    },
+    "is_illustrative": {},
+    "expected": "ORANGE"
+  }
+]
