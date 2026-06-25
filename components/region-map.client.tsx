@@ -81,6 +81,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
       overlapsPane.style.mixBlendMode = 'multiply'
       const schoolsPane = map.createPane('schools')
       schoolsPane.style.zIndex = '700'
+      const streetPointsPane = map.createPane('streetPoints')
+      streetPointsPane.style.zIndex = '680'
 
       // Inject MRK hatch pattern SVG once
       if (!document.getElementById('mrkHatchDefs')) {
@@ -452,18 +454,33 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           })
 
           // (H) House points layer — per-house geocodes from VZN ranges
+          // Build district_id → index map for HSL hue lookup
+          const districtIndexMap = new Map<string, number>()
+          features.forEach((f, idx) => { districtIndexMap.set(f.id, idx) })
+
           const housePointsGroup = L.featureGroup()
           housePoints.forEach((hp) => {
             if (hp.lat == null || hp.lon == null) return
+            // Only render valid points by default; invalid are silently skipped
+            if (hp.valid === false) return
+
+            const distIdx = districtIndexMap.get(hp.district_id) ?? 0
+            const hue = getDistrictHue(distIdx)
+            const fillColor = `hsl(${hue}, 70%, 45%)`
+            const strokeColor = `hsl(${hue}, 70%, 25%)`
+
             const marker = L.circleMarker([hp.lat, hp.lon], {
-              radius: 2,
-              fillColor: '#10b981',
-              color: '#065f46',
-              weight: 0.5,
-              fillOpacity: 0.7,
+              radius: 2.5,
+              fillColor,
+              color: strokeColor,
+              weight: 0.7,
+              fillOpacity: 0.85,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'streetPoints' as any,
             })
+            const partialWarning = hp.partial_match ? ' ⚠ partial match' : ''
             marker.bindTooltip(
-              `${hp.street} ${hp.house_number}${hp.formatted_address ? `<br/>${hp.formatted_address}` : ''}`,
+              `${hp.street} ${hp.house_number}${hp.formatted_address ? `<br/>${hp.formatted_address}` : ''}${partialWarning}`,
               { sticky: true }
             )
             marker.addTo(housePointsGroup)

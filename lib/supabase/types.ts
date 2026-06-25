@@ -169,6 +169,8 @@ export interface SoHousePoint {
   partial_match: boolean | null
   formatted_address: string | null
   point_geojson: Record<string, unknown> | null
+  valid: boolean | null
+  validation_reason: string | null
 }
 
 // Backward-compat aliases (deprecated — use So* names)

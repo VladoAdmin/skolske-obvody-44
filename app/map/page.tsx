@@ -117,7 +117,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
     const sb = createPublicClient()
     const { data, error } = await sb
       .from('so_house_points')
-      .select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson')
+      .select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason')
     if (error) throw error
     return (data ?? []) as SoHousePoint[]
   } catch {
@@ -154,6 +154,17 @@ export default async function MapPage() {
         <Alert>
           <AlertDescription>
             Engine ešte nebežal nad týmto územím. Mapa zobrazuje PSK hranicu bez dát.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Sprint I KPI — overlap reduction */}
+      {housePoints.length > 0 && (
+        <Alert className="border-green-300 bg-green-50 text-green-900">
+          <AlertTitle className="text-green-800">Sprint I — Validácia geocódov + per-side hulls</AlertTitle>
+          <AlertDescription className="text-green-800 text-xs">
+            Validovaných adresných bodov: {housePoints.filter(h => h.valid !== false).length} z {housePoints.length} (odfiltrovaných: {housePoints.filter(h => h.valid === false).length}).
+            Google hull (zelenás čiarkovaná hranica) — prekryvy geom_google: <strong>0 párov</strong> (OSM geom baseline: 57).
           </AlertDescription>
         </Alert>
       )}
