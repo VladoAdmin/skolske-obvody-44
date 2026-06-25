@@ -26,12 +26,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, initialMode = 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const layersRef = useRef<{ sk?: any; psk?: any }>({})
   const [mode, setMode] = useState<'sk' | 'psk'>(initialMode)
+  const [mapReady, setMapReady] = useState(false)
   const modeRef = useRef(mode)
 
   // keep modeRef in sync for use inside closure
   useEffect(() => {
     modeRef.current = mode
-  }, [mode])
+  }, [mode, mapReady])
 
   // Init map once
   useEffect(() => {
@@ -55,6 +56,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, initialMode = 
       })
 
       mapRef.current = map
+      setMapReady(true)
 
       // OSM tile layer with mandatory attribution
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -289,7 +291,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, initialMode = 
       }
     }).catch(console.error)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
+  }, [mode, mapReady])
 
   return (
     <div className="relative w-full h-full">

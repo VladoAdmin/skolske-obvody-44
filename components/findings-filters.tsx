@@ -39,7 +39,7 @@ export function FindingsFilters() {
       {/* Severity filter */}
       <div>
         <label htmlFor="filter-severity" className="text-xs text-muted-foreground block mb-1">Závažnosť</label>
-        <Select value={severityVal as string} onValueChange={(v: string | null) => updateParam('severity', v ?? ALL)}>
+        <Select value={severityVal === ALL ? undefined : severityVal} onValueChange={(v: string | null) => updateParam('severity', v ?? ALL)}>
           <SelectTrigger id="filter-severity" className="w-40 h-8 text-xs">
             <SelectValue placeholder="Všetky závažnosti" />
           </SelectTrigger>
@@ -57,7 +57,7 @@ export function FindingsFilters() {
       {/* Status filter */}
       <div>
         <label htmlFor="filter-status" className="text-xs text-muted-foreground block mb-1">Stav</label>
-        <Select value={statusVal as string} onValueChange={(v: string | null) => updateParam('status', v ?? ALL)}>
+        <Select value={statusVal === ALL ? undefined : statusVal} onValueChange={(v: string | null) => updateParam('status', v ?? ALL)}>
           <SelectTrigger id="filter-status" className="w-36 h-8 text-xs">
             <SelectValue placeholder="Všetky stavy" />
           </SelectTrigger>
@@ -74,7 +74,7 @@ export function FindingsFilters() {
       {/* Condition filter */}
       <div>
         <label htmlFor="filter-condition" className="text-xs text-muted-foreground block mb-1">Podmienka</label>
-        <Select value={conditionVal as string} onValueChange={(v: string | null) => updateParam('condition', v ?? ALL)}>
+        <Select value={conditionVal === ALL ? undefined : conditionVal} onValueChange={(v: string | null) => updateParam('condition', v ?? ALL)}>
           <SelectTrigger id="filter-condition" className="w-52 h-8 text-xs">
             <SelectValue placeholder="Všetky podmienky" />
           </SelectTrigger>
