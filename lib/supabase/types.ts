@@ -87,6 +87,38 @@ export interface SoEngineMetadata {
   open_findings_count: number
 }
 
+export interface SoSchoolMarker {
+  id: string
+  name: string
+  kind: string | null
+  geom_geojson: Record<string, unknown> | null
+}
+
+export interface SoMrkOverlay {
+  id: string
+  name: string | null
+  severity_class: string | null
+  geom_geojson: Record<string, unknown> | null
+}
+
+export interface SoFindingsPanelItem {
+  finding_id: string
+  district_id: string
+  district_name: string
+  municipality_id: string
+  municipality_name: string | null
+  condition_code: string
+  condition_label_sk: string
+  severity: string
+  severity_rank: number
+  status: string
+  evidence_public_text: string | null
+  provenance_source: string | null
+  created_at: string
+  district_geom_centroid_lon: number | null
+  district_geom_centroid_lat: number | null
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

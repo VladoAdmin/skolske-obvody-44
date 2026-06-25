@@ -46,7 +46,7 @@ export default async function MunicipalityDetailPage({ params }: Props) {
 
       {/* Mini map */}
       <div className="rounded-lg border border-border overflow-hidden" style={{ height: 300 }}>
-        <RegionMap features={features} />
+        <RegionMap features={features} schools={[]} mrkOverlays={[]} findings={[]} />
       </div>
 
       {/* Districts list */}

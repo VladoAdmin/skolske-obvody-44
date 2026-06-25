@@ -1,7 +1,7 @@
 // PSK region constants — source of truth for map centering and region identification
 export const PSK_BBOX: [number, number, number, number] = [20.4, 48.3, 22.8, 49.7] // minLon, minLat, maxLon, maxLat
-export const PSK_CENTER: [number, number] = [49.0, 21.6] // [lat, lon] for Leaflet
-export const PSK_DEFAULT_ZOOM = 9
+export const PSK_CENTER: [number, number] = [49.0, 21.25] // [lat, lon] for Leaflet
+export const PSK_DEFAULT_ZOOM = 12
 export const PRESOV_MUNICIPALITY_SLUG = 'presov'
 
 // Composition color map — Tailwind classes + fill opacity
