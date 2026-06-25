@@ -1,5 +1,6 @@
 'use client'
 
+import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef } from 'react'
 import type { DistrictMapFeature } from '@/lib/supabase/types'
 import { COMPOSITION_COLOR_MAP } from '@/lib/config/region'
