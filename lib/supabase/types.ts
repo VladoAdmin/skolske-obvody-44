@@ -1,6 +1,6 @@
 // Manual types for skolske_obvody views — generated types from views are flaky
 
-export interface DistrictComposition {
+export interface SoDistrictComposition {
   district_id: string
   composition_color: 'RED' | 'ORANGE' | 'GREEN' | 'NONE'
   composition_reason: string | null
@@ -10,7 +10,7 @@ export interface DistrictComposition {
   computed_at: string | null
 }
 
-export interface DistrictMapFeature {
+export interface SoDistrictMapFeature {
   id: string
   name: string
   municipality_id: string
@@ -23,7 +23,7 @@ export interface DistrictMapFeature {
   school_name: string | null
 }
 
-export interface DistrictScorecardRow {
+export interface SoDistrictScorecardRow {
   district_id: string
   district_name: string
   municipality_id: string
@@ -48,7 +48,7 @@ export interface DistrictScorecardRow {
   computed_at: string | null
 }
 
-export interface MunicipalitySummary {
+export interface SoMunicipalitySummary {
   municipality_id: string
   name: string
   districts_count: number
@@ -60,7 +60,7 @@ export interface MunicipalitySummary {
   none_districts_count: number
 }
 
-export interface FindingPublic {
+export interface SoFindingPublic {
   finding_id: string
   district_id: string
   district_name: string
@@ -76,7 +76,7 @@ export interface FindingPublic {
   created_at: string
 }
 
-export interface EngineMetadata {
+export interface SoEngineMetadata {
   dataset_version: string | null
   methodology_version: string | null
   engine_version: string | null
@@ -86,3 +86,11 @@ export interface EngineMetadata {
   schools_count: number
   open_findings_count: number
 }
+
+// Backward-compat aliases (deprecated — use So* names)
+export type DistrictComposition = SoDistrictComposition
+export type DistrictMapFeature = SoDistrictMapFeature
+export type DistrictScorecardRow = SoDistrictScorecardRow
+export type MunicipalitySummary = SoMunicipalitySummary
+export type FindingPublic = SoFindingPublic
+export type EngineMetadata = SoEngineMetadata

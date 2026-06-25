@@ -32,7 +32,7 @@ async function fetchFindings(searchParams: Props['searchParams']) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let query: any = sb
-      .from('findings_public')
+      .from('so_findings_public')
       .select('*', { count: 'exact' })
       .order('severity_rank', { ascending: false })
       .order('created_at', { ascending: false })

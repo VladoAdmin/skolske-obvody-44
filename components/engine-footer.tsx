@@ -7,7 +7,7 @@ export async function EngineFooter() {
   try {
     const sb = createPublicClient()
     const { data } = await sb
-      .from('engine_metadata')
+      .from('so_engine_metadata')
       .select('*')
       .maybeSingle()
     meta = data as EngineMetadata | null

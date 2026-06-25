@@ -17,7 +17,7 @@ export const metadata = {
 async function fetchFeatures(): Promise<DistrictMapFeature[]> {
   try {
     const sb = createPublicClient()
-    const { data, error } = await sb.from('district_map_features').select('*')
+    const { data, error } = await sb.from('so_district_map_features').select('*')
     if (error) throw error
     return (data ?? []) as DistrictMapFeature[]
   } catch {

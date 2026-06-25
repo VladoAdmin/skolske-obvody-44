@@ -16,8 +16,8 @@ export default async function MunicipalityDetailPage({ params }: Props) {
   const sb = createPublicClient()
 
   const [summaryRes, featuresRes] = await Promise.all([
-    sb.from('municipalities_summary').select('*').eq('municipality_id', id).maybeSingle(),
-    sb.from('district_map_features').select('*'),
+    sb.from('so_municipalities_summary').select('*').eq('municipality_id', id).maybeSingle(),
+    sb.from('so_district_map_features').select('*'),
   ])
 
   const summary = summaryRes.data as MunicipalitySummary | null

@@ -8,7 +8,7 @@ export const metadata = { title: 'Zriaďovatelia — Kontrola § 44' }
 async function fetchSummaries(): Promise<MunicipalitySummary[]> {
   try {
     const sb = createPublicClient()
-    const { data, error } = await sb.from('municipalities_summary').select('*')
+    const { data, error } = await sb.from('so_municipalities_summary').select('*')
     if (error) throw error
     return (data ?? []) as MunicipalitySummary[]
   } catch {

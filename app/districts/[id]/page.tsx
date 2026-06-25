@@ -21,7 +21,7 @@ export default async function DistrictPage({ params }: Props) {
 
   // Fetch scorecard rows
   const { data: rawRows, error: scorecardError } = await sb
-    .from('district_scorecard')
+    .from('so_district_scorecard')
     .select('*')
     .eq('district_id', id)
 
@@ -53,7 +53,7 @@ export default async function DistrictPage({ params }: Props) {
   } else {
     // No scorecard rows: check if district even exists
     const { data: mf } = await sb
-      .from('district_map_features')
+      .from('so_district_map_features')
       .select('*')
       .eq('id', id)
       .maybeSingle()
@@ -76,7 +76,7 @@ export default async function DistrictPage({ params }: Props) {
   // Fetch map feature for mini map (if not already fetched)
   if (!mapFeature) {
     const { data: mf } = await sb
-      .from('district_map_features')
+      .from('so_district_map_features')
       .select('*')
       .eq('id', id)
       .maybeSingle()

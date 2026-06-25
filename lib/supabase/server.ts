@@ -14,7 +14,7 @@ export function createPublicClient() {
         set() {}, // read-only client — no writes
         remove() {},
       },
-      db: { schema: 'skolske_obvody' },
+      db: { schema: 'public' },
     },
   )
 }

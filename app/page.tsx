@@ -10,8 +10,8 @@ async function fetchKpis() {
   try {
     const sb = createPublicClient()
     const [metaRes, summaryRes] = await Promise.all([
-      sb.from('engine_metadata').select('*').maybeSingle(),
-      sb.from('municipalities_summary').select('*').maybeSingle(),
+      sb.from('so_engine_metadata').select('*').maybeSingle(),
+      sb.from('so_municipalities_summary').select('*').maybeSingle(),
     ])
     return {
       meta: metaRes.data as EngineMetadata | null,

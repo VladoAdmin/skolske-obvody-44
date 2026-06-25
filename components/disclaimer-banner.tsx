@@ -14,7 +14,7 @@ export async function DisclaimerBanner({ alwaysShow = false }: Props) {
   try {
     const sb = createPublicClient()
     const { data } = await sb
-      .from('engine_metadata')
+      .from('so_engine_metadata')
       .select('methodology_version, engine_version')
       .maybeSingle()
     const meta = data as EngineMetadata | null

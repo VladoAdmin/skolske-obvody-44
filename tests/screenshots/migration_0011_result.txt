@@ -1,0 +1,12 @@
+Migration 0011_sprint_c_public_aliases.sql applied via f2_exec_sql RPC
+Date: 2026-06-25
+Status: HTTP 200 {"ok": true}
+Views created in public schema:
+  - public.so_district_compositions
+  - public.so_district_map_features
+  - public.so_district_scorecard
+  - public.so_municipalities_summary
+  - public.so_findings_public
+  - public.so_engine_metadata
+  - public.so_provenance_allowed_hosts
+GRANT SELECT TO anon applied to all 7 views.
