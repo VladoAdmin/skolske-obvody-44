@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { RegionMap } from '@/components/region-map'
 import { FindingsPanel } from '@/components/findings-panel'
+import { MapWithPanel } from '@/components/map/map-with-panel'
 import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -90,32 +91,23 @@ export default async function MapPage() {
         </Alert>
       )}
 
-      {/* Map + findings panel layout */}
-      <div className="flex flex-col md:flex-row gap-4">
-        {/* Map container */}
-        <div
-          className="flex-1 rounded-lg border border-border overflow-hidden"
-          style={{ height: '60vh', minHeight: 400 }}
-          aria-describedby="map-fallback-table"
-        >
-          <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
-            <RegionMap
-              features={features}
-              schools={schools}
-              mrkOverlays={mrkOverlays}
-              findings={findings}
-              initialMode="sk"
-            />
-          </Suspense>
-        </div>
-
-        {/* Findings sidebar */}
-        <div
-          className="w-full md:w-80 flex-shrink-0 rounded-lg border border-border overflow-hidden"
-          style={{ height: '60vh', minHeight: 400 }}
-        >
-          <FindingsPanel findings={findings} />
-        </div>
+      {/* Map + findings panel layout — responsive via MapWithPanel */}
+      <div aria-describedby="map-fallback-table">
+        <MapWithPanel
+          findingsCount={findings.length}
+          mapSlot={
+            <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
+              <RegionMap
+                features={features}
+                schools={schools}
+                mrkOverlays={mrkOverlays}
+                findings={findings}
+                initialMode="sk"
+              />
+            </Suspense>
+          }
+          panelSlot={<FindingsPanel findings={findings} />}
+        />
       </div>
 
       {/* A11y fallback table */}

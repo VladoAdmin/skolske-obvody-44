@@ -54,5 +54,13 @@
 
   body {
     @apply bg-background text-foreground;
+    overflow-x: hidden;
+  }
+}
+
+/* Mobile typography tweak */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
   }
 }
