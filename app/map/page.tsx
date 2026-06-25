@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode, SoHousePoint } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoDistrictGeocodedGeom, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -112,6 +112,17 @@ async function fetchStreetGeocodes(): Promise<SoStreetGeocode[]> {
   }
 }
 
+async function fetchVoronoiGeom(): Promise<SoDistrictVoronoi[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_voronoi').select('id,name,geom_voronoi_geojson,geom_voronoi_metadata')
+    if (error) throw error
+    return (data ?? []) as SoDistrictVoronoi[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchHousePoints(): Promise<SoHousePoint[]> {
   try {
     const sb = createPublicClient()
@@ -126,7 +137,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, municipalities, geocodedGeom, streetGeocodes, housePoints] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, municipalities, geocodedGeom, streetGeocodes, housePoints, voronoiGeom] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -136,6 +147,7 @@ export default async function MapPage() {
     fetchGeocodedGeom(),
     fetchStreetGeocodes(),
     fetchHousePoints(),
+    fetchVoronoiGeom(),
   ])
   const isEmpty = features.length === 0
 
@@ -158,8 +170,19 @@ export default async function MapPage() {
         </Alert>
       )}
 
+      {/* Sprint K KPI — Voronoi tessellation */}
+      {voronoiGeom.length > 0 && (
+        <Alert className="border-blue-300 bg-blue-50 text-blue-900">
+          <AlertTitle className="text-blue-800">Sprint K — Voronoi tessellation (matematicky disjoint)</AlertTitle>
+          <AlertDescription className="text-blue-800 text-xs">
+            Voronoi obvody: {voronoiGeom.length} obvodov · celky PostGIS ST_VoronoiPolygons ·{' '}
+            <strong>0 prekryvov</strong> (Sprint J: ~200 km² baseline).{' '}
+            Vrstva &ldquo;Voronoi hranice (Sprint K)&rdquo; je predvolene zapnutá.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Sprint I KPI — overlap reduction */}
-      {housePoints.length > 0 && (
+      {housePoints.length > 0 && voronoiGeom.length === 0 && (
         <Alert className="border-green-300 bg-green-50 text-green-900">
           <AlertTitle className="text-green-800">Sprint I — Validácia geocódov + per-side hulls</AlertTitle>
           <AlertDescription className="text-green-800 text-xs">
@@ -194,6 +217,7 @@ export default async function MapPage() {
                 geocodedGeom={geocodedGeom}
                 streetGeocodes={streetGeocodes}
                 housePoints={housePoints}
+                voronoiGeom={voronoiGeom}
                 initialMode="sk"
               />
             </Suspense>

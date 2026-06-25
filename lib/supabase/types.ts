@@ -148,6 +148,17 @@ export interface SoDistrictGeocodedGeom {
   } | null
 }
 
+export interface SoDistrictVoronoi {
+  id: string
+  name: string
+  geom_voronoi_geojson: Record<string, unknown> | null
+  geom_voronoi_metadata: {
+    method?: string
+    cell_count?: number
+    created_at?: string
+  } | null
+}
+
 export interface SoStreetGeocode {
   district_id: string
   street: string

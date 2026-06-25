@@ -36,14 +36,14 @@ def _get_engine_version() -> str:
             stderr=subprocess.DEVNULL,
             text=True,
         ).strip()
-        return f"{short}+google-validated"
+        return f"{short}+voronoi"
     except Exception:
-        return "unknown+google-validated"
+        return "unknown+voronoi"
 
 ENGINE_VERSION = _get_engine_version()
 
 # Dataset version — sourced from latest ingest run
-DATASET_VERSION = "sprint-i+presov-2026-06-25"
+DATASET_VERSION = "sprint-k+presov-2026-06-25"
 
 # Thresholds (METHODOLOGY §P-b)
 PB_PASS_DISTANCE_M = 2000     # 2 km for ZS 1. stupeň
