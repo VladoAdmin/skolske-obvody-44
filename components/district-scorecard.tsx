@@ -4,9 +4,12 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 
 interface DistrictScorecardProps {
   rows: DistrictScorecardRow[]
+  // condition_code → AI-generated plain-Slovak explanation (precomputed,
+  // optional; empty when explanations have not been generated yet).
+  explanationByCode?: Record<string, string>
 }
 
-export function DistrictScorecard({ rows }: DistrictScorecardProps) {
+export function DistrictScorecard({ rows, explanationByCode = {} }: DistrictScorecardProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm" aria-label="Scorecard podmienok § 44">
@@ -52,7 +55,11 @@ export function DistrictScorecard({ rows }: DistrictScorecardProps) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <VerdictRow key={row.condition_code} row={row} />
+            <VerdictRow
+              key={row.condition_code}
+              row={row}
+              aiExplanation={explanationByCode[row.condition_code]}
+            />
           ))}
         </tbody>
       </table>

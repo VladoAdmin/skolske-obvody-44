@@ -76,6 +76,14 @@ export interface SoFindingPublic {
   created_at: string
 }
 
+export interface SoFindingExplanation {
+  condition_code: string
+  severity: string
+  explanation_sk: string
+  model: string | null
+  generated_at: string
+}
+
 export interface SoEngineMetadata {
   dataset_version: string | null
   methodology_version: string | null
