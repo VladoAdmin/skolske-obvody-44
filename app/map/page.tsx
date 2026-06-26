@@ -236,6 +236,13 @@ export default async function MapPage() {
               zvyšok ({cleanFallbackCount}) je Voronoi rekonštrukcia z VZN textu.
             </>
           )}
+          {' '}
+          <a
+            href="/o-metodike#paragraf-44"
+            className="font-semibold underline underline-offset-2 hover:text-amber-700"
+          >
+            Pozri metodiku →
+          </a>
         </AlertDescription>
       </Alert>
 
