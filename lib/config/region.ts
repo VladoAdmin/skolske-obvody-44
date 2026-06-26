@@ -38,8 +38,29 @@ export function isAllowedHost(url: string | null | undefined): boolean {
   }
 }
 
-// Per-district categorical hue using golden ratio rotation — deterministic, well-distributed
+// Qualitative 12-entry hue palette for the 12 districts. Hues are ordered so
+// that consecutive indices land far apart on the colour wheel, so adjacent
+// districts (which tend to be near each other in index order) never read as the
+// same colour even with a solid fill. Wraps after 12 for safety.
+const DISTRICT_HUE_PALETTE = [
+  210, // blue
+  30,  // orange
+  140, // green
+  330, // magenta/pink
+  50,  // yellow
+  260, // violet
+  0,   // red
+  180, // cyan/teal
+  90,  // lime
+  300, // purple
+  20,  // brown/red-orange
+  160, // emerald
+]
+
+// Per-district categorical hue — deterministic, distinct, well-separated for
+// adjacent districts. Shared by every component that colours per-district so
+// the map, toggle panel and detail view stay in sync.
 export function getDistrictHue(index: number): number {
-  const GOLDEN_RATIO_CONJUGATE = 0.61803398875
-  return Math.round(((index * GOLDEN_RATIO_CONJUGATE) % 1) * 360)
+  const safe = ((index % DISTRICT_HUE_PALETTE.length) + DISTRICT_HUE_PALETTE.length) % DISTRICT_HUE_PALETTE.length
+  return DISTRICT_HUE_PALETTE[safe]
 }

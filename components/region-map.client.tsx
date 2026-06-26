@@ -90,10 +90,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
       mapRef.current = map
 
       // Create z-ordering panes
+      // MRK pane sits BELOW districts so that, even when the MRK overlay is
+      // toggled on, tapping a district area hits the district polygon (and its
+      // summary popup) rather than the MRK hatch underneath it.
+      const mrkPane = map.createPane('mrk')
+      mrkPane.style.zIndex = '440'
       const districtPane = map.createPane('districts')
       districtPane.style.zIndex = '450'
-      const mrkPane = map.createPane('mrk')
-      mrkPane.style.zIndex = '460'
       const overlapsPane = map.createPane('overlaps')
       overlapsPane.style.zIndex = '470'
       // Apply multiply blend mode so stacked overlap polygons darken additively
@@ -151,7 +154,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           const featureIndex = features.findIndex((f) => f.id === layerId)
           const hue = getDistrictHue(featureIndex >= 0 ? featureIndex : 0)
           if (layerId === id) {
-            layer.setStyle({ weight: 4.5, fillOpacity: 0.42, fillColor: `hsl(${hue}, 65%, 55%)` })
+            layer.setStyle({ weight: 4.5, fillOpacity: 0.55, fillColor: `hsl(${hue}, 65%, 55%)` })
             layer.bringToFront()
             try {
               const bounds = layer.getBounds()
@@ -160,8 +163,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               }
             } catch { /* ignore */ }
           } else {
-            // restore the outline-dominant default (faint fill, thin border)
-            layer.setStyle({ weight: 2.5, fillOpacity: 0.08 })
+            // restore the solid-fill default (distinct palette colour)
+            layer.setStyle({ weight: 2.5, fillOpacity: 0.40 })
           }
         })
       }
@@ -285,15 +288,15 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           const newDistrictLayersMap = new Map()
 
           if (features.length > 0) {
-            // Border clarity (Task C): with many adjacent districts a saturated
-            // fill muddies the boundaries so you can't tell which border belongs
-            // to which obvod. Default view is therefore OUTLINE-DOMINANT — a
-            // strong, well-separated per-district hue on the border, a thin
-            // white casing underneath each line to crisply split touching
-            // borders, and only a faint fill. The hovered/selected obvod alone
-            // gets a stronger fill, so it pops without the rest blending.
-            const FILL_OPACITY_DEFAULT = 0.08
-            const FILL_OPACITY_HOVER = 0.42
+            // Readability: each obvod must read as its OWN solid coloured
+            // region so you can see where it begins and ends. With a 12-entry
+            // qualitative palette (distinct hues for adjacent districts) plus a
+            // crisp white-cased border, a solid ~0.40 fill makes every district
+            // legible while the OSM basemap labels stay faintly visible. The
+            // hovered/selected obvod gets a stronger fill and is brought to
+            // front so it pops above its neighbours.
+            const FILL_OPACITY_DEFAULT = 0.40
+            const FILL_OPACITY_HOVER = 0.55
             const WEIGHT_DEFAULT = 2.5
             const WEIGHT_HOVER = 4.5
 
@@ -508,14 +511,14 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 fillColor: 'url(#mrkHatch)' as any,
                 fillOpacity: 1,
+                // Non-interactive so a tap on a district area that overlaps an
+                // MRK locality always reaches the district polygon underneath
+                // and opens the district summary popup (never an MRK popup).
+                interactive: false,
               },
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'mrk' as any,
             })
-            geoJsonLayer.bindTooltip(
-              `<strong>MRK: ${mrk.name ?? 'Lokalita'}</strong>${mrk.severity_class ? `<br/>Kategória: ${mrk.severity_class}` : ''}`,
-              { sticky: true }
-            )
             geoJsonLayer.addTo(mrkGroup)
           })
 
@@ -739,18 +742,35 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             marker.addTo(houseDotsGroup)
           })
 
-          // Zoom-gated visibility for house dots. The listener is registered
-          // once per PSK build; it's safe to call addLayer/removeLayer
-          // repeatedly because Leaflet ignores no-op adds.
+          // House dots are OFF by default. They only render once the user
+          // explicitly toggles the "Adresné bodky" layer on AND has zoomed in
+          // past HOUSE_DOTS_MIN_ZOOM. We track the toggle intent via the layer
+          // control's overlayadd/overlayremove events so the zoom listener
+          // never re-introduces the dots on its own.
+          let houseDotsEnabled = false
           const updateHouseDotsVisibility = () => {
             const z = map.getZoom()
-            if (z >= HOUSE_DOTS_MIN_ZOOM) {
+            if (houseDotsEnabled && z >= HOUSE_DOTS_MIN_ZOOM) {
               if (!map.hasLayer(houseDotsGroup)) map.addLayer(houseDotsGroup)
             } else {
               if (map.hasLayer(houseDotsGroup)) map.removeLayer(houseDotsGroup)
             }
           }
           map.on('zoomend', updateHouseDotsVisibility)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          map.on('overlayadd', (e: any) => {
+            if (e.layer === houseDotsGroup) {
+              houseDotsEnabled = true
+              updateHouseDotsVisibility()
+            }
+          })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          map.on('overlayremove', (e: any) => {
+            if (e.layer === houseDotsGroup) {
+              houseDotsEnabled = false
+              updateHouseDotsVisibility()
+            }
+          })
 
           // Layer control — MVP demo view. The authoritative "Obvody" layer is
           // the corrected geometry served via so_district_map_features (the
@@ -794,15 +814,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             layersToggle.setAttribute('aria-label', 'Vrstvy mapy')
           }
 
-          // Default ON: corrected obvody (districtsGroup) + školy + prekryvy.
-          // The stale cleanGroup stays OFF by default so the map shows exactly
-          // one authoritative district boundary per district.
+          // Default ON: ONLY the corrected obvody (distinct solid fills) +
+          // school pins, for a clean, readable high-level map. Every analytical
+          // overlay (MRK, anomálie/ostrovy, prekryvy, domy/house-dots, stale
+          // cleanGroup) stays OFF by default and is reachable via the layer
+          // control for drill-down.
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
-          if (overlaps.length > 0) overlapsGroup.addTo(map)
-          if (anomalyIslandsCount > 0) islandsGroup.addTo(map)
-          // House dots: register zoom-gated visibility now (no-op if zoom < threshold)
-          updateHouseDotsVisibility()
 
           // Fit bounds to the authoritative districtsGroup (corrected geom).
           try {
@@ -816,17 +834,12 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
           layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup, cleanGroup, houseDotsGroup, islandsGroup]
         } else {
-          const [districtsGroup, schoolsGroup, , overlapsGroup, , , , , houseDotsGroupCached, islandsGroupCached] = layersRef.current.psk
-          // Re-add active layers (corrected obvody + školy + prekryvy ON by
-          // default; the stale cleanGroup stays OFF).
+          const [districtsGroup, schoolsGroup] = layersRef.current.psk
+          // Re-add ONLY the default-ON layers (corrected obvody + školy); every
+          // analytical overlay stays OFF by default and is toggled via the
+          // layer control.
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
-          if (overlaps.length > 0) overlapsGroup.addTo(map)
-          if (islandsGroupCached) islandsGroupCached.addTo(map)
-          // House dots: gated re-add by current zoom
-          if (houseDotsGroupCached && map.getZoom() >= HOUSE_DOTS_MIN_ZOOM) {
-            houseDotsGroupCached.addTo(map)
-          }
           if (features.length > 0) {
             try {
               const bounds = districtsGroup.getBounds()
