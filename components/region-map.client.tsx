@@ -148,7 +148,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           const featureIndex = features.findIndex((f) => f.id === layerId)
           const hue = getDistrictHue(featureIndex >= 0 ? featureIndex : 0)
           if (layerId === id) {
-            layer.setStyle({ fillOpacity: 0.4, fillColor: `hsl(${hue}, 65%, 60%)` })
+            layer.setStyle({ weight: 4.5, fillOpacity: 0.42, fillColor: `hsl(${hue}, 65%, 55%)` })
+            layer.bringToFront()
             try {
               const bounds = layer.getBounds()
               if (bounds.isValid()) {
@@ -156,7 +157,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               }
             } catch { /* ignore */ }
           } else {
-            layer.setStyle({ fillOpacity: 0 })
+            // restore the outline-dominant default (faint fill, thin border)
+            layer.setStyle({ weight: 2.5, fillOpacity: 0.08 })
           }
         })
       }
@@ -280,18 +282,46 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           const newDistrictLayersMap = new Map()
 
           if (features.length > 0) {
+            // Border clarity (Task C): with many adjacent districts a saturated
+            // fill muddies the boundaries so you can't tell which border belongs
+            // to which obvod. Default view is therefore OUTLINE-DOMINANT — a
+            // strong, well-separated per-district hue on the border, a thin
+            // white casing underneath each line to crisply split touching
+            // borders, and only a faint fill. The hovered/selected obvod alone
+            // gets a stronger fill, so it pops without the rest blending.
+            const FILL_OPACITY_DEFAULT = 0.08
+            const FILL_OPACITY_HOVER = 0.42
+            const WEIGHT_DEFAULT = 2.5
+            const WEIGHT_HOVER = 4.5
+
             features.forEach((feature, index) => {
               if (!feature.geom_geojson) return
 
               const hue = getDistrictHue(index)
-              const borderColor = `hsl(${hue}, 65%, 45%)`
+              const borderColor = `hsl(${hue}, 70%, 38%)`
+              const fillColor = `hsl(${hue}, 65%, 55%)`
+
+              // White casing line drawn UNDER the coloured border so adjacent
+              // obvod borders read as two distinct edges instead of one blur.
+              const casingLayer = L.geoJSON(feature.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+                style: {
+                  color: '#ffffff',
+                  weight: WEIGHT_DEFAULT + 2.5,
+                  opacity: 0.9,
+                  fillOpacity: 0,
+                  interactive: false,
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                pane: 'districts' as any,
+              })
+              casingLayer.addTo(districtsGroup)
 
               const geoJsonLayer = L.geoJSON(feature.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
                 style: {
                   color: borderColor,
-                  weight: 3,
-                  fillColor: `hsl(${hue}, 65%, 60%)`,
-                  fillOpacity: 0.2, // sýta per-district fill
+                  weight: WEIGHT_DEFAULT,
+                  fillColor,
+                  fillOpacity: FILL_OPACITY_DEFAULT,
                 },
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 pane: 'districts' as any,
@@ -306,10 +336,11 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               )
 
               geoJsonLayer.on('mouseover', () => {
-                geoJsonLayer.setStyle({ weight: 5 })
+                geoJsonLayer.setStyle({ weight: WEIGHT_HOVER, fillOpacity: FILL_OPACITY_HOVER })
+                geoJsonLayer.bringToFront()
               })
               geoJsonLayer.on('mouseout', () => {
-                geoJsonLayer.setStyle({ weight: 3 })
+                geoJsonLayer.setStyle({ weight: WEIGHT_DEFAULT, fillOpacity: FILL_OPACITY_DEFAULT })
               })
 
               geoJsonLayer.on('click', () => {
