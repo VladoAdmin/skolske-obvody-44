@@ -2,10 +2,10 @@ import { Suspense } from 'react'
 import { RegionMap } from '@/components/region-map'
 import { FindingsPanel } from '@/components/findings-panel'
 import { MapWithPanel } from '@/components/map/map-with-panel'
-import { DisclaimerBanner } from '@/components/disclaimer-banner'
+import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -184,15 +184,16 @@ export default async function MapPage() {
   const cleanFallbackCount = cleanGeom.length - cleanShowcaseCount
 
   return (
-    <div className="space-y-4">
-      <DisclaimerBanner />
-
+    <div className="space-y-3">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Mapa Slovenska — Školské obvody § 44</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Zobrazenie podľa krajov. Aktívne dáta: Prešovský samosprávny kraj
+          Prešovský samosprávny kraj — pilot mesta Prešov
         </p>
       </div>
+
+      {/* High-level pilot summary — first thing visible, above the fold on mobile */}
+      <SummaryStrip features={features} findings={findings} />
 
       {isEmpty && (
         <Alert>
@@ -202,31 +203,14 @@ export default async function MapPage() {
         </Alert>
       )}
 
-      {/* Map overview — what the default view shows */}
-      <Alert className="border-blue-300 bg-blue-50 text-blue-900">
-        <AlertTitle className="text-blue-800">Ako čítať mapu</AlertTitle>
-        <AlertDescription className="text-blue-800 text-xs">
-          Mapa ukazuje {features.length} školských obvodov v Prešove farebne odlíšené.
-          Sýto vyfarbené hranice = oblasť pridelená danej škole podľa VZN.
-          Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
-          Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
-        </AlertDescription>
-      </Alert>
-      {/* Sprint I KPI — overlap reduction */}
-      {housePoints.length > 0 && voronoiGeom.length === 0 && (
-        <Alert className="border-green-300 bg-green-50 text-green-900">
-          <AlertTitle className="text-green-800">Sprint I — Validácia geocódov + per-side hulls</AlertTitle>
-          <AlertDescription className="text-green-800 text-xs">
-            Validovaných adresných bodov: {housePoints.filter(h => h.valid !== false).length} z {housePoints.length} (odfiltrovaných: {housePoints.filter(h => h.valid === false).length}).
-            Google hull (zelenás čiarkovaná hranica) — prekryvy geom_google: <strong>0 párov</strong> (OSM geom baseline: 57).
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Sprint M-2 demo banner — Register adries MŠSR unavailability */}
-      <Alert className="border-amber-400 bg-amber-100 text-amber-950">
-        <AlertTitle className="text-amber-900 font-semibold">⚠ Demo dáta — Register adries MŠSR nedostupný</AlertTitle>
-        <AlertDescription className="text-amber-900 text-xs">
+      {/* Demo-data disclaimer — compact, collapsed by default (honest but not pushing content down) */}
+      <details className="rounded-lg border border-amber-400 bg-amber-100 text-amber-950">
+        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold flex items-center gap-1.5 min-h-[44px] sm:min-h-0">
+          <span aria-hidden="true">⚠</span>
+          <span>Demo dáta — Register adries MŠSR nedostupný</span>
+          <span className="ml-auto text-amber-800" aria-hidden="true">▾</span>
+        </summary>
+        <p className="px-3 pb-2 text-xs text-amber-900">
           Ukazujeme cieľový stav portálu nad rekonštruovanými polygónmi obvodov.
           Reálne dáta po sprístupnení Registra adries Ministerstva školstva.
           {cleanGeom.length > 0 && (
@@ -243,8 +227,22 @@ export default async function MapPage() {
           >
             Pozri metodiku →
           </a>
-        </AlertDescription>
-      </Alert>
+        </p>
+      </details>
+
+      {/* How to read the map — small expandable tip */}
+      <details className="rounded-lg border border-blue-300 bg-blue-50 text-blue-900">
+        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium flex items-center gap-1.5 min-h-[44px] sm:min-h-0">
+          <span>Ako čítať mapu</span>
+          <span className="ml-auto text-blue-700" aria-hidden="true">▾</span>
+        </summary>
+        <p className="px-3 pb-2 text-xs text-blue-800">
+          Mapa ukazuje {features.length} školských obvodov v Prešove farebne odlíšené.
+          Sýto vyfarbené hranice = oblasť pridelená danej škole podľa VZN.
+          Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
+          Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
+        </p>
+      </details>
 
       {/* Map + findings panel layout — responsive via MapWithPanel */}
       <div aria-describedby="map-fallback-table">
@@ -309,12 +307,15 @@ export default async function MapPage() {
               <tbody>
                 {features.map((f) => (
                   <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="px-3 py-2">
-                      <Link href={`/districts/${f.id}`} className="text-primary underline hover:text-primary/80">
+                    <td className="p-0">
+                      <Link
+                        href={`/districts/${f.id}`}
+                        className="flex items-center min-h-[44px] px-3 py-2 text-primary hover:text-primary/80"
+                      >
                         {f.name}
                       </Link>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <span aria-label={getColorLabel(f.composition_color)}>
                         {getColorSymbol(f.composition_color)} {getColorLabel(f.composition_color)}
                       </span>

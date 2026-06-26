@@ -9,6 +9,14 @@ import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAME
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
 
+// On small screens the Leaflet layer-toggle control must start COLLAPSED so it
+// does not obscure the map; it expands into the full checkbox list on tap.
+// On desktop it stays open (collapsed: false) as before.
+function layerControlCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(max-width: 767px)').matches
+}
+
 interface RegionMapClientProps {
   features: DistrictMapFeature[]
   schools: SoSchoolMarker[]
@@ -243,7 +251,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               L.control.layers(
                 undefined,
                 { 'Obce PSK (665)': muniGroup },
-                { collapsed: false }
+                { collapsed: layerControlCollapsed() }
               ).addTo(map)
 
               skGroup.addTo(map)
@@ -654,7 +662,18 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             overlays[`Adresné bodky obvodov (auto-zobrazia sa pri priblížení ≥ ${HOUSE_DOTS_MIN_ZOOM})`] = houseDotsGroup
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          L.control.layers(undefined, overlays as any, { collapsed: false }).addTo(map)
+          const layersControl = L.control.layers(undefined, overlays as any, {
+            collapsed: layerControlCollapsed(),
+          }).addTo(map)
+          // Label the collapsed toggle so mobile users recognise it as "Vrstvy".
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const layersToggle = (layersControl as any)._container?.querySelector(
+            '.leaflet-control-layers-toggle'
+          ) as HTMLElement | null
+          if (layersToggle) {
+            layersToggle.setAttribute('title', 'Vrstvy mapy')
+            layersToggle.setAttribute('aria-label', 'Vrstvy mapy')
+          }
 
           // Default ON: clean obvody (or fallback to Sprint A) + školy + prekryvy.
           if (hasCleanGeom) {
