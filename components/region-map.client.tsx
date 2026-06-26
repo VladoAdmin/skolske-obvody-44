@@ -3,8 +3,11 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
+
+// Zoom threshold (inclusive) at which per-house dots become visible.
+const HOUSE_DOTS_MIN_ZOOM = 16
 
 interface RegionMapClientProps {
   features: DistrictMapFeature[]
@@ -16,6 +19,8 @@ interface RegionMapClientProps {
   streetGeocodes?: SoStreetGeocode[]
   housePoints?: SoHousePoint[]
   voronoiGeom?: SoDistrictVoronoi[]
+  cleanGeom?: SoDistrictCleanGeom[]
+  houseDots?: SoHouseDot[]
   initialMode?: 'sk' | 'psk'
 }
 
@@ -24,7 +29,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -492,36 +497,144 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             layer.addTo(voronoiGroup)
           })
 
-          // Layer control — MVP demo view: only obvody + školy + prekryvy ON by default.
-          // Voronoi is engine input only and is hidden from the user-facing control.
-          L.control.layers(
-            undefined,
-            {
-              [`Obvody (${features.length})`]: districtsGroup,
-              [`Školy (${schools.length})`]: schoolsGroup,
-              'Prekryvy obvodov (kde 2+ obvodov hovorí o tej istej adrese)': overlapsGroup,
-              'MRK lokality (Atlas marginalizovaných rómskych komunít)': mrkGroup,
-              'Domy z VZN (Google geokódovanie, 460 platných)': housePointsGroup,
-            },
-            { collapsed: false }
-          ).addTo(map)
+          // (M-2) Clean district boundary layer — primary "Obvody" surface
+          // when present. Hand-tuned showcase polygons get a thicker border;
+          // voronoi_fallback polygons get the same weight as Sprint A so the
+          // map still reads as a single coherent layer.
+          const cleanGroup = L.featureGroup()
+          cleanGeom.forEach((cg) => {
+            if (!cg.geom_clean_geojson) return
+            const distIdx = districtIndexMap.get(cg.id) ?? features.findIndex((f) => f.id === cg.id)
+            const hue = getDistrictHue(distIdx >= 0 ? distIdx : 0)
+            const fillColor = `hsl(${hue}, 65%, 60%)`
+            const borderColor = `hsl(${hue}, 65%, 40%)`
+            const method = cg.geom_clean_metadata?.method ?? 'voronoi_fallback'
+            const isShowcase = method === 'clean_polygon'
 
-          // Default ON: obvody + školy + prekryvy (ak má content).
-          // Default OFF: voronoi, MRK, adresy/domy z VZN.
-          districtsGroup.addTo(map)
+            const layer = L.geoJSON(cg.geom_clean_geojson as unknown as GeoJSON.GeoJsonObject, {
+              style: {
+                color: borderColor,
+                weight: isShowcase ? 3.5 : 3,
+                fillColor,
+                fillOpacity: 0.25,
+                dashArray: isShowcase ? undefined : '4,3',
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'districts' as any,
+            })
+            const label = isShowcase
+              ? 'Demo clean polygón (hand-tuned)'
+              : 'Voronoi fallback'
+            layer.bindTooltip(
+              `<strong>${cg.name}</strong><br/>${label}`,
+              { sticky: true }
+            )
+            layer.on('click', () => {
+              router.push(`/districts/${cg.id}`)
+            })
+            layer.addTo(cleanGroup)
+          })
+
+          // (M-2) Per-house dots — only visible when zoomed in past
+          // HOUSE_DOTS_MIN_ZOOM. We build the markers eagerly but gate the
+          // group's addTo/removeFrom on the map's zoom level.
+          const houseDotsGroup = L.featureGroup()
+          houseDots.forEach((hd) => {
+            if (hd.lat == null || hd.lon == null) return
+            const distIdx = districtIndexMap.get(hd.district_id) ?? 0
+            const hue = getDistrictHue(distIdx)
+            const marker = L.circleMarker([hd.lat, hd.lon], {
+              radius: 3,
+              fillColor: `hsl(${hue}, 70%, 45%)`,
+              color: `hsl(${hue}, 70%, 25%)`,
+              weight: 0.8,
+              fillOpacity: 0.9,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'streetPoints' as any,
+            })
+            marker.bindTooltip(`${hd.street} ${hd.house_number}`, { sticky: true })
+            marker.addTo(houseDotsGroup)
+          })
+
+          // Zoom-gated visibility for house dots. The listener is registered
+          // once per PSK build; it's safe to call addLayer/removeLayer
+          // repeatedly because Leaflet ignores no-op adds.
+          const updateHouseDotsVisibility = () => {
+            const z = map.getZoom()
+            if (z >= HOUSE_DOTS_MIN_ZOOM) {
+              if (!map.hasLayer(houseDotsGroup)) map.addLayer(houseDotsGroup)
+            } else {
+              if (map.hasLayer(houseDotsGroup)) map.removeLayer(houseDotsGroup)
+            }
+          }
+          map.on('zoomend', updateHouseDotsVisibility)
+
+          // Layer control — MVP demo view. The "Obvody" layer is the new
+          // clean geom from Sprint M-2 (smoothed polygons) when present;
+          // the original Sprint A geom is exposed as an optional toggle so
+          // analysts can compare the two surfaces. Voronoi remains engine
+          // input only and is hidden from the user-facing control.
+          const hasCleanGeom = cleanGeom.length > 0
+          const overlays: Record<string, unknown> = {}
+          if (hasCleanGeom) {
+            overlays[`Obvody (${cleanGeom.length})`] = cleanGroup
+            overlays[`Obvody — VZN hull (Sprint A, ${features.length})`] = districtsGroup
+          } else {
+            overlays[`Obvody (${features.length})`] = districtsGroup
+          }
+          overlays[`Školy (${schools.length})`] = schoolsGroup
+          overlays['Prekryvy obvodov (kde 2+ obvodov hovorí o tej istej adrese)'] = overlapsGroup
+          overlays['MRK lokality (Atlas marginalizovaných rómskych komunít)'] = mrkGroup
+          overlays['Domy z VZN (Google geokódovanie, 460 platných)'] = housePointsGroup
+          if (houseDots.length > 0) {
+            overlays[`Adresné bodky obvodov (auto-zobrazia sa pri priblížení ≥ ${HOUSE_DOTS_MIN_ZOOM})`] = houseDotsGroup
+          }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          L.control.layers(undefined, overlays as any, { collapsed: false }).addTo(map)
+
+          // Default ON: clean obvody (or fallback to Sprint A) + školy + prekryvy.
+          if (hasCleanGeom) {
+            cleanGroup.addTo(map)
+          } else {
+            districtsGroup.addTo(map)
+          }
           schoolsGroup.addTo(map)
           if (overlaps.length > 0) overlapsGroup.addTo(map)
+          // House dots: register zoom-gated visibility now (no-op if zoom < threshold)
+          updateHouseDotsVisibility()
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup]
+          // Prefer fitting bounds to the cleanGroup if it exists, otherwise the
+          // legacy districtsGroup.
+          try {
+            const primary = hasCleanGeom ? cleanGroup : districtsGroup
+            const bounds = primary.getBounds()
+            if (bounds.isValid()) {
+              map.fitBounds(bounds, { padding: [20, 20] })
+            }
+          } catch {
+            map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
+          }
+
+          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup, cleanGroup, houseDotsGroup]
         } else {
-          const [districtsGroup, schoolsGroup, , overlapsGroup] = layersRef.current.psk
+          const [districtsGroup, schoolsGroup, , overlapsGroup, , , , cleanGroupCached, houseDotsGroupCached] = layersRef.current.psk
+          const hasCleanGeom = cleanGeom.length > 0
           // Re-add active layers (obvody + školy + prekryvy ON by default)
-          districtsGroup.addTo(map)
+          if (hasCleanGeom && cleanGroupCached) {
+            cleanGroupCached.addTo(map)
+          } else {
+            districtsGroup.addTo(map)
+          }
           schoolsGroup.addTo(map)
           if (overlaps.length > 0) overlapsGroup.addTo(map)
+          // House dots: gated re-add by current zoom
+          if (houseDotsGroupCached && map.getZoom() >= HOUSE_DOTS_MIN_ZOOM) {
+            houseDotsGroupCached.addTo(map)
+          }
           if (features.length > 0) {
             try {
-              const bounds = districtsGroup.getBounds()
+              const primary = hasCleanGeom && cleanGroupCached ? cleanGroupCached : districtsGroup
+              const bounds = primary.getBounds()
               if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [20, 20] })
               }

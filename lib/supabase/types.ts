@@ -159,6 +159,26 @@ export interface SoDistrictVoronoi {
   } | null
 }
 
+export interface SoDistrictCleanGeom {
+  id: string
+  name: string
+  school_id: string | null
+  geom_clean_geojson: Record<string, unknown> | null
+  geom_clean_metadata: {
+    method?: 'clean_polygon' | 'voronoi_fallback'
+    demo?: boolean
+    note?: string
+  } | null
+}
+
+export interface SoHouseDot {
+  district_id: string
+  street: string
+  house_number: string
+  lat: number
+  lon: number
+}
+
 export interface SoStreetGeocode {
   district_id: string
   street: string

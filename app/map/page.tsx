@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -112,6 +112,32 @@ async function fetchVoronoiGeom(): Promise<SoDistrictVoronoi[]> {
   }
 }
 
+async function fetchCleanGeom(): Promise<SoDistrictCleanGeom[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_district_clean_geom')
+      .select('id,name,school_id,geom_clean_geojson,geom_clean_metadata')
+    if (error) throw error
+    return (data ?? []) as SoDistrictCleanGeom[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchHouseDots(): Promise<SoHouseDot[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_house_dots')
+      .select('district_id,street,house_number,lat,lon')
+    if (error) throw error
+    return (data ?? []) as SoHouseDot[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchHousePoints(): Promise<SoHousePoint[]> {
   try {
     const sb = createPublicClient()
@@ -126,7 +152,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, municipalities, streetGeocodes, housePoints, voronoiGeom] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -136,8 +162,14 @@ export default async function MapPage() {
     fetchStreetGeocodes(),
     fetchHousePoints(),
     fetchVoronoiGeom(),
+    fetchCleanGeom(),
+    fetchHouseDots(),
   ])
   const isEmpty = features.length === 0
+  const cleanShowcaseCount = cleanGeom.filter(
+    (d) => d.geom_clean_metadata?.method === 'clean_polygon'
+  ).length
+  const cleanFallbackCount = cleanGeom.length - cleanShowcaseCount
 
   return (
     <div className="space-y-4">
@@ -179,12 +211,19 @@ export default async function MapPage() {
         </Alert>
       )}
 
-      {/* Geometry disclaimer — PSK data */}
-      <Alert className="border-yellow-300 bg-yellow-50 text-yellow-900">
-        <AlertTitle className="text-yellow-800">⚠ Hranice obvodov sú odhad</AlertTitle>
-        <AlertDescription className="text-yellow-800 text-xs">
-          Hranice obvodov sú odhad z OSM building hull, nie zo zákonných ulíc Prešovského VZN 1/2023.
-          Bez prístupu k Registru adries nevieme rekonštruovať presné polygóny — preto sú obvody &bdquo;roztiahnuté&ldquo; a Š2/Š3 verdikty INCOMPLETE.
+      {/* Sprint M-2 demo banner — Register adries MŠSR unavailability */}
+      <Alert className="border-amber-400 bg-amber-100 text-amber-950">
+        <AlertTitle className="text-amber-900 font-semibold">⚠ Demo dáta — Register adries MŠSR nedostupný</AlertTitle>
+        <AlertDescription className="text-amber-900 text-xs">
+          Ukazujeme cieľový stav portálu nad rekonštruovanými polygónmi obvodov.
+          Reálne dáta po sprístupnení Registra adries Ministerstva školstva.
+          {cleanGeom.length > 0 && (
+            <>
+              {' '}
+              <strong>{cleanShowcaseCount} obvody</strong> majú demo &bdquo;clean&ldquo; polygóny (hand-tuned),
+              zvyšok ({cleanFallbackCount}) je Voronoi rekonštrukcia z VZN textu.
+            </>
+          )}
         </AlertDescription>
       </Alert>
 
@@ -204,6 +243,8 @@ export default async function MapPage() {
                 streetGeocodes={streetGeocodes}
                 housePoints={housePoints}
                 voronoiGeom={voronoiGeom}
+                cleanGeom={cleanGeom}
+                houseDots={houseDots}
                 initialMode="sk"
               />
             </Suspense>
