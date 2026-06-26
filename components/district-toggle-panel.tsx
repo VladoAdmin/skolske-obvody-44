@@ -3,6 +3,12 @@
 import { useState } from 'react'
 import type { DistrictMapFeature } from '@/lib/supabase/types'
 import { getDistrictHue } from '@/lib/config/region'
+import {
+  EVENT_SELECT_DISTRICT,
+  EVENT_TOGGLE_DISTRICT,
+  type SelectDistrictDetail,
+  type ToggleDistrictDetail,
+} from '@/lib/map-events'
 
 interface DistrictTogglePanelProps {
   features: DistrictMapFeature[]
@@ -21,14 +27,14 @@ export function DistrictTogglePanel({ features }: DistrictTogglePanelProps) {
       } else {
         next.add(id)
       }
-      window.dispatchEvent(new CustomEvent('so:toggle-district', { detail: { id, visible: next.has(id) } }))
+      window.dispatchEvent(new CustomEvent<ToggleDistrictDetail>(EVENT_TOGGLE_DISTRICT, { detail: { id, visible: next.has(id) } }))
       return next
     })
   }
 
   function selectDistrict(feature: DistrictMapFeature) {
     setSelectedId(feature.id)
-    window.dispatchEvent(new CustomEvent('so:select-district', { detail: { id: feature.id } }))
+    window.dispatchEvent(new CustomEvent<SelectDistrictDetail>(EVENT_SELECT_DISTRICT, { detail: { id: feature.id } }))
     // Also flyTo centroid if available
     // Districts don't have centroid on the feature directly — dispatch select-district and let map handle flyTo
   }
@@ -37,14 +43,14 @@ export function DistrictTogglePanel({ features }: DistrictTogglePanelProps) {
     const all = new Set(features.map((f) => f.id))
     setEnabledIds(all)
     features.forEach((f) => {
-      window.dispatchEvent(new CustomEvent('so:toggle-district', { detail: { id: f.id, visible: true } }))
+      window.dispatchEvent(new CustomEvent<ToggleDistrictDetail>(EVENT_TOGGLE_DISTRICT, { detail: { id: f.id, visible: true } }))
     })
   }
 
   function selectNone() {
     setEnabledIds(new Set())
     features.forEach((f) => {
-      window.dispatchEvent(new CustomEvent('so:toggle-district', { detail: { id: f.id, visible: false } }))
+      window.dispatchEvent(new CustomEvent<ToggleDistrictDetail>(EVENT_TOGGLE_DISTRICT, { detail: { id: f.id, visible: false } }))
     })
   }
 

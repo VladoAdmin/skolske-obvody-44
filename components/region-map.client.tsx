@@ -6,6 +6,16 @@ import { useRouter } from 'next/navigation'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
+import {
+  EVENT_FLYTO,
+  EVENT_SELECT_DISTRICT,
+  EVENT_TOGGLE_DISTRICT,
+  EVENT_DRAW_ROUTE,
+  type FlyToDetail,
+  type SelectDistrictDetail,
+  type ToggleDistrictDetail,
+  type DrawRouteDetail,
+} from '@/lib/map-events'
 
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
@@ -50,6 +60,11 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
   // Per-district layer map: id -> L.GeoJSON layer
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const districtLayersRef = useRef<Map<string, any>>(new Map())
+  // Active route polyline drawn for distance findings (Pa/Pb). Held in a ref
+  // so successive events remove the previous line before drawing a new one,
+  // and the effect cleanup can remove it on unmount.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const routeLayerRef = useRef<any>(null)
   // Currently click-selected district id (for highlight reset on next tap /
   // popup close / empty-map tap). Mirrors the visual "selected" style.
   const selectedDistrictIdRef = useRef<string | null>(null)
@@ -129,14 +144,14 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
       // --- CustomEvent listener for flyTo from findings panel ---
       const flyToHandler = (e: Event) => {
-        const { lat, lon, zoom } = (e as CustomEvent<{ lat: number; lon: number; zoom?: number }>).detail
+        const { lat, lon, zoom } = (e as CustomEvent<FlyToDetail>).detail
         map.flyTo([lat, lon], zoom ?? 15, { duration: 1 })
       }
-      window.addEventListener('so:flyto', flyToHandler)
+      window.addEventListener(EVENT_FLYTO, flyToHandler)
 
       // --- CustomEvent: toggle individual district visibility ---
       const toggleDistrictHandler = (e: Event) => {
-        const { id, visible } = (e as CustomEvent<{ id: string; visible: boolean }>).detail
+        const { id, visible } = (e as CustomEvent<ToggleDistrictDetail>).detail
         const layer = districtLayersRef.current.get(id)
         if (!layer) return
         if (visible) {
@@ -145,11 +160,11 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           map.removeLayer(layer)
         }
       }
-      window.addEventListener('so:toggle-district', toggleDistrictHandler)
+      window.addEventListener(EVENT_TOGGLE_DISTRICT, toggleDistrictHandler)
 
       // --- CustomEvent: select district (highlight + flyTo centroid) ---
       const selectDistrictHandler = (e: Event) => {
-        const { id } = (e as CustomEvent<{ id: string }>).detail
+        const { id } = (e as CustomEvent<SelectDistrictDetail>).detail
         districtLayersRef.current.forEach((layer, layerId) => {
           const featureIndex = features.findIndex((f) => f.id === layerId)
           const hue = getDistrictHue(featureIndex >= 0 ? featureIndex : 0)
@@ -168,31 +183,30 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           }
         })
       }
-      window.addEventListener('so:select-district', selectDistrictHandler)
+      window.addEventListener(EVENT_SELECT_DISTRICT, selectDistrictHandler)
 
       // --- CustomEvent: draw a route line for distance findings (Pa/Pb) ---
       // Draws a dashed line from the district centroid (representative address
       // area) to the school location so the user can see the problematic
       // air-line distance visually. Replaces any previous route layer.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let routeLayer: any = null
       const drawRouteHandler = (e: Event) => {
-        const { from, to, label } = (e as CustomEvent<{
-          districtId: string
-          from: { lat: number; lon: number }
-          to: { lat: number; lon: number }
-        } & { label?: string }>).detail
+        const { from, to, label } = (e as CustomEvent<DrawRouteDetail>).detail
+        // Validate coordinates — skip if any coordinate is non-finite
+        if (
+          !Number.isFinite(from.lat) || !Number.isFinite(from.lon) ||
+          !Number.isFinite(to.lat)   || !Number.isFinite(to.lon)
+        ) return
         // Remove previous route if any
-        if (routeLayer) {
-          map.removeLayer(routeLayer)
-          routeLayer = null
+        if (routeLayerRef.current) {
+          map.removeLayer(routeLayerRef.current)
+          routeLayerRef.current = null
         }
         const fromLatLng: [number, number] = [from.lat, from.lon]
         const toLatLng: [number, number] = [to.lat, to.lon]
         // Compute straight-line distance in metres (Haversine via Leaflet)
         const distM = map.distance(fromLatLng, toLatLng)
         const distKm = (distM / 1000).toFixed(2)
-        routeLayer = L.polyline([fromLatLng, toLatLng], {
+        routeLayerRef.current = L.polyline([fromLatLng, toLatLng], {
           color: '#dc2626',    // red-600 — problem highlight
           weight: 3,
           dashArray: '8,5',
@@ -205,15 +219,20 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             { maxWidth: 220 }
           )
           .addTo(map)
-        routeLayer.openPopup()
+        routeLayerRef.current.openPopup()
       }
-      window.addEventListener('so:draw-route', drawRouteHandler)
+      window.addEventListener(EVENT_DRAW_ROUTE, drawRouteHandler)
 
       return () => {
-        window.removeEventListener('so:flyto', flyToHandler)
-        window.removeEventListener('so:toggle-district', toggleDistrictHandler)
-        window.removeEventListener('so:select-district', selectDistrictHandler)
-        window.removeEventListener('so:draw-route', drawRouteHandler)
+        window.removeEventListener(EVENT_FLYTO, flyToHandler)
+        window.removeEventListener(EVENT_TOGGLE_DISTRICT, toggleDistrictHandler)
+        window.removeEventListener(EVENT_SELECT_DISTRICT, selectDistrictHandler)
+        window.removeEventListener(EVENT_DRAW_ROUTE, drawRouteHandler)
+        // Remove route layer if still on the map
+        if (routeLayerRef.current && mapRef.current) {
+          mapRef.current.removeLayer(routeLayerRef.current)
+          routeLayerRef.current = null
+        }
       }
     }).catch(console.error)
 

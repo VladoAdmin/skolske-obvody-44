@@ -3,6 +3,14 @@
 import { useState } from 'react'
 import type { SoFindingsPanelItem, DistrictMapFeature } from '@/lib/supabase/types'
 import { DistrictTogglePanel } from '@/components/district-toggle-panel'
+import {
+  EVENT_FLYTO,
+  EVENT_SELECT_DISTRICT,
+  EVENT_DRAW_ROUTE,
+  type FlyToDetail,
+  type SelectDistrictDetail,
+  type DrawRouteDetail,
+} from '@/lib/map-events'
 
 interface FindingsPanelProps {
   findings: SoFindingsPanelItem[]
@@ -57,10 +65,10 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
 
     if (hasCentroid) {
       window.dispatchEvent(
-        new CustomEvent('so:flyto', {
+        new CustomEvent<FlyToDetail>(EVENT_FLYTO, {
           detail: {
-            lat: item.district_geom_centroid_lat,
-            lon: item.district_geom_centroid_lon,
+            lat: item.district_geom_centroid_lat as number,
+            lon: item.district_geom_centroid_lon as number,
             zoom: 14,
           },
         })
@@ -81,7 +89,7 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
       ) {
         const [schoolLon, schoolLat] = schoolGeom.coordinates
         window.dispatchEvent(
-          new CustomEvent('so:draw-route', {
+          new CustomEvent<DrawRouteDetail>(EVENT_DRAW_ROUTE, {
             detail: {
               districtId: item.district_id,
               from: {
@@ -97,7 +105,7 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
     } else {
       // Boundary/composition finding — highlight the district polygon.
       window.dispatchEvent(
-        new CustomEvent('so:select-district', {
+        new CustomEvent<SelectDistrictDetail>(EVENT_SELECT_DISTRICT, {
           detail: { id: item.district_id },
         })
       )
