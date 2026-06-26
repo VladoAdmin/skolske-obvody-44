@@ -15,6 +15,7 @@ import type {
   SoDistrictVoronoi,
   SoDistrictIsland,
   SoDistrictAddressStats,
+  SoFindingExplanation,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -43,6 +44,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawAllScorecard },
     { data: rawFindings },
     { data: rawAddressStats },
+    { data: rawExplanations },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -55,6 +57,7 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
+    sb.from('so_finding_explanations').select('condition_code,severity,explanation_sk'),
   ])
 
   if (scorecardError) throw scorecardError
@@ -68,6 +71,23 @@ export default async function DistrictPage({ params }: Props) {
   const streetGeocodes = (rawStreetGeocodes ?? []) as SoStreetGeocode[]
   const islands = (rawIslands ?? []) as SoDistrictIsland[]
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
+
+  // Precomputed AI explanations are keyed by (condition_code, severity). The
+  // scorecard is keyed by condition_code only, so we collapse to one
+  // explanation per code, preferring the most severe combo. Empty until the
+  // generator has run (OpenRouter offline ⇒ no AI heading shows).
+  const SEVERITY_RANK: Record<string, number> = {
+    critical: 5, high: 4, medium: 3, low: 2, info: 1,
+  }
+  const explanationByCode: Record<string, string> = {}
+  const explanationSeverityByCode: Record<string, number> = {}
+  for (const e of (rawExplanations ?? []) as SoFindingExplanation[]) {
+    const rank = SEVERITY_RANK[e.severity] ?? 0
+    if (rank >= (explanationSeverityByCode[e.condition_code] ?? -1)) {
+      explanationByCode[e.condition_code] = e.explanation_sk
+      explanationSeverityByCode[e.condition_code] = rank
+    }
+  }
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
   const allScorecard = (rawAllScorecard ?? []) as DistrictScorecardRow[]
@@ -208,11 +228,11 @@ export default async function DistrictPage({ params }: Props) {
               {addressStats.habitable_addresses.toLocaleString('sk-SK')} obývateľných adries,{' '}
               {addressStats.register_streets.toLocaleString('sk-SK')} ulíc{' '}
               (pokrytie ulíc z VZN {Math.round(addressStats.street_coverage * 100)} %).{' '}
-              Zdroj: register adries MV SR. Slúži len ako podklad dôvery dát — nemení
+              Zdroj: register adries a stavieb mesta Prešov. Slúži len ako podklad dôvery dát — nemení
               právny verdikt podmienok § 44.
             </p>
           )}
-          <DistrictScorecard rows={sorted} />
+          <DistrictScorecard rows={sorted} explanationByCode={explanationByCode} />
         </section>
       ) : (
         <Alert>

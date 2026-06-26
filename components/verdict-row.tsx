@@ -7,6 +7,24 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 
 interface VerdictRowProps {
   row: DistrictScorecardRow
+  // Precomputed AI-generated plain-Slovak explanation for this condition.
+  // Optional — absent until the explanations have been generated.
+  aiExplanation?: string
+}
+
+function AiExplanation({ text }: { text: string }) {
+  return (
+    <div className="mt-2 rounded border border-violet-200 bg-violet-50 px-2 py-1.5">
+      <p className="flex items-center gap-1 text-[11px] font-semibold text-violet-800">
+        <span aria-hidden>✦</span> Vysvetlenie (generované AI)
+      </p>
+      <p className="mt-0.5 text-xs leading-relaxed text-violet-900">{text}</p>
+      <p className="mt-1 text-[10px] italic text-violet-700">
+        Generované umelou inteligenciou ako pomôcka pre čitateľa — nemení právny
+        verdikt podmienky.
+      </p>
+    </div>
+  )
 }
 
 const VALUE_DESCRIPTIONS: Record<string, string> = {
@@ -61,7 +79,7 @@ function ProgressBar({ value, label }: { value: number | null | undefined; label
   )
 }
 
-export function VerdictRow({ row }: VerdictRowProps) {
+export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
   const colorSymbol = getColorSymbol(row.composition_color)
   const colorClass = getColorClass(row.composition_color)
 
@@ -136,6 +154,12 @@ export function VerdictRow({ row }: VerdictRowProps) {
             <div className="mt-1">
               <ProvenanceLink url={row.provenance_source} />
             </div>
+            {aiExplanation && <AiExplanation text={aiExplanation} />}
+          </details>
+        ) : aiExplanation ? (
+          <details className="text-xs">
+            <summary className="cursor-pointer text-primary hover:underline">Vysvetlenie</summary>
+            <AiExplanation text={aiExplanation} />
           </details>
         ) : (
           <span className="text-xs text-muted-foreground">—</span>
