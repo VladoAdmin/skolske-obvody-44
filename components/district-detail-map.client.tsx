@@ -17,6 +17,7 @@ import {
   PSK_CENTER,
   PSK_DEFAULT_ZOOM,
 } from '@/lib/config/region'
+import { buildDistrictSchoolPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 
 // On mobile (≤767px) the layer control starts collapsed so the legend
 // does not obscure the map; it expands into the full checkbox list on tap.
@@ -35,6 +36,7 @@ interface DistrictDetailMapClientProps {
   housePoints: SoHousePoint[]
   streetGeocodes: SoStreetGeocode[]
   islands: SoDistrictIsland[]
+  districtSummaries?: Record<string, DistrictPopupSummary>
 }
 
 export function DistrictDetailMapClient({
@@ -46,6 +48,7 @@ export function DistrictDetailMapClient({
   housePoints,
   streetGeocodes,
   islands,
+  districtSummaries = {},
 }: DistrictDetailMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,8 +110,14 @@ export function DistrictDetailMapClient({
       const districtIndexMap = new Map<string, number>()
       features.forEach((f, idx) => districtIndexMap.set(f.id, idx))
 
-      // --- Voronoi layer: current district highlighted, others as context ---
-      const voronoiGroup = L.featureGroup()
+      // --- Voronoi layer: ONLY the selected district is drawn prominently.
+      // Neighbour districts are rendered as faint neutral-grey outline-only
+      // context (no saturated fill, no per-district hue) so the selected obvod
+      // visually dominates the detail view instead of competing with a wall of
+      // neighbour polygons. The map is then fitted tightly to the current
+      // district's bounds.
+      const currentVoronoiGroup = L.featureGroup() // selected district (prominent)
+      const contextVoronoiGroup = L.featureGroup() // neighbours (faint context)
       let currentBounds: ReturnType<typeof L.latLngBounds> | null = null
 
       voronoiFeatures.forEach((v) => {
@@ -126,35 +135,38 @@ export function DistrictDetailMapClient({
                 fillOpacity: 0.5,
               }
             : {
-                color: `hsl(${hue}, 40%, 55%)`,
-                weight: 1.5,
-                fillColor: `hsl(${hue}, 40%, 75%)`,
-                fillOpacity: 0.10,
+                // Neutral, near-invisible context only — no fill, thin grey line.
+                color: '#cbd5e1', // slate-300
+                weight: 1,
+                fillColor: '#cbd5e1',
+                fillOpacity: 0,
               },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'districts' as any,
         })
 
-        const feat = features.find((f) => f.id === v.id)
-        const colorConfig = COMPOSITION_COLOR_MAP[feat?.composition_color ?? 'NONE'] ?? COMPOSITION_COLOR_MAP.NONE
-        layer.bindTooltip(
-          `<strong>${v.name}</strong>${isCurrent ? ' (aktuálny obvod)' : ''}<br/>${colorConfig.symbol} ${feat?.composition_color ?? 'NONE'}`,
-          { sticky: true }
-        )
-
-        layer.addTo(voronoiGroup)
-
         if (isCurrent) {
+          const feat = features.find((f) => f.id === v.id)
+          const colorConfig = COMPOSITION_COLOR_MAP[feat?.composition_color ?? 'NONE'] ?? COMPOSITION_COLOR_MAP.NONE
+          layer.bindTooltip(
+            `<strong>${v.name}</strong> (aktuálny obvod)<br/>${colorConfig.symbol} ${feat?.composition_color ?? 'NONE'}`,
+            { sticky: true }
+          )
+          layer.addTo(currentVoronoiGroup)
           try {
             const b = layer.getBounds()
             if (b.isValid()) currentBounds = b
           } catch { /* ignore */ }
+        } else {
+          layer.addTo(contextVoronoiGroup)
         }
       })
 
-      voronoiGroup.addTo(map)
+      // Add context first so the selected district renders on top of it.
+      contextVoronoiGroup.addTo(map)
+      currentVoronoiGroup.addTo(map)
 
-      // Fit to current district on load
+      // Fit tightly to the selected district on load.
       if (currentBounds) {
         map.fitBounds(currentBounds, { padding: [30, 30] })
       } else {
@@ -221,12 +233,23 @@ export function DistrictDetailMapClient({
         const geom = feature.school_geom_geojson as { type: string; coordinates: [number, number] }
         if (geom.type !== 'Point') return
         const [lon, lat] = geom.coordinates
+        const schoolName = feature.school_name ?? 'Škola'
+        const isCurrent = feature.id === currentDistrictId
         L.marker([lat, lon], {
-          icon: makeSchoolIcon(feature.id === currentDistrictId ? 26 : 18),
+          icon: makeSchoolIcon(isCurrent ? 26 : 18),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'schools' as any,
         })
-          .bindTooltip(`${feature.school_name ?? 'Škola'}${feature.id === currentDistrictId ? ' (aktuálna)' : ''}`)
+          .bindTooltip(`${schoolName}${isCurrent ? ' (aktuálna)' : ''}`)
+          .bindPopup(
+            buildDistrictSchoolPopup(
+              schoolName,
+              feature.id,
+              districtSummaries[feature.id],
+              feature.composition_color
+            ),
+            { maxWidth: 280, autoPanPadding: [20, 20] }
+          )
           .addTo(schoolsGroup)
       })
 
@@ -241,13 +264,16 @@ export function DistrictDetailMapClient({
         const [lon, lat] = geom.coordinates
         const isPrivate = school.is_public === false
         const fill = isPrivate ? SCHOOL_COLOR_PRIVATE : SCHOOL_COLOR_PUBLIC
-        const founderLabel = isPrivate ? 'súkromná / cirkevná' : 'verejná (mesto Prešov)'
         L.marker([lat, lon], {
           icon: makeSchoolIcon(16, fill),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'schools' as any,
         })
-          .bindTooltip(`${school.name}${school.kind ? ` (${school.kind})` : ''}<br/><em>${founderLabel}</em>`)
+          .bindTooltip(school.name)
+          .bindPopup(
+            buildNonVznSchoolPopup(school.name, school.kind, isPrivate),
+            { maxWidth: 280, autoPanPadding: [20, 20] }
+          )
           .addTo(schoolsGroup)
       })
 
@@ -322,7 +348,8 @@ export function DistrictDetailMapClient({
       const layersControl = L.control.layers(
         undefined,
         {
-          'Voronoi obvody (všetky)': voronoiGroup,
+          'Tento obvod': currentVoronoiGroup,
+          'Susedné obvody (kontext)': contextVoronoiGroup,
           'Čísla ostrovov': islandLabelsGroup,
           'MRK lokality': mrkGroup,
           'Školy': schoolsGroup,

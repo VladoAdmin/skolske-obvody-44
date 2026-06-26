@@ -17,6 +17,7 @@ import type {
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
+import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
 
@@ -38,6 +39,8 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawHousePoints },
     { data: rawStreetGeocodes },
     { data: rawIslands },
+    { data: rawAllScorecard },
+    { data: rawFindings },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -47,6 +50,8 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_house_points').select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason'),
     sb.from('so_street_geocodes').select('district_id,street,lat,lon,status,partial_match,formatted_address,point_geojson'),
     sb.from('so_district_islands').select('*').eq('district_id', id).order('island_index'),
+    sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
+    sb.from('so_findings_panel').select('district_id,status'),
   ])
 
   if (scorecardError) throw scorecardError
@@ -59,6 +64,17 @@ export default async function DistrictPage({ params }: Props) {
   const housePoints = (rawHousePoints ?? []) as SoHousePoint[]
   const streetGeocodes = (rawStreetGeocodes ?? []) as SoStreetGeocode[]
   const islands = (rawIslands ?? []) as SoDistrictIsland[]
+
+  // Per-district scorecard summaries + open-findings counts for school-pin popups.
+  const allScorecard = (rawAllScorecard ?? []) as DistrictScorecardRow[]
+  const findingsRows = (rawFindings ?? []) as { district_id: string; status: string }[]
+  const openFindingsByDistrict: Record<string, number> = {}
+  for (const f of findingsRows) {
+    if (f.status === 'open') {
+      openFindingsByDistrict[f.district_id] = (openFindingsByDistrict[f.district_id] ?? 0) + 1
+    }
+  }
+  const districtSummaries = buildDistrictSummaries(allScorecard, openFindingsByDistrict)
 
   // Header info
   let header: {
@@ -158,6 +174,7 @@ export default async function DistrictPage({ params }: Props) {
         housePoints={housePoints}
         streetGeocodes={streetGeocodes}
         islands={islands}
+        districtSummaries={districtSummaries}
       />
 
       {/* Scorecard or empty state */}

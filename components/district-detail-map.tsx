@@ -9,6 +9,7 @@ import type {
   SoDistrictVoronoi,
   SoDistrictIsland,
 } from '@/lib/supabase/types'
+import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface DistrictDetailMapProps {
@@ -20,6 +21,7 @@ interface DistrictDetailMapProps {
   housePoints: SoHousePoint[]
   streetGeocodes: SoStreetGeocode[]
   islands: SoDistrictIsland[]
+  districtSummaries?: Record<string, DistrictPopupSummary>
 }
 
 const DistrictDetailMapDynamic = dynamic(
