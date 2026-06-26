@@ -6,7 +6,7 @@ import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -69,6 +69,17 @@ async function fetchOverlaps(): Promise<SoDistrictOverlap[]> {
     const { data, error } = await sb.from('so_district_overlaps').select('*')
     if (error) throw error
     return (data ?? []) as SoDistrictOverlap[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchIslands(): Promise<SoDistrictIsland[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_islands').select('*')
+    if (error) throw error
+    return (data ?? []) as SoDistrictIsland[]
   } catch {
     return []
   }
@@ -152,12 +163,13 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
     fetchFindings(),
     fetchOverlaps(),
+    fetchIslands(),
     fetchMunicipalities(),
     fetchStreetGeocodes(),
     fetchHousePoints(),
@@ -239,6 +251,7 @@ export default async function MapPage() {
                 mrkOverlays={mrkOverlays}
                 findings={findings}
                 overlaps={overlaps}
+                islands={islands}
                 municipalities={municipalities}
                 streetGeocodes={streetGeocodes}
                 housePoints={housePoints}

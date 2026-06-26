@@ -115,17 +115,23 @@ export interface SoFindingsPanelItem {
   evidence_public_text: string | null
   provenance_source: string | null
   created_at: string
+  is_demo: boolean
+  tag: string | null
   district_geom_centroid_lon: number | null
   district_geom_centroid_lat: number | null
 }
 
 export interface SoDistrictOverlap {
+  overlap_id: string | null
   district_a_id: string
   district_a_name: string
   district_b_id: string
   district_b_name: string
   overlap_geojson: Record<string, unknown> | null
   overlap_area_m2: number
+  severity: string | null
+  tag: string | null
+  is_demo: boolean
 }
 
 export interface SoPskMunicipality {
@@ -205,6 +211,7 @@ export interface SoHousePoint {
 }
 
 export interface SoDistrictIsland {
+  island_id: string
   district_id: string
   island_index: number
   area_m2: number | null
@@ -212,6 +219,11 @@ export interface SoDistrictIsland {
   house_count: number | null
   streets: string[] | null
   house_numbers: string[] | null
+  status: string | null
+  anomaly_type: string | null
+  severity: string | null
+  tag: string | null
+  is_demo: boolean
   geom_geojson: Record<string, unknown> | null
 }
 

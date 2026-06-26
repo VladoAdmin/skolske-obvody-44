@@ -1,6 +1,6 @@
 // SSR-safe wrapper: dynamically imports the Leaflet client component
 import dynamic from 'next/dynamic'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface RegionMapProps {
@@ -9,6 +9,7 @@ interface RegionMapProps {
   mrkOverlays: SoMrkOverlay[]
   findings: SoFindingsPanelItem[]
   overlaps?: SoDistrictOverlap[]
+  islands?: SoDistrictIsland[]
   municipalities?: SoPskMunicipality[]
   streetGeocodes?: SoStreetGeocode[]
   housePoints?: SoHousePoint[]
@@ -26,6 +27,6 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, findings, overlaps = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], initialMode = 'sk' }: RegionMapProps) {
-  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} findings={findings} overlaps={overlaps} municipalities={municipalities} streetGeocodes={streetGeocodes} housePoints={housePoints} voronoiGeom={voronoiGeom} cleanGeom={cleanGeom} houseDots={houseDots} initialMode={initialMode} />
+export function RegionMap({ features, schools, mrkOverlays, findings, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], initialMode = 'sk' }: RegionMapProps) {
+  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} findings={findings} overlaps={overlaps} islands={islands} municipalities={municipalities} streetGeocodes={streetGeocodes} housePoints={housePoints} voronoiGeom={voronoiGeom} cleanGeom={cleanGeom} houseDots={houseDots} initialMode={initialMode} />
 }

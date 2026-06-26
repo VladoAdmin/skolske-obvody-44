@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
 
 // Zoom threshold (inclusive) at which per-house dots become visible.
@@ -15,6 +15,7 @@ interface RegionMapClientProps {
   mrkOverlays: SoMrkOverlay[]
   findings: SoFindingsPanelItem[]
   overlaps?: SoDistrictOverlap[]
+  islands?: SoDistrictIsland[]
   municipalities?: SoPskMunicipality[]
   streetGeocodes?: SoStreetGeocode[]
   housePoints?: SoHousePoint[]
@@ -29,7 +30,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -395,28 +396,85 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
           mrkGroup.addTo(map)
 
-          // (B-heatmap) Overlap polygons — multiply blend mode applied on the pane itself
-          // Each overlap polygon is a light red with no border; stacking = visual darkening
+          // (B-heatmap) Overlap polygons — Sprint M-3 styling. Demo overlaps
+          // get a saturated yellow fill + dashed amber border so the viewer
+          // can pick them out from real geom-derived overlaps (red, no border,
+          // multiply blend). The pane-level mixBlendMode = 'multiply' (set up
+          // above) means stacked polygons still darken visually.
           const overlapsGroup = L.featureGroup()
 
           overlaps.forEach((overlap) => {
             if (!overlap.overlap_geojson) return
+            const isDemo = overlap.is_demo === true
+            const style = isDemo
+              ? {
+                  fillColor: '#facc15', // amber-400 — high-visibility hatched yellow
+                  fillOpacity: 0.55,
+                  color: '#b45309',     // amber-700 border
+                  weight: 2,
+                  dashArray: '6,4',
+                }
+              : {
+                  fillColor: '#dc2626',
+                  fillOpacity: 0.10,
+                  color: 'transparent',
+                  weight: 0,
+                }
             const geoJsonLayer = L.geoJSON(overlap.overlap_geojson as unknown as GeoJSON.GeoJsonObject, {
-              style: {
-                fillColor: '#dc2626',
-                fillOpacity: 0.10,
-                color: 'transparent',
-                weight: 0,
-              },
+              style,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'overlaps' as any,
             })
-            geoJsonLayer.bindTooltip(
-              `Prekryv obvodov: ${overlap.district_a_name} × ${overlap.district_b_name}<br/>Plocha: ${(overlap.overlap_area_m2 / 10000).toFixed(2)} ha<br/><em>1 prekryv (2 obvody)</em>`,
-              { sticky: true }
-            )
+            const areaHa = (overlap.overlap_area_m2 / 10000).toFixed(2)
+            const tooltip = isDemo
+              ? `<strong>⚠ PREKRYV (demo)</strong>: tieto adresy patria podľa VZN do 2 obvodov<br/>` +
+                `${overlap.district_a_name} × ${overlap.district_b_name}<br/>` +
+                `Plocha: ${areaHa} ha · <em>§ 44 zákona 321 §3 violation</em>`
+              : `Prekryv obvodov: ${overlap.district_a_name} × ${overlap.district_b_name}<br/>` +
+                `Plocha: ${areaHa} ha`
+            geoJsonLayer.bindTooltip(tooltip, { sticky: true })
             geoJsonLayer.addTo(overlapsGroup)
           })
+
+          // (M-3) District island anomalies — rendered as red dashed outlines
+          // with no fill, so the underlying clean/voronoi obvod still reads.
+          // Only islands flagged with anomaly_type (demo segregation seed +
+          // any future engine-flagged real islands) are drawn — the default
+          // 'main_body' / 'reconnected' statuses stay off the map to avoid
+          // visual noise.
+          const islandsGroup = L.featureGroup()
+          islands
+            .filter((isl) =>
+              isl.anomaly_type != null ||
+              isl.status === 'unresolved_anomaly' ||
+              isl.is_demo === true
+            )
+            .forEach((isl) => {
+              if (!isl.geom_geojson) return
+              const isDemo = isl.is_demo === true
+              const layer = L.geoJSON(isl.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+                style: {
+                  color: '#b91c1c', // red-700
+                  weight: 3,
+                  fillColor: '#b91c1c',
+                  fillOpacity: 0,
+                  dashArray: '6,4',
+                },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                pane: 'overlaps' as any,
+              })
+              const areaHa =
+                isl.area_m2 != null ? `${(Number(isl.area_m2) / 10000).toFixed(2)} ha` : '?'
+              const tooltip = isDemo
+                ? `<strong>⚠ OSTROV (demo)</strong>: časť obvodu odtrhnutá od hlavnej plochy.<br/>` +
+                  `Možná segregácia (§ 44 zákona 321 §3 violation).<br/>` +
+                  `Plocha: ${areaHa}`
+                : `<strong>Ostrov obvodu</strong><br/>` +
+                  `${isl.anomaly_type ?? isl.status ?? 'anomália'}<br/>` +
+                  `Plocha: ${areaHa}`
+              layer.bindTooltip(tooltip, { sticky: true })
+              layer.addTo(islandsGroup)
+            })
 
           // (G) Street geocode points layer
           const streetPointsGroup = L.featureGroup()
@@ -584,6 +642,12 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           }
           overlays[`Školy (${schools.length})`] = schoolsGroup
           overlays['Prekryvy obvodov (kde 2+ obvodov hovorí o tej istej adrese)'] = overlapsGroup
+          const anomalyIslandsCount = islands.filter(
+            (i) => i.anomaly_type != null || i.status === 'unresolved_anomaly' || i.is_demo === true
+          ).length
+          if (anomalyIslandsCount > 0) {
+            overlays[`Anomálie / ostrovy (${anomalyIslandsCount})`] = islandsGroup
+          }
           overlays['MRK lokality (Atlas marginalizovaných rómskych komunít)'] = mrkGroup
           overlays['Domy z VZN (Google geokódovanie, 460 platných)'] = housePointsGroup
           if (houseDots.length > 0) {
@@ -600,6 +664,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           }
           schoolsGroup.addTo(map)
           if (overlaps.length > 0) overlapsGroup.addTo(map)
+          if (anomalyIslandsCount > 0) islandsGroup.addTo(map)
           // House dots: register zoom-gated visibility now (no-op if zoom < threshold)
           updateHouseDotsVisibility()
 
@@ -615,9 +680,9 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
           }
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup, cleanGroup, houseDotsGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup, cleanGroup, houseDotsGroup, islandsGroup]
         } else {
-          const [districtsGroup, schoolsGroup, , overlapsGroup, , , , cleanGroupCached, houseDotsGroupCached] = layersRef.current.psk
+          const [districtsGroup, schoolsGroup, , overlapsGroup, , , , cleanGroupCached, houseDotsGroupCached, islandsGroupCached] = layersRef.current.psk
           const hasCleanGeom = cleanGeom.length > 0
           // Re-add active layers (obvody + školy + prekryvy ON by default)
           if (hasCleanGeom && cleanGroupCached) {
@@ -627,6 +692,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           }
           schoolsGroup.addTo(map)
           if (overlaps.length > 0) overlapsGroup.addTo(map)
+          if (islandsGroupCached) islandsGroupCached.addTo(map)
           // House dots: gated re-add by current zoom
           if (houseDotsGroupCached && map.getZoom() >= HOUSE_DOTS_MIN_ZOOM) {
             houseDotsGroupCached.addTo(map)
