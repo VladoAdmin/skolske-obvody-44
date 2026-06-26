@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" role="img" aria-label="Ilustrácia: prekryv dvoch obvodov">
+  <defs>
+    <pattern id="hatch-yellow" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+      <rect width="8" height="8" fill="#fde047"/>
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#854d0e" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="400" height="280" fill="#f8fafc"/>
+  <g stroke="#e2e8f0" stroke-width="1">
+    <line x1="0" y1="70" x2="400" y2="70"/>
+    <line x1="0" y1="140" x2="400" y2="140"/>
+    <line x1="0" y1="210" x2="400" y2="210"/>
+    <line x1="100" y1="0" x2="100" y2="280"/>
+    <line x1="200" y1="0" x2="200" y2="280"/>
+    <line x1="300" y1="0" x2="300" y2="280"/>
+  </g>
+  <!-- district A (blue) extends too far right -->
+  <polygon points="20,30 260,30 260,180 20,180" fill="#3b82f6" fill-opacity="0.20" stroke="#2563eb" stroke-width="3"/>
+  <!-- district B (orange) extends too far left, overlapping with A -->
+  <polygon points="180,60 380,60 380,250 180,250" fill="#f97316" fill-opacity="0.20" stroke="#ea580c" stroke-width="3"/>
+  <!-- overlap zone — yellow hatched -->
+  <polygon points="180,60 260,60 260,180 180,180" fill="url(#hatch-yellow)" stroke="#a16207" stroke-width="2.5"/>
+  <!-- school markers -->
+  <g font-family="sans-serif">
+    <rect x="100" y="80" width="14" height="14" fill="#1e3a8a" rx="2"/>
+    <text x="107" y="91" fill="#fff" font-size="9" text-anchor="middle" font-weight="700">A</text>
+    <rect x="310" y="140" width="14" height="14" fill="#9a3412" rx="2"/>
+    <text x="317" y="151" fill="#fff" font-size="9" text-anchor="middle" font-weight="700">B</text>
+  </g>
+  <!-- conflict label -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="195" y="105" width="50" height="22" fill="#ffffff" stroke="#a16207" stroke-width="1.5" rx="3"/>
+    <text x="220" y="120" font-size="10" font-weight="700" fill="#854d0e" text-anchor="middle">PREKRYV</text>
+  </g>
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="0" y="252" width="400" height="28" fill="#ffffff"/>
+    <text x="12" y="270" font-size="11" fill="#0f172a" font-weight="600">Prekryv — dva obvody si nárokujú rovnaké domy (§ 44 Š2)</text>
+  </g>
+</svg>

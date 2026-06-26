@@ -1,95 +1,113 @@
-import Link from "next/link";
+import Link from 'next/link'
+import { KpiCard } from '@/components/kpi-card'
+import { DisclaimerBanner } from '@/components/disclaimer-banner'
+import { createPublicClient } from '@/lib/supabase/server'
+import type { EngineMetadata, MunicipalitySummary } from '@/lib/supabase/types'
 
-export default function Home() {
+export const revalidate = 300
+
+async function fetchKpis() {
+  try {
+    const sb = createPublicClient()
+    const [metaRes, summaryRes] = await Promise.all([
+      sb.from('so_engine_metadata').select('*').maybeSingle(),
+      sb.from('so_municipalities_summary').select('*').maybeSingle(),
+    ])
+    return {
+      meta: metaRes.data as EngineMetadata | null,
+      summary: summaryRes.data as MunicipalitySummary | null,
+    }
+  } catch {
+    return { meta: null, summary: null }
+  }
+}
+
+export default async function Home() {
+  const { meta, summary } = await fetchKpis()
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
+      <DisclaimerBanner />
+
       <section aria-labelledby="portal-heading">
-        <h1
-          id="portal-heading"
-          className="text-2xl font-semibold tracking-tight mb-2"
-        >
-          Kontrola § 44 — Školské obvody
+        <h1 id="portal-heading" className="text-2xl font-semibold tracking-tight mb-3">
+          Školské obvody — kontrola podľa § 44
         </h1>
-        <p className="text-muted-foreground">
-          Analytický portál pre referentov RÚŠS a ministerstva školstva. Portál
-          overuje súlad verejných školských obvodov s § 44 zákona č. 321/2025
-          Z. z. Pilot: Prešovský samosprávny kraj (PSK).
-        </p>
+        <div className="prose prose-sm text-muted-foreground space-y-3 max-w-none">
+          <p>
+            Každá obec na Slovensku má zo zákona (§ 44 zák. č. 596/2003 Z. z.) povinnosť určiť
+            školské obvody pre základné školy. Obvod presne vymedzuje, ktoré ulice a adresy patria
+            ku konkrétnej škole — žiak má právo nastúpiť do školy v obvode svojho trvalého pobytu.
+          </p>
+          <p>
+            Tento portál vám ukáže, ako <strong>12 školských obvodov mesta Prešov</strong> obstojí
+            v 9 merateľných podmienkach: tri zákonné požiadavky (Š1–Š3) a šesť analytických
+            indikátorov dostupnosti (P-a až P-f). Dáta máme zatiaľ len pre Prešov. Výsledky sú
+            informatívne — nie záväzný právny výklad.
+          </p>
+          <p>
+            Každý obvod dostane farbu:{' '}
+            <strong>🔴 červená</strong> = zákonné podmienky nesplnené,{' '}
+            <strong>🟠 oranžová</strong> = dáta chýbajú alebo sú rizikové indikátory,{' '}
+            <strong>🟢 zelená</strong> = všetko v poriadku,{' '}
+            <strong>⚪ sivá</strong> = obvod sme ešte nehodnotili.
+          </p>
+        </div>
       </section>
 
+      {/* KPI cards */}
+      <section aria-labelledby="kpi-heading">
+        <h2 id="kpi-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+          Stav dát
+        </h2>
+        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <KpiCard
+            label="Posúdených obvodov"
+            value={summary?.districts_count ?? meta?.districts_count ?? '—'}
+            description="Mesto Prešov, pilotné pokrytie"
+          />
+          <KpiCard
+            label="Spracovaných verdiktov"
+            value={meta?.verdicts_count ?? '—'}
+            description="12 obvodov × 9 podmienok"
+          />
+          <KpiCard
+            label="Otvorených nálezov"
+            value={summary?.open_findings_count ?? meta?.open_findings_count ?? '—'}
+            description="Stav po poslednom výpočte"
+          />
+        </dl>
+      </section>
+
+      {/* Portal section cards */}
       <section aria-labelledby="quick-access-heading" className="space-y-4">
-        <h2 id="quick-access-heading" className="text-lg font-medium">
-          Rýchly prístup
+        <h2 id="quick-access-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          Sekcie portálu
         </h2>
         <nav aria-label="Hlavné sekcie portálu">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 list-none p-0 m-0">
-            {NAV_ITEMS.map((item) => (
+            {PORTAL_CARDS.map((item) => (
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  className="block rounded-lg border border-border p-4 hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block rounded-lg border border-border p-5 hover:border-primary hover:bg-accent/30 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span className="block font-medium text-sm">
-                    {item.label}
-                  </span>
-                  <span className="block text-xs text-muted-foreground mt-1">
-                    {item.description}
-                  </span>
+                  <span className="block text-lg mb-1">{item.icon}</span>
+                  <span className="block font-medium text-sm">{item.label}</span>
+                  <span className="block text-xs text-muted-foreground mt-1">{item.description}</span>
                 </Link>
               </li>
             ))}
           </ul>
         </nav>
       </section>
-
-      <section
-        aria-labelledby="pilot-status-heading"
-        className="rounded-lg border border-border p-4 bg-muted/30"
-      >
-        <h2
-          id="pilot-status-heading"
-          className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3"
-        >
-          Stav pilotu — Sprint 0 (infraštruktúra)
-        </h2>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-          <dt className="font-medium">Dátové vrstvy</dt>
-          <dd className="text-muted-foreground">čakajú na Sprint 1</dd>
-          <dt className="font-medium">Engine § 44</dt>
-          <dd className="text-muted-foreground">čaká na Sprint 2</dd>
-          <dt className="font-medium">Mapa PSK</dt>
-          <dd className="text-muted-foreground">
-            <Link href="/map" className="underline hover:text-foreground">
-              základný podklad aktívny
-            </Link>
-          </dd>
-          <dt className="font-medium">DB schéma</dt>
-          <dd className="text-muted-foreground">migrácie pripravené</dd>
-        </dl>
-      </section>
     </div>
-  );
+  )
 }
 
-const NAV_ITEMS = [
-  {
-    href: "/map",
-    label: "Mapa PSK",
-    description: "Prehľad obvodov celého Prešovského kraja",
-  },
-  {
-    href: "/findings",
-    label: "Register nálezov",
-    description: "Zoznam odchýlok a výnimiek per VZN",
-  },
-  {
-    href: "/municipalities",
-    label: "Zriaďovatelia",
-    description: "Scorecard per obec / zriaďovateľ",
-  },
-  {
-    href: "/admin",
-    label: "Správa dát",
-    description: "Import, validácia, kvalita zdrojov",
-  },
-] as const;
+const PORTAL_CARDS = [
+  { href: '/map', icon: '🗺️', label: 'Mapa obvodov', description: 'Zobrazte si obvody na mape — kde sú školy, kde žijú deti a kde sú nálezy' },
+  { href: '/findings', icon: '📋', label: 'Register nálezov', description: 'Prehľad konkrétnych problémov — každý nález má závažnosť a dôkaz' },
+  { href: '/municipalities', icon: '🏛️', label: 'Zriaďovatelia', description: 'Ktoré obce sme preverili a koľko otvorených nálezov majú' },
+  { href: '/o-metodike', icon: '📖', label: 'Ako hodnotíme', description: 'Čo sú podmienky Š1–Š3, čo sú indikátory P-a až P-f a ako funguje semafor' },
+] as const

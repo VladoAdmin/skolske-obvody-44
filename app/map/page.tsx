@@ -1,53 +1,331 @@
-import { Suspense } from "react";
-import { MapPlaceholder } from "@/components/map/map-placeholder";
-import { MapClient } from "@/components/map/map-client";
+import { Suspense } from 'react'
+import { RegionMap } from '@/components/region-map'
+import { FindingsPanel } from '@/components/findings-panel'
+import { MapWithPanel } from '@/components/map/map-with-panel'
+import { DisclaimerBanner } from '@/components/disclaimer-banner'
+import { createPublicClient } from '@/lib/supabase/server'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import Link from 'next/link'
+import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
+
+export const revalidate = 60
 
 export const metadata = {
-  title: "Mapa PSK — Kontrola § 44",
-};
+  title: 'Mapa Slovenska — Školské obvody § 44',
+}
 
-/**
- * Map page — PSK overview.
- * MapClient is lazy-loaded (client component) because MapLibre needs browser APIs.
- * MapPlaceholder is the accessible skeleton shown during load.
- *
- * ID-SK requirement: every map MUST have a table equivalent toggle.
- * The table toggle is wired in Sprint 4; the toggle button is stubbed here.
- */
-export default function MapPage() {
+async function fetchFeatures(): Promise<DistrictMapFeature[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_map_features').select('*')
+    if (error) throw error
+    return (data ?? []) as DistrictMapFeature[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchSchools(): Promise<SoSchoolMarker[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_school_markers').select('*')
+    if (error) throw error
+    return (data ?? []) as SoSchoolMarker[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchMrkOverlays(): Promise<SoMrkOverlay[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_mrk_overlays').select('*')
+    if (error) throw error
+    return (data ?? []) as SoMrkOverlay[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchFindings(): Promise<SoFindingsPanelItem[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_findings_panel')
+      .select('*')
+      .order('severity_rank', { ascending: true })
+    if (error) throw error
+    return (data ?? []) as SoFindingsPanelItem[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchOverlaps(): Promise<SoDistrictOverlap[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_overlaps').select('*')
+    if (error) throw error
+    return (data ?? []) as SoDistrictOverlap[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchIslands(): Promise<SoDistrictIsland[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_islands').select('*')
+    if (error) throw error
+    return (data ?? []) as SoDistrictIsland[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
+  try {
+    const sb = createPublicClient()
+    // Fetch without geom to keep payload small — geom only for map rendering
+    const { data, error } = await sb
+      .from('so_psk_municipalities')
+      .select('id,name,slug,geom_geojson,schools_count,districts_count')
+    if (error) throw error
+    return (data ?? []) as SoPskMunicipality[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchStreetGeocodes(): Promise<SoStreetGeocode[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_street_geocodes')
+      .select('district_id,street,lat,lon,status,partial_match,formatted_address,point_geojson')
+    if (error) throw error
+    return (data ?? []) as SoStreetGeocode[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchVoronoiGeom(): Promise<SoDistrictVoronoi[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_district_voronoi').select('id,name,geom_voronoi_geojson,geom_voronoi_metadata')
+    if (error) throw error
+    return (data ?? []) as SoDistrictVoronoi[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchCleanGeom(): Promise<SoDistrictCleanGeom[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_district_clean_geom')
+      .select('id,name,school_id,geom_clean_geojson,geom_clean_metadata')
+    if (error) throw error
+    return (data ?? []) as SoDistrictCleanGeom[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchHouseDots(): Promise<SoHouseDot[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_house_dots')
+      .select('district_id,street,house_number,lat,lon')
+    if (error) throw error
+    return (data ?? []) as SoHouseDot[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchHousePoints(): Promise<SoHousePoint[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_house_points')
+      .select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason')
+    if (error) throw error
+    return (data ?? []) as SoHousePoint[]
+  } catch {
+    return []
+  }
+}
+
+export default async function MapPage() {
+  const [features, schools, mrkOverlays, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots] = await Promise.all([
+    fetchFeatures(),
+    fetchSchools(),
+    fetchMrkOverlays(),
+    fetchFindings(),
+    fetchOverlaps(),
+    fetchIslands(),
+    fetchMunicipalities(),
+    fetchStreetGeocodes(),
+    fetchHousePoints(),
+    fetchVoronoiGeom(),
+    fetchCleanGeom(),
+    fetchHouseDots(),
+  ])
+  const isEmpty = features.length === 0
+  const cleanShowcaseCount = cleanGeom.filter(
+    (d) => d.geom_clean_metadata?.method === 'clean_polygon'
+  ).length
+  const cleanFallbackCount = cleanGeom.length - cleanShowcaseCount
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Mapa PSK</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Prehľad školských obvodov — Prešovský samosprávny kraj
-          </p>
-        </div>
-        {/* ID-SK: map ↔ table toggle — wired in Sprint 4 */}
-        <button
-          type="button"
-          aria-label="Prepnúť na tabuľkový výstup (Sprint 4)"
-          disabled
-          className="text-xs border border-dashed border-border rounded px-3 py-1.5 text-muted-foreground cursor-not-allowed"
-        >
-          Tabuľkový výstup (Sprint 4)
-        </button>
+      <DisclaimerBanner />
+
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Mapa Slovenska — Školské obvody § 44</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Zobrazenie podľa krajov. Aktívne dáta: Prešovský samosprávny kraj
+        </p>
       </div>
 
-      <div
-        className="rounded-lg border border-border overflow-hidden"
-        style={{ height: "60vh", minHeight: 400 }}
-      >
-        <Suspense fallback={<MapPlaceholder />}>
-          <MapClient />
-        </Suspense>
+      {isEmpty && (
+        <Alert>
+          <AlertDescription>
+            Engine ešte nebežal nad týmto územím. Mapa zobrazuje PSK hranicu bez dát.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Map overview — what the default view shows */}
+      <Alert className="border-blue-300 bg-blue-50 text-blue-900">
+        <AlertTitle className="text-blue-800">Ako čítať mapu</AlertTitle>
+        <AlertDescription className="text-blue-800 text-xs">
+          Mapa ukazuje {features.length} školských obvodov v Prešove farebne odlíšené.
+          Sýto vyfarbené hranice = oblasť pridelená danej škole podľa VZN.
+          Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
+          Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
+        </AlertDescription>
+      </Alert>
+      {/* Sprint I KPI — overlap reduction */}
+      {housePoints.length > 0 && voronoiGeom.length === 0 && (
+        <Alert className="border-green-300 bg-green-50 text-green-900">
+          <AlertTitle className="text-green-800">Sprint I — Validácia geocódov + per-side hulls</AlertTitle>
+          <AlertDescription className="text-green-800 text-xs">
+            Validovaných adresných bodov: {housePoints.filter(h => h.valid !== false).length} z {housePoints.length} (odfiltrovaných: {housePoints.filter(h => h.valid === false).length}).
+            Google hull (zelenás čiarkovaná hranica) — prekryvy geom_google: <strong>0 párov</strong> (OSM geom baseline: 57).
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Sprint M-2 demo banner — Register adries MŠSR unavailability */}
+      <Alert className="border-amber-400 bg-amber-100 text-amber-950">
+        <AlertTitle className="text-amber-900 font-semibold">⚠ Demo dáta — Register adries MŠSR nedostupný</AlertTitle>
+        <AlertDescription className="text-amber-900 text-xs">
+          Ukazujeme cieľový stav portálu nad rekonštruovanými polygónmi obvodov.
+          Reálne dáta po sprístupnení Registra adries Ministerstva školstva.
+          {cleanGeom.length > 0 && (
+            <>
+              {' '}
+              <strong>{cleanShowcaseCount} obvody</strong> majú demo &bdquo;clean&ldquo; polygóny (hand-tuned),
+              zvyšok ({cleanFallbackCount}) je Voronoi rekonštrukcia z VZN textu.
+            </>
+          )}
+          {' '}
+          <a
+            href="/o-metodike#paragraf-44"
+            className="font-semibold underline underline-offset-2 hover:text-amber-700"
+          >
+            Pozri metodiku →
+          </a>
+        </AlertDescription>
+      </Alert>
+
+      {/* Map + findings panel layout — responsive via MapWithPanel */}
+      <div aria-describedby="map-fallback-table">
+        <MapWithPanel
+          findingsCount={findings.length}
+          mapSlot={
+            <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
+              <RegionMap
+                features={features}
+                schools={schools}
+                mrkOverlays={mrkOverlays}
+                findings={findings}
+                overlaps={overlaps}
+                islands={islands}
+                municipalities={municipalities}
+                streetGeocodes={streetGeocodes}
+                housePoints={housePoints}
+                voronoiGeom={voronoiGeom}
+                cleanGeom={cleanGeom}
+                houseDots={houseDots}
+                initialMode="sk"
+              />
+            </Suspense>
+          }
+          panelSlot={<FindingsPanel findings={findings} features={features} />}
+        />
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        Podkladová mapa: OpenStreetMap contributors. Dátové vrstvy (obvody, školy,
-        MRK) sa načítajú v Sprinte 1. Verdikty (semafor) v Sprinte 2.
-      </p>
+      {/* Map legend */}
+      <div className="hidden md:block">
+        <p className="text-xs text-muted-foreground mt-2">
+          Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'hsl(40,65%,60%)', opacity: 0.5 }}></span> Obvod (kategorická farba)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3" style={{ background: 'repeating-linear-gradient(45deg, #7c3aed, #7c3aed 2px, transparent 2px, transparent 5px)' }}></span> MRK lokalita</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span> Škola</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#dc2626', opacity: 0.25 }}></span> Prekryv obvodov: svetlejšie = 1, tmavšie = viac</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-dashed" style={{ borderColor: '#10b981', background: 'transparent' }}></span> Google hull (Sprint G)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body (Google)</span>
+        </p>
+      </div>
+
+      {/* A11y fallback table */}
+      <section aria-labelledby="district-list-heading" id="map-fallback-table">
+        <h2 id="district-list-heading" className="text-sm font-semibold mb-2">
+          Zoznam obvodov
+        </h2>
+        {isEmpty ? (
+          <p className="text-xs text-muted-foreground">Žiadne obvody — engine ešte nezhodnotil.</p>
+        ) : (
+          <div className="overflow-x-auto rounded border border-border">
+            <table className="w-full text-xs" aria-label="Zoznam obvodov s semaforom">
+              <thead>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground" scope="col">Obvod</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground" scope="col">Semafor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {features.map((f) => (
+                  <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <td className="px-3 py-2">
+                      <Link href={`/districts/${f.id}`} className="text-primary underline hover:text-primary/80">
+                        {f.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span aria-label={getColorLabel(f.composition_color)}>
+                        {getColorSymbol(f.composition_color)} {getColorLabel(f.composition_color)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
-  );
+  )
 }

@@ -1,0 +1,41 @@
+version: "3.8"
+
+# OSRM routing service for Školské obvody § 44
+# Walking profile (foot) — for P-b distance/time computation
+#
+# Setup (one-time):
+#   1. chmod +x routing/setup.sh && ./routing/setup.sh
+#   2. docker compose -f routing/docker-compose.yml up -d
+#
+# The setup script downloads Slovakia OSM extract from Geofabrik,
+# processes it with the foot profile, and starts the OSRM HTTP server.
+#
+# G-ROUTING gate requirements (PLAN §0.5):
+#   - Walking profile confirmed working
+#   - Address snapping test passes
+#   - Fallback LOW_DATA when route unavailable (never straight-line)
+
+services:
+  osrm:
+    image: ghcr.io/project-osrm/osrm-backend:latest
+    volumes:
+      - ./data:/data
+    ports:
+      - "5000:5000"
+    command: >
+      osrm-routed
+      --algorithm mld
+      /data/slovakia-latest.osrm
+      --max-table-size 1000
+      --port 5000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  default:
+    name: skolske-obvody-routing

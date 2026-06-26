@@ -4,6 +4,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppNav } from "@/components/layout/app-nav";
+import { EngineFooter } from "@/components/engine-footer";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -37,13 +39,16 @@ export default function RootLayout({
         >
           Preskočiť na hlavný obsah
         </a>
+        <TooltipProvider>
         <AppHeader />
         <div className="flex flex-1">
           <AppNav />
-          <main id="main-content" className="flex-1 p-6 overflow-auto">
+          <main id="main-content" className="flex-1 p-4 md:p-6 overflow-auto min-w-0">
             {children}
           </main>
         </div>
+        <EngineFooter />
+        </TooltipProvider>
       </body>
     </html>
   );

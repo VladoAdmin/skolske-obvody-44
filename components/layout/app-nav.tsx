@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { href: "/map", label: "Mapa PSK" },
   { href: "/municipalities", label: "Zriaďovatelia" },
   { href: "/findings", label: "Register nálezov" },
-  { href: "/reports", label: "Reporty" },
+  { href: "/o-metodike", label: "O metodike" },
   { href: "/admin", label: "Správa dát" },
 ] as const;
 
