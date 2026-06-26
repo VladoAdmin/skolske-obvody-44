@@ -60,7 +60,7 @@ export function MapWithPanel({ mapSlot, panelSlot, findingsCount }: MapWithPanel
           )}
           style={{ height: undefined }}
         >
-          <div className="h-[50vh] md:h-[60vh] min-h-[320px]">
+          <div className="h-[65vh] md:h-[60vh] min-h-[320px]">
             {mapSlot}
           </div>
         </div>
@@ -76,7 +76,7 @@ export function MapWithPanel({ mapSlot, panelSlot, findingsCount }: MapWithPanel
           )}
           style={{ height: undefined }}
         >
-          <div className="h-[50vh] md:h-[60vh] min-h-[320px]">
+          <div className="h-[65vh] md:h-[60vh] min-h-[320px]">
             {panelSlot}
           </div>
         </div>

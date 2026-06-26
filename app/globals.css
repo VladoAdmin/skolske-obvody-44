@@ -64,3 +64,30 @@
     font-size: 14px;
   }
 }
+
+/* On mobile the Leaflet layer-toggle starts collapsed (collapsed: true) and is
+   shown as a labeled "Vrstvy" pill instead of the bare icon, so users recognise
+   it and have a >=44px touch target. The expanded list keeps Leaflet defaults. */
+@media (max-width: 767px) {
+  .leaflet-control-layers.leaflet-control-layers-collapsed .leaflet-control-layers-toggle {
+    width: auto;
+    height: 44px;
+    min-width: 44px;
+    background-image: none;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  .leaflet-control-layers.leaflet-control-layers-collapsed .leaflet-control-layers-toggle::after {
+    content: "Vrstvy";
+  }
+  /* Cap the expanded list so it never covers the whole small map */
+  .leaflet-control-layers-expanded {
+    max-width: 78vw;
+    max-height: 55vh;
+    overflow-y: auto;
+  }
+}
