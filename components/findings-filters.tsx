@@ -7,6 +7,23 @@ import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 
 const ALL = '__all__'
 
+// Explicit SK label maps so the trigger always shows Slovak regardless of
+// base-ui SelectValue behaviour with controlled values (bod 8a fix).
+const SEVERITY_SK: Record<string, string> = {
+  critical: 'Kritická',
+  high: 'Vysoká',
+  medium: 'Stredná',
+  low: 'Nízka',
+  info: 'Informácia',
+}
+
+const STATUS_SK: Record<string, string> = {
+  open: 'Otvorený',
+  acknowledged: 'Zaznamenaný',
+  resolved: 'Vyriešený',
+  wont_fix: 'Neopravovať',
+}
+
 export function FindingsFilters() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -29,19 +46,21 @@ export function FindingsFilters() {
   const status = searchParams.get('status') ?? ALL
   const condition = searchParams.get('condition') ?? ALL
 
-  // shadcn Select value must be string (not null)
-  const severityVal: string = severity
-  const statusVal: string = status
-  const conditionVal: string = condition
+  // Derive the SK label to show in the trigger (fallback to placeholder when ALL).
+  const severityLabel = severity !== ALL ? (SEVERITY_SK[severity] ?? severity) : undefined
+  const statusLabel = status !== ALL ? (STATUS_SK[status] ?? status) : undefined
+  const conditionLabel = condition !== ALL ? (CONDITION_LABELS_SK[condition]?.label ?? condition) : undefined
 
   return (
     <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3" role="search" aria-label="Filtre nálezov">
       {/* Severity filter */}
       <div className="sm:w-auto w-full">
         <label htmlFor="filter-severity" className="text-xs text-muted-foreground block mb-1">Závažnosť</label>
-        <Select value={severityVal === ALL ? undefined : severityVal} onValueChange={(v: string | null) => updateParam('severity', v ?? ALL)}>
+        <Select value={severity !== ALL ? severity : undefined} onValueChange={(v: string | null) => updateParam('severity', v ?? ALL)}>
           <SelectTrigger id="filter-severity" className="w-full sm:w-40 h-8 text-xs">
-            <SelectValue placeholder="Všetky závažnosti" />
+            <SelectValue placeholder="Všetky závažnosti">
+              {severityLabel}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Všetky závažnosti</SelectItem>
@@ -57,9 +76,11 @@ export function FindingsFilters() {
       {/* Status filter */}
       <div className="sm:w-auto w-full">
         <label htmlFor="filter-status" className="text-xs text-muted-foreground block mb-1">Stav</label>
-        <Select value={statusVal === ALL ? undefined : statusVal} onValueChange={(v: string | null) => updateParam('status', v ?? ALL)}>
+        <Select value={status !== ALL ? status : undefined} onValueChange={(v: string | null) => updateParam('status', v ?? ALL)}>
           <SelectTrigger id="filter-status" className="w-full sm:w-36 h-8 text-xs">
-            <SelectValue placeholder="Všetky stavy" />
+            <SelectValue placeholder="Všetky stavy">
+              {statusLabel}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Všetky stavy</SelectItem>
@@ -74,9 +95,11 @@ export function FindingsFilters() {
       {/* Condition filter */}
       <div className="sm:w-auto w-full">
         <label htmlFor="filter-condition" className="text-xs text-muted-foreground block mb-1">Podmienka</label>
-        <Select value={conditionVal === ALL ? undefined : conditionVal} onValueChange={(v: string | null) => updateParam('condition', v ?? ALL)}>
+        <Select value={condition !== ALL ? condition : undefined} onValueChange={(v: string | null) => updateParam('condition', v ?? ALL)}>
           <SelectTrigger id="filter-condition" className="w-full sm:w-52 h-8 text-xs">
-            <SelectValue placeholder="Všetky podmienky" />
+            <SelectValue placeholder="Všetky podmienky">
+              {conditionLabel}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Všetky podmienky</SelectItem>
