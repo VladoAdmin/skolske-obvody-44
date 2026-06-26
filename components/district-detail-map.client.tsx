@@ -218,6 +218,9 @@ export function DistrictDetailMapClient({
 
       // --- School markers ---
       const schoolsGroup = L.featureGroup()
+      // district_id → school marker (for so:flyto-school event)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const schoolMarkerByDistrictId = new Map<string, any>()
       // Pin colour distinguishes founder: public (zriaďovateľ mesto Prešov)
       // = blue; private/church = amber.
       const SCHOOL_COLOR_PUBLIC = '#2563eb'
@@ -236,7 +239,7 @@ export function DistrictDetailMapClient({
         const [lon, lat] = geom.coordinates
         const schoolName = feature.school_name ?? 'Škola'
         const isCurrent = feature.id === currentDistrictId
-        L.marker([lat, lon], {
+        const marker = L.marker([lat, lon], {
           icon: makeSchoolIcon(isCurrent ? 26 : 18),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'schools' as any,
@@ -252,6 +255,7 @@ export function DistrictDetailMapClient({
             { maxWidth: 280, autoPanPadding: [20, 20] }
           )
           .addTo(schoolsGroup)
+        schoolMarkerByDistrictId.set(feature.id, marker)
       })
 
       const districtLinkedSchoolNames = new Set(
@@ -281,6 +285,8 @@ export function DistrictDetailMapClient({
       schoolsGroup.addTo(map)
 
       // --- MRK overlays ---
+      // MRK stays OFF by default (same as region-map): non-interactive so taps
+      // on a district area always reach the school markers underneath.
       const mrkGroup = L.featureGroup()
       mrkOverlays.forEach((mrk) => {
         if (!mrk.geom_geojson) return
@@ -291,6 +297,7 @@ export function DistrictDetailMapClient({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             fillColor: 'url(#mrkHatch)' as any,
             fillOpacity: 1,
+            interactive: false,
           },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'mrk' as any,
@@ -301,7 +308,7 @@ export function DistrictDetailMapClient({
         )
         layer.addTo(mrkGroup)
       })
-      mrkGroup.addTo(map)
+      // Do NOT add mrkGroup to map on init — user enables via layer control.
 
       // --- House points: current district larger markers ---
       const housePointsGroup = L.featureGroup()
@@ -371,10 +378,29 @@ export function DistrictDetailMapClient({
         layersToggle.setAttribute('title', 'Vrstvy mapy')
         layersToggle.setAttribute('aria-label', 'Vrstvy mapy')
       }
+
+      // --- so:flyto-school: pan to a specific school and open its popup ---
+      // Dispatched by findings-row or school-list clicks (district_id payload).
+      const flyToSchoolHandler = (e: Event) => {
+        const { districtId } = (e as CustomEvent<{ districtId: string }>).detail
+        const marker = schoolMarkerByDistrictId.get(districtId)
+        if (!marker) return
+        const latlng = marker.getLatLng()
+        map.flyTo(latlng, 17, { duration: 0.8 })
+        setTimeout(() => marker.openPopup(), 900)
+      }
+      window.addEventListener('so:flyto-school', flyToSchoolHandler)
+
+      // Cleanup is handled in the outer return below — store ref for removal.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(map as any)._soFlyToSchoolHandler = flyToSchoolHandler
     }).catch(console.error)
 
     return () => {
       if (mapRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handler = (mapRef.current as any)._soFlyToSchoolHandler
+        if (handler) window.removeEventListener('so:flyto-school', handler)
         mapRef.current.remove()
         mapRef.current = null
       }

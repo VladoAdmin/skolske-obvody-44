@@ -170,10 +170,50 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
       }
       window.addEventListener('so:select-district', selectDistrictHandler)
 
+      // --- CustomEvent: draw a route line for distance findings (Pa/Pb) ---
+      // Draws a dashed line from the district centroid (representative address
+      // area) to the school location so the user can see the problematic
+      // air-line distance visually. Replaces any previous route layer.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let routeLayer: any = null
+      const drawRouteHandler = (e: Event) => {
+        const { from, to, label } = (e as CustomEvent<{
+          districtId: string
+          from: { lat: number; lon: number }
+          to: { lat: number; lon: number }
+        } & { label?: string }>).detail
+        // Remove previous route if any
+        if (routeLayer) {
+          map.removeLayer(routeLayer)
+          routeLayer = null
+        }
+        const fromLatLng: [number, number] = [from.lat, from.lon]
+        const toLatLng: [number, number] = [to.lat, to.lon]
+        // Compute straight-line distance in metres (Haversine via Leaflet)
+        const distM = map.distance(fromLatLng, toLatLng)
+        const distKm = (distM / 1000).toFixed(2)
+        routeLayer = L.polyline([fromLatLng, toLatLng], {
+          color: '#dc2626',    // red-600 — problem highlight
+          weight: 3,
+          dashArray: '8,5',
+          opacity: 0.85,
+        })
+          .bindPopup(
+            `<strong>${label ?? 'Vzdialenosť'}</strong><br/>` +
+            `Vzdušná vzdialenosť: <strong>${distKm} km</strong><br/>` +
+            `<em>Centroid obvodu → škola</em>`,
+            { maxWidth: 220 }
+          )
+          .addTo(map)
+        routeLayer.openPopup()
+      }
+      window.addEventListener('so:draw-route', drawRouteHandler)
+
       return () => {
         window.removeEventListener('so:flyto', flyToHandler)
         window.removeEventListener('so:toggle-district', toggleDistrictHandler)
         window.removeEventListener('so:select-district', selectDistrictHandler)
+        window.removeEventListener('so:draw-route', drawRouteHandler)
       }
     }).catch(console.error)
 

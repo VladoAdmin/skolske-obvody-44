@@ -44,19 +44,61 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
     })
   }
 
+  // Condition codes that represent distance/route findings (Pa = air-line ≤2km,
+  // Pb = walking route). All others are boundary/composition findings.
+  const DISTANCE_CODES = new Set(['Pa', 'Pb', 'Pc', 'Pd'])
+
   function handleItemClick(item: SoFindingsPanelItem) {
     setSelectedId(item.finding_id)
-    if (
+
+    const hasCentroid =
       typeof item.district_geom_centroid_lat === 'number' &&
       typeof item.district_geom_centroid_lon === 'number'
-    ) {
+
+    if (hasCentroid) {
       window.dispatchEvent(
         new CustomEvent('so:flyto', {
           detail: {
             lat: item.district_geom_centroid_lat,
             lon: item.district_geom_centroid_lon,
-            zoom: 15,
+            zoom: 14,
           },
+        })
+      )
+    }
+
+    const isDistanceFinding = DISTANCE_CODES.has(item.condition_code)
+
+    if (isDistanceFinding) {
+      // Draw a line from district centroid → school location to show the
+      // problematic distance visually. School coords come from features prop.
+      const feature = features.find((f) => f.id === item.district_id)
+      const schoolGeom = feature?.school_geom_geojson as { type?: string; coordinates?: [number, number] } | null
+      if (
+        hasCentroid &&
+        schoolGeom?.type === 'Point' &&
+        Array.isArray(schoolGeom.coordinates)
+      ) {
+        const [schoolLon, schoolLat] = schoolGeom.coordinates
+        window.dispatchEvent(
+          new CustomEvent('so:draw-route', {
+            detail: {
+              districtId: item.district_id,
+              from: {
+                lat: item.district_geom_centroid_lat as number,
+                lon: item.district_geom_centroid_lon as number,
+              },
+              to: { lat: schoolLat, lon: schoolLon },
+              label: item.condition_label_sk,
+            },
+          })
+        )
+      }
+    } else {
+      // Boundary/composition finding — highlight the district polygon.
+      window.dispatchEvent(
+        new CustomEvent('so:select-district', {
+          detail: { id: item.district_id },
         })
       )
     }

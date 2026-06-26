@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import type { FindingPublic } from '@/lib/supabase/types'
 import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
 import { relativeTime } from '@/lib/format/dates'
@@ -22,6 +23,8 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export function FindingsTable({ findings, totalCount, page, pageSize }: FindingsTableProps) {
+  const router = useRouter()
+
   if (findings.length === 0) {
     return (
       <div className="rounded-lg border border-border p-8 text-center text-sm text-muted-foreground">
@@ -45,7 +48,12 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
         {findings.map((finding) => (
           <div
             key={finding.finding_id}
-            className="rounded-lg border border-border p-3 space-y-1.5 bg-background"
+            className="rounded-lg border border-border p-3 space-y-1.5 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
+            onClick={() => router.push(`/districts/${finding.district_id}`)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(`/districts/${finding.district_id}`) }}
+            aria-label={`Nález pre obvod ${finding.district_name}`}
           >
             <div className="flex items-start justify-between gap-2">
               <span
@@ -61,6 +69,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
               <Link
                 href={`/districts/${finding.district_id}`}
                 className="text-sm font-medium text-primary underline hover:text-primary/80"
+                onClick={(e) => e.stopPropagation()}
               >
                 {finding.district_name}
               </Link>
@@ -105,7 +114,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
               <TableRow
                 key={finding.finding_id}
                 className="cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => {}}
+                onClick={() => router.push(`/districts/${finding.district_id}`)}
                 aria-label={`Nález pre obvod ${finding.district_name}`}
               >
                 <TableCell className="sticky left-0 bg-background z-10">
