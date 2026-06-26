@@ -213,6 +213,14 @@ export interface SoDistrictAddressStats {
   vzn_streets: number
   vzn_streets_in_register: number
   street_coverage: number
+  // Step-2 CLEAN (authoritative) figures from register_adries_clean.
+  clean_habitable_addresses: number
+  clean_distinct_streets: number
+  clean_street_coverage: number
+  // Step-3 geometric-consistency signal: geocoded addresses the VZN assigns to
+  // this district whose real coordinate falls outside its polygon (a place to
+  // review, not a verdict change).
+  mismatch_count: number
   computed_at: string | null
 }
 

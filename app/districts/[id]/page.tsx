@@ -237,14 +237,35 @@ export default async function DistrictPage({ params }: Props) {
             Scorecard podmienok § 44
           </h2>
           {addressStats && (
-            <p className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Autoritatívny register adries:</span>{' '}
-              {addressStats.habitable_addresses.toLocaleString('sk-SK')} obývateľných adries,{' '}
-              {addressStats.register_streets.toLocaleString('sk-SK')} ulíc{' '}
-              (pokrytie ulíc z VZN {Math.round(addressStats.street_coverage * 100)} %).{' '}
-              Zdroj: register adries a stavieb mesta Prešov. Slúži len ako podklad dôvery dát — nemení
-              právny verdikt podmienok § 44.
-            </p>
+            <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Autoritatívny register adries:</span>{' '}
+                {addressStats.clean_habitable_addresses.toLocaleString('sk-SK')} obývateľných adries,{' '}
+                {addressStats.clean_distinct_streets.toLocaleString('sk-SK')} ulíc{' '}
+                (pokrytie ulíc z VZN {Math.round(addressStats.clean_street_coverage * 100)} %).{' '}
+                Zdroj: vyčistený autoritatívny register adries a stavieb mesta Prešov. Slúži len ako
+                podklad dôvery dát — nemení právny verdikt podmienok § 44.
+              </p>
+              {addressStats.mismatch_count > 0 && (
+                <p className="mt-1.5">
+                  <span
+                    className="inline-flex items-center gap-1 cursor-help border-b border-dotted border-muted-foreground/60"
+                    title={
+                      'Adresy, ktorých reálna poloha (geokódovaná súradnica) padá mimo ' +
+                      'obvodu, ktorý im prideľuje VZN — miesto na kontrolu, nie automatická ' +
+                      'chyba. Ulice, ktoré VZN delí podľa rozsahu čísel medzi viac obvodov, ' +
+                      'sa tu môžu objaviť legitímne. Nemení právny verdikt § 44.'
+                    }
+                  >
+                    ⚠ Geometrický nesúlad:{' '}
+                    <span className="font-medium text-foreground">
+                      {addressStats.mismatch_count.toLocaleString('sk-SK')}
+                    </span>{' '}
+                    adries s reálnou polohou mimo prideleného obvodu
+                  </span>
+                </p>
+              )}
+            </div>
           )}
           <DistrictScorecard rows={sorted} explanationByCode={explanationByCode} mockByCode={mockByCode} />
         </section>
