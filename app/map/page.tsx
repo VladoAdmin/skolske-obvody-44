@@ -242,6 +242,11 @@ export default async function MapPage() {
           Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
           Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
         </p>
+        <p className="px-3 pb-2 text-xs text-blue-800">
+          Značky škôl sú farebne rozlíšené podľa zriaďovateľa:{' '}
+          <span className="inline-flex items-center gap-1 align-middle"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#2563eb' }}></span> modrá = verejná (mesto Prešov)</span>,{' '}
+          <span className="inline-flex items-center gap-1 align-middle"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#d97706' }}></span> oranžová = súkromná / cirkevná</span>.
+        </p>
       </details>
 
       {/* Map + findings panel layout — responsive via MapWithPanel */}
@@ -278,7 +283,9 @@ export default async function MapPage() {
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3" style={{ background: 'repeating-linear-gradient(45deg, #7c3aed, #7c3aed 2px, transparent 2px, transparent 5px)' }}></span> MRK lokalita</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full bg-blue-600"></span> Škola</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#2563eb' }}></span> Škola verejná (mesto Prešov)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#d97706' }}></span> Škola súkromná / cirkevná</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#dc2626', opacity: 0.25 }}></span> Prekryv obvodov: svetlejšie = 1, tmavšie = viac</span>
           <span className="mx-2">·</span>

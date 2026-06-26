@@ -92,6 +92,8 @@ export interface SoSchoolMarker {
   name: string
   kind: string | null
   geom_geojson: Record<string, unknown> | null
+  // true = verejná škola (zriaďovateľ mesto Prešov); false = súkromná/cirkevná
+  is_public: boolean | null
 }
 
 export interface SoMrkOverlay {

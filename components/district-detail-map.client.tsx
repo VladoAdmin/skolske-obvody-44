@@ -205,8 +205,12 @@ export function DistrictDetailMapClient({
 
       // --- School markers ---
       const schoolsGroup = L.featureGroup()
-      const makeSchoolIcon = (size: number) => L.divIcon({
-        html: `<div style="line-height:0"><svg viewBox="0 0 24 24" width="${size}" height="${size}"><circle cx="12" cy="12" r="10" fill="#2563eb" stroke="#fff" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Š</text></svg></div>`,
+      // Pin colour distinguishes founder: public (zriaďovateľ mesto Prešov)
+      // = blue; private/church = amber.
+      const SCHOOL_COLOR_PUBLIC = '#2563eb'
+      const SCHOOL_COLOR_PRIVATE = '#d97706'
+      const makeSchoolIcon = (size: number, fill: string = SCHOOL_COLOR_PUBLIC) => L.divIcon({
+        html: `<div style="line-height:0"><svg viewBox="0 0 24 24" width="${size}" height="${size}"><circle cx="12" cy="12" r="10" fill="${fill}" stroke="#fff" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Š</text></svg></div>`,
         className: 'school-icon',
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2],
@@ -235,12 +239,15 @@ export function DistrictDetailMapClient({
         const geom = school.geom_geojson as { type: string; coordinates: [number, number] }
         if (geom.type !== 'Point') return
         const [lon, lat] = geom.coordinates
+        const isPrivate = school.is_public === false
+        const fill = isPrivate ? SCHOOL_COLOR_PRIVATE : SCHOOL_COLOR_PUBLIC
+        const founderLabel = isPrivate ? 'súkromná / cirkevná' : 'verejná (mesto Prešov)'
         L.marker([lat, lon], {
-          icon: makeSchoolIcon(16),
+          icon: makeSchoolIcon(16, fill),
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'schools' as any,
         })
-          .bindTooltip(`${school.name}${school.kind ? ` (${school.kind})` : ''}`)
+          .bindTooltip(`${school.name}${school.kind ? ` (${school.kind})` : ''}<br/><em>${founderLabel}</em>`)
           .addTo(schoolsGroup)
       })
 
