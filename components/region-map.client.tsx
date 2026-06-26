@@ -522,7 +522,10 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             geoJsonLayer.addTo(mrkGroup)
           })
 
-          mrkGroup.addTo(map)
+          // MRK stays OFF by default (declutter): the group is built and
+          // registered in the layer control below ("MRK lokality …") but is
+          // NOT added to the map on load. The user can enable it via the
+          // checkbox. Do not call mrkGroup.addTo(map) here.
 
           // (B-heatmap) Overlap polygons — Sprint M-3 styling. Demo overlaps
           // get a saturated yellow fill + dashed amber border so the viewer
