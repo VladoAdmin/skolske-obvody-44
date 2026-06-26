@@ -341,8 +341,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
           const schoolsGroup = L.featureGroup()
 
-          const makeSchoolIcon = (size: number) => L.divIcon({
-            html: `<div style="line-height:0"><svg viewBox="0 0 24 24" width="${size}" height="${size}"><circle cx="12" cy="12" r="10" fill="#2563eb" stroke="#fff" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Š</text></svg></div>`,
+          // Pin colour distinguishes founder: public (zriaďovateľ mesto Prešov)
+          // = blue; private/church = amber. White "Š" + stroke kept for
+          // legibility on both.
+          const SCHOOL_COLOR_PUBLIC = '#2563eb'
+          const SCHOOL_COLOR_PRIVATE = '#d97706'
+          const makeSchoolIcon = (size: number, fill: string = SCHOOL_COLOR_PUBLIC) => L.divIcon({
+            html: `<div style="line-height:0"><svg viewBox="0 0 24 24" width="${size}" height="${size}"><circle cx="12" cy="12" r="10" fill="${fill}" stroke="#fff" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">Š</text></svg></div>`,
             className: 'school-icon',
             iconSize: [size, size],
             iconAnchor: [size / 2, size / 2],
@@ -368,12 +373,15 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             const geom = school.geom_geojson as { type: string; coordinates: [number, number] }
             if (geom.type !== 'Point') return
             const [lon, lat] = geom.coordinates
+            const isPrivate = school.is_public === false
+            const fill = isPrivate ? SCHOOL_COLOR_PRIVATE : SCHOOL_COLOR_PUBLIC
+            const founderLabel = isPrivate ? 'súkromná / cirkevná' : 'verejná (mesto Prešov)'
             L.marker([lat, lon], {
-              icon: makeSchoolIcon(16),
+              icon: makeSchoolIcon(16, fill),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'schools' as any,
             })
-              .bindTooltip(`${school.name}${school.kind ? ` (${school.kind})` : ''}`)
+              .bindTooltip(`${school.name}${school.kind ? ` (${school.kind})` : ''}<br/><em>${founderLabel}</em>`)
               .addTo(schoolsGroup)
           })
 
@@ -635,18 +643,20 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           }
           map.on('zoomend', updateHouseDotsVisibility)
 
-          // Layer control — MVP demo view. The "Obvody" layer is the new
-          // clean geom from Sprint M-2 (smoothed polygons) when present;
-          // the original Sprint A geom is exposed as an optional toggle so
-          // analysts can compare the two surfaces. Voronoi remains engine
-          // input only and is hidden from the user-facing control.
+          // Layer control — MVP demo view. The authoritative "Obvody" layer is
+          // the corrected geometry served via so_district_map_features (the
+          // `features` prop → districtsGroup). The older Sprint M-2 clean-geom
+          // surface (cleanGroup) is now STALE relative to the corrected
+          // districts.geom — for several central districts it holds collapsed
+          // voronoi_fallback polygons that are 17×–6000× smaller than the real
+          // extent — so it is exposed only as an optional comparison toggle and
+          // is NOT drawn by default. Voronoi remains engine input only and is
+          // hidden from the user-facing control.
           const hasCleanGeom = cleanGeom.length > 0
           const overlays: Record<string, unknown> = {}
+          overlays[`Obvody (${features.length})`] = districtsGroup
           if (hasCleanGeom) {
-            overlays[`Obvody (${cleanGeom.length})`] = cleanGroup
-            overlays[`Obvody — VZN hull (Sprint A, ${features.length})`] = districtsGroup
-          } else {
-            overlays[`Obvody (${features.length})`] = districtsGroup
+            overlays[`Obvody — staršie clean polygóny (Sprint M-2, ${cleanGeom.length})`] = cleanGroup
           }
           overlays[`Školy (${schools.length})`] = schoolsGroup
           overlays['Prekryvy obvodov (kde 2+ obvodov hovorí o tej istej adrese)'] = overlapsGroup
@@ -675,23 +685,19 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             layersToggle.setAttribute('aria-label', 'Vrstvy mapy')
           }
 
-          // Default ON: clean obvody (or fallback to Sprint A) + školy + prekryvy.
-          if (hasCleanGeom) {
-            cleanGroup.addTo(map)
-          } else {
-            districtsGroup.addTo(map)
-          }
+          // Default ON: corrected obvody (districtsGroup) + školy + prekryvy.
+          // The stale cleanGroup stays OFF by default so the map shows exactly
+          // one authoritative district boundary per district.
+          districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
           if (overlaps.length > 0) overlapsGroup.addTo(map)
           if (anomalyIslandsCount > 0) islandsGroup.addTo(map)
           // House dots: register zoom-gated visibility now (no-op if zoom < threshold)
           updateHouseDotsVisibility()
 
-          // Prefer fitting bounds to the cleanGroup if it exists, otherwise the
-          // legacy districtsGroup.
+          // Fit bounds to the authoritative districtsGroup (corrected geom).
           try {
-            const primary = hasCleanGeom ? cleanGroup : districtsGroup
-            const bounds = primary.getBounds()
+            const bounds = districtsGroup.getBounds()
             if (bounds.isValid()) {
               map.fitBounds(bounds, { padding: [20, 20] })
             }
@@ -701,14 +707,10 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
           layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup, cleanGroup, houseDotsGroup, islandsGroup]
         } else {
-          const [districtsGroup, schoolsGroup, , overlapsGroup, , , , cleanGroupCached, houseDotsGroupCached, islandsGroupCached] = layersRef.current.psk
-          const hasCleanGeom = cleanGeom.length > 0
-          // Re-add active layers (obvody + školy + prekryvy ON by default)
-          if (hasCleanGeom && cleanGroupCached) {
-            cleanGroupCached.addTo(map)
-          } else {
-            districtsGroup.addTo(map)
-          }
+          const [districtsGroup, schoolsGroup, , overlapsGroup, , , , , houseDotsGroupCached, islandsGroupCached] = layersRef.current.psk
+          // Re-add active layers (corrected obvody + školy + prekryvy ON by
+          // default; the stale cleanGroup stays OFF).
+          districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
           if (overlaps.length > 0) overlapsGroup.addTo(map)
           if (islandsGroupCached) islandsGroupCached.addTo(map)
@@ -718,8 +720,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           }
           if (features.length > 0) {
             try {
-              const primary = hasCleanGeom && cleanGroupCached ? cleanGroupCached : districtsGroup
-              const bounds = primary.getBounds()
+              const bounds = districtsGroup.getBounds()
               if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [20, 20] })
               }
