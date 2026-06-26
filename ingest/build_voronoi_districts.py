@@ -81,23 +81,29 @@ WHERE geom_sprint_j_backup IS NULL
 # ---------------------------------------------------------------------------
 
 VORONOI_UPDATE_SQL = """
-WITH pts AS (
+WITH presov_boundary AS (
+  SELECT geom FROM skolske_obvody.municipalities WHERE slug = 'presov'
+),
+pts AS (
+  -- House points + VZN street-level points (range_type='all' streets that have
+  -- no explicit house-number range). Both are clipped to the Prešov boundary:
+  -- geocoding outliers landing outside the city create giant Voronoi cells whose
+  -- arbitrary (LIMIT 1) cell→district assignment was collapsing centre districts.
   SELECT hg.district_id, hg.geom
   FROM skolske_obvody.house_geocodes hg
   WHERE hg.valid = true AND hg.geom IS NOT NULL
+    AND public.ST_Within(hg.geom, (SELECT geom FROM presov_boundary))
   UNION ALL
   SELECT sg.district_id, sg.geom
   FROM skolske_obvody.street_geocodes sg
   WHERE sg.geom IS NOT NULL
+    AND public.ST_Within(sg.geom, (SELECT geom FROM presov_boundary))
     AND EXISTS (
       SELECT 1 FROM skolske_obvody.vzn_street_ranges vsr
       WHERE vsr.district_id = sg.district_id
         AND vsr.street = sg.street
         AND vsr.range_type = 'all'
     )
-),
-presov_boundary AS (
-  SELECT geom FROM skolske_obvody.municipalities WHERE slug = 'presov'
 ),
 vor_cells AS (
   -- Generate one Voronoi cell per input point, envelope = Prešov boundary
@@ -109,10 +115,15 @@ vor_cells AS (
   FROM pts
 ),
 cells_with_district AS (
-  -- Assign each cell to the district whose input point falls inside it
+  -- Assign each cell to the district whose input point falls inside it.
+  -- Deterministic ORDER BY: a cell can contain >1 input point; without a stable
+  -- tie-break the assignment was non-reproducible and could mis-assign a district's
+  -- cells, collapsing it after the per-district union.
   SELECT vc.cell_geom,
          (SELECT p.district_id FROM pts p
-          WHERE public.ST_Within(p.geom, vc.cell_geom) LIMIT 1) AS district_id
+          WHERE public.ST_Within(p.geom, vc.cell_geom)
+          ORDER BY p.district_id, public.ST_X(p.geom), public.ST_Y(p.geom)
+          LIMIT 1) AS district_id
   FROM vor_cells vc
 ),
 grouped AS (
