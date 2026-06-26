@@ -198,6 +198,16 @@ export interface SoStreetGeocode {
   point_geojson: Record<string, unknown> | null
 }
 
+export interface SoDistrictAddressStats {
+  district_id: string
+  habitable_addresses: number
+  register_streets: number
+  vzn_streets: number
+  vzn_streets_in_register: number
+  street_coverage: number
+  computed_at: string | null
+}
+
 export interface SoHousePoint {
   district_id: string
   street: string

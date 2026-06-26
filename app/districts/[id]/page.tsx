@@ -14,6 +14,7 @@ import type {
   SoStreetGeocode,
   SoDistrictVoronoi,
   SoDistrictIsland,
+  SoDistrictAddressStats,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -41,6 +42,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawIslands },
     { data: rawAllScorecard },
     { data: rawFindings },
+    { data: rawAddressStats },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -52,6 +54,7 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_district_islands').select('*').eq('district_id', id).order('island_index'),
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
+    sb.from('so_district_address_stats').select('*').eq('district_id', id),
   ])
 
   if (scorecardError) throw scorecardError
@@ -64,6 +67,7 @@ export default async function DistrictPage({ params }: Props) {
   const housePoints = (rawHousePoints ?? []) as SoHousePoint[]
   const streetGeocodes = (rawStreetGeocodes ?? []) as SoStreetGeocode[]
   const islands = (rawIslands ?? []) as SoDistrictIsland[]
+  const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
   const allScorecard = (rawAllScorecard ?? []) as DistrictScorecardRow[]
@@ -198,6 +202,16 @@ export default async function DistrictPage({ params }: Props) {
           <h2 id="scorecard-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
             Scorecard podmienok § 44
           </h2>
+          {addressStats && (
+            <p className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Autoritatívny register adries:</span>{' '}
+              {addressStats.habitable_addresses.toLocaleString('sk-SK')} obývateľných adries,{' '}
+              {addressStats.register_streets.toLocaleString('sk-SK')} ulíc{' '}
+              (pokrytie ulíc z VZN {Math.round(addressStats.street_coverage * 100)} %).{' '}
+              Zdroj: register adries MV SR. Slúži len ako podklad dôvery dát — nemení
+              právny verdikt podmienok § 44.
+            </p>
+          )}
           <DistrictScorecard rows={sorted} />
         </section>
       ) : (
