@@ -135,11 +135,12 @@ export function DistrictDetailMapClient({
                 fillOpacity: 0.5,
               }
             : {
-                // Neutral, near-invisible context only — no fill, thin grey line.
-                color: '#cbd5e1', // slate-300
-                weight: 1,
-                fillColor: '#cbd5e1',
-                fillOpacity: 0,
+                // Clearly outlined neighbour context — heavier stroke + slate-600
+                // so borders are legible while the selected district stays dominant.
+                color: '#475569', // slate-600 (was slate-300 — too faint)
+                weight: 2.5,      // was 1 — invisible on mobile
+                fillColor: '#94a3b8',
+                fillOpacity: 0.08,
               },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           pane: 'districts' as any,
@@ -344,7 +345,9 @@ export function DistrictDetailMapClient({
         marker.addTo(streetPointsGroup)
       })
 
-      // Layer control
+      // Layer control.
+      // Standard layers: on by default (added to map above).
+      // Expert-only layers: off by default — NOT added to map; analyst toggle only.
       const layersControl = L.control.layers(
         undefined,
         {
@@ -353,8 +356,9 @@ export function DistrictDetailMapClient({
           'Čísla ostrovov': islandLabelsGroup,
           'MRK lokality': mrkGroup,
           'Školy': schoolsGroup,
-          'Domy z VZN (Google)': housePointsGroup,
-          'Ulice (Street geocodes)': streetPointsGroup,
+          // Expert layers (off by default — analyst evidence, not for normal view)
+          '⚙ Expert: Domy z VZN (Google geokódovanie)': housePointsGroup,
+          '⚙ Expert: Ulice (Street geocodes)': streetPointsGroup,
         },
         { collapsed: layerControlCollapsed() }
       ).addTo(map)

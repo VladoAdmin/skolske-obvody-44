@@ -784,12 +784,11 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
           // extent — so it is exposed only as an optional comparison toggle and
           // is NOT drawn by default. Voronoi remains engine input only and is
           // hidden from the user-facing control.
-          const hasCleanGeom = cleanGeom.length > 0
           const overlays: Record<string, unknown> = {}
           overlays[`Obvody (${features.length})`] = districtsGroup
-          if (hasCleanGeom) {
-            overlays[`Obvody — staršie clean polygóny (Sprint M-2, ${cleanGeom.length})`] = cleanGroup
-          }
+          // NOTE: "Obvody — staršie clean polygóny" (Sprint M-2 cleanGroup) removed from
+          // layer control (bod 8b). The authoritative district polygons come from
+          // so_district_map_features (districtsGroup above). cleanGroup is legacy/duplicate.
           overlays[`Školy (${schools.length})`] = schoolsGroup
           overlays['Prekryvy obvodov (kde 2+ obvodov hovorí o tej istej adrese)'] = overlapsGroup
           const anomalyIslandsCount = islands.filter(
@@ -799,7 +798,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             overlays[`Anomálie / ostrovy (${anomalyIslandsCount})`] = islandsGroup
           }
           overlays['MRK lokality (Atlas marginalizovaných rómskych komunít)'] = mrkGroup
-          overlays['Domy z VZN (Google geokódovanie, 460 platných)'] = housePointsGroup
+          // Expert layers (off by default — analyst evidence, not for normal view)
+          overlays['⚙ Expert: Domy z VZN (Google geokódovanie, 460 platných)'] = housePointsGroup
           if (houseDots.length > 0) {
             overlays[`Adresné bodky obvodov (auto-zobrazia sa pri priblížení ≥ ${HOUSE_DOTS_MIN_ZOOM})`] = houseDotsGroup
           }
