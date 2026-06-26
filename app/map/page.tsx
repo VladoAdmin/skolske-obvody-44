@@ -6,9 +6,10 @@ import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot, DistrictScorecardRow } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
+import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
 
@@ -149,6 +150,19 @@ async function fetchHouseDots(): Promise<SoHouseDot[]> {
   }
 }
 
+async function fetchScorecard(): Promise<DistrictScorecardRow[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_district_scorecard')
+      .select('district_id,condition_label_sk,condition_order,value,confidence,composition_color')
+    if (error) throw error
+    return (data ?? []) as DistrictScorecardRow[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchHousePoints(): Promise<SoHousePoint[]> {
   try {
     const sb = createPublicClient()
@@ -163,7 +177,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots] = await Promise.all([
+  const [features, schools, mrkOverlays, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots, scorecardRows] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -176,8 +190,18 @@ export default async function MapPage() {
     fetchVoronoiGeom(),
     fetchCleanGeom(),
     fetchHouseDots(),
+    fetchScorecard(),
   ])
   const isEmpty = features.length === 0
+
+  // Open-findings count per district (status = open) for the school-pin popup.
+  const openFindingsByDistrict: Record<string, number> = {}
+  for (const f of findings) {
+    if (f.status === 'open') {
+      openFindingsByDistrict[f.district_id] = (openFindingsByDistrict[f.district_id] ?? 0) + 1
+    }
+  }
+  const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict)
   const cleanShowcaseCount = cleanGeom.filter(
     (d) => d.geom_clean_metadata?.method === 'clean_polygon'
   ).length
@@ -268,6 +292,7 @@ export default async function MapPage() {
                 voronoiGeom={voronoiGeom}
                 cleanGeom={cleanGeom}
                 houseDots={houseDots}
+                districtSummaries={districtSummaries}
                 initialMode="sk"
               />
             </Suspense>

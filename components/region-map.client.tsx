@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
+import { buildDistrictSchoolPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
@@ -30,6 +31,7 @@ interface RegionMapClientProps {
   voronoiGeom?: SoDistrictVoronoi[]
   cleanGeom?: SoDistrictCleanGeom[]
   houseDots?: SoHouseDot[]
+  districtSummaries?: Record<string, DistrictPopupSummary>
   initialMode?: 'sk' | 'psk'
 }
 
@@ -38,7 +40,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -358,12 +360,23 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             const geom = feature.school_geom_geojson as { type: string; coordinates: [number, number] }
             if (geom.type !== 'Point') return
             const [lon, lat] = geom.coordinates
+            const schoolName = feature.school_name ?? 'Škola'
             L.marker([lat, lon], {
               icon: makeSchoolIcon(22),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'schools' as any,
             })
-              .bindTooltip(feature.school_name ?? 'Škola')
+              // Short hover hint; the click popup carries the semafor + numbers.
+              .bindTooltip(schoolName)
+              .bindPopup(
+                buildDistrictSchoolPopup(
+                  schoolName,
+                  feature.id,
+                  districtSummaries[feature.id],
+                  feature.composition_color
+                ),
+                { maxWidth: 280, autoPanPadding: [20, 20] }
+              )
               .addTo(schoolsGroup)
           })
 
@@ -375,13 +388,16 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             const [lon, lat] = geom.coordinates
             const isPrivate = school.is_public === false
             const fill = isPrivate ? SCHOOL_COLOR_PRIVATE : SCHOOL_COLOR_PUBLIC
-            const founderLabel = isPrivate ? 'súkromná / cirkevná' : 'verejná (mesto Prešov)'
             L.marker([lat, lon], {
               icon: makeSchoolIcon(16, fill),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'schools' as any,
             })
-              .bindTooltip(`${school.name}${school.kind ? ` (${school.kind})` : ''}<br/><em>${founderLabel}</em>`)
+              .bindTooltip(school.name)
+              .bindPopup(
+                buildNonVznSchoolPopup(school.name, school.kind, isPrivate),
+                { maxWidth: 280, autoPanPadding: [20, 20] }
+              )
               .addTo(schoolsGroup)
           })
 
