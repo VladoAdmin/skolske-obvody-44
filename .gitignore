@@ -42,3 +42,6 @@ __pycache__/
 *.pyc
 *.pyo
 .env*
+
+# raw register download (14MB XML) — JSON derivative is the tracked source
+/ingest/data/register_adries_presov_full.xml
