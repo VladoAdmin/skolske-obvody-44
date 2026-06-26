@@ -130,6 +130,68 @@ function valueDot(value: string): string {
   return '🟡' // INCOMPLETE / RISK / INSUFFICIENT_DATA
 }
 
+// --- Shared section builders (reused by school + district-body popups so the
+// semafor / numbers / per-condition list / multi-part flag stay identical) ---
+
+function semaforHtml(color: string | null): string {
+  return (
+    `<div style="margin-top:4px">Semafor: ` +
+    `<strong>${getColorSymbol(color)} ${escapeHtml(getColorLabel(color))}</strong></div>`
+  )
+}
+
+function countsHtml(summary: DistrictPopupSummary | undefined): string {
+  return summary
+    ? `<div style="margin-top:6px;font-size:11px;color:#374151">` +
+      `🟢 ${summary.passCount} PASS · 🔴 ${summary.failCount} FAIL · 🟡 ${summary.incompleteCount} neúplné` +
+      `<br/>Otvorené nálezy: <strong>${summary.openFindingsCount}</strong>` +
+      `</div>`
+    : `<div style="margin-top:6px;font-size:11px;color:#6b7280">Scorecard zatiaľ nedostupný pre tento obvod.</div>`
+}
+
+function conditionsHtml(summary: DistrictPopupSummary | undefined): string {
+  if (!summary || summary.conditions.length === 0) return ''
+  return (
+    `<div style="margin-top:6px;display:grid;grid-template-columns:auto 1fr auto;gap:1px 6px;align-items:baseline">` +
+    summary.conditions
+      .map((c) => {
+        const conf = c.confidence != null ? `${Math.round(c.confidence * 100)} %` : '—'
+        return (
+          `<span>${valueDot(c.value)}</span>` +
+          `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</span>` +
+          `<span style="color:#6b7280;white-space:nowrap">${escapeHtml(c.value)} · ${conf}</span>`
+        )
+      })
+      .join('') +
+    `</div>`
+  )
+}
+
+// Multi-part geometry review flag (Task B): an obvod should be one contiguous
+// polygon; flag when it has separated parts that need a manual check.
+function multiPartHtml(summary: DistrictPopupSummary | undefined): string {
+  const mp = summary?.multiPart
+  if (!mp) return ''
+  return (
+    `<div style="margin-top:6px;padding:5px 7px;border:1px solid #fcd34d;` +
+    `background:#fffbeb;border-radius:4px;font-size:11px;color:#92400e;line-height:1.35">` +
+    `⚠ Tento obvod má <strong>${mp.parts}</strong> oddelených častí — na kontrolu` +
+    `<br/>najväčšia ${mp.biggestKm2.toFixed(2)} km²` +
+    (mp.otherKm2.length > 0
+      ? `, ostatné: ${mp.otherKm2.map((a) => `${a.toFixed(2)} km²`).join(', ')}`
+      : '') +
+    `</div>`
+  )
+}
+
+function detailLinkHtml(districtId: string): string {
+  return (
+    `<div style="margin-top:8px">` +
+    `<a href="/districts/${encodeURIComponent(districtId)}" style="color:#2563eb;font-weight:600;text-decoration:underline">Zobraziť detail obvodu →</a>` +
+    `</div>`
+  )
+}
+
 // Popup for a district-linked (public VZN) school.
 export function buildDistrictSchoolPopup(
   schoolName: string,
@@ -138,55 +200,40 @@ export function buildDistrictSchoolPopup(
   compositionColorFallback: string | null
 ): string {
   const color = summary?.composition_color ?? compositionColorFallback
-  const semaforSymbol = getColorSymbol(color)
-  const semaforLabel = getColorLabel(color)
-
-  const conditionsHtml = summary && summary.conditions.length > 0
-    ? `<div style="margin-top:6px;display:grid;grid-template-columns:auto 1fr auto;gap:1px 6px;align-items:baseline">` +
-      summary.conditions
-        .map((c) => {
-          const conf = c.confidence != null ? `${Math.round(c.confidence * 100)} %` : '—'
-          return (
-            `<span>${valueDot(c.value)}</span>` +
-            `<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</span>` +
-            `<span style="color:#6b7280;white-space:nowrap">${escapeHtml(c.value)} · ${conf}</span>`
-          )
-        })
-        .join('') +
-      `</div>`
-    : ''
-
-  const countsHtml = summary
-    ? `<div style="margin-top:6px;font-size:11px;color:#374151">` +
-      `🟢 ${summary.passCount} PASS · 🔴 ${summary.failCount} FAIL · 🟡 ${summary.incompleteCount} neúplné` +
-      `<br/>Otvorené nálezy: <strong>${summary.openFindingsCount}</strong>` +
-      `</div>`
-    : `<div style="margin-top:6px;font-size:11px;color:#6b7280">Scorecard zatiaľ nedostupný pre tento obvod.</div>`
-
-  // Multi-part geometry review flag (Task B): an obvod should be one contiguous
-  // polygon; flag when it has separated parts that need a manual check.
-  const mp = summary?.multiPart
-  const multiPartHtml = mp
-    ? `<div style="margin-top:6px;padding:5px 7px;border:1px solid #fcd34d;` +
-      `background:#fffbeb;border-radius:4px;font-size:11px;color:#92400e;line-height:1.35">` +
-      `⚠ Tento obvod má <strong>${mp.parts}</strong> oddelených častí — na kontrolu` +
-      `<br/>najväčšia ${mp.biggestKm2.toFixed(2)} km²` +
-      (mp.otherKm2.length > 0
-        ? `, ostatné: ${mp.otherKm2.map((a) => `${a.toFixed(2)} km²`).join(', ')}`
-        : '') +
-      `</div>`
-    : ''
 
   return (
     `<div style="min-width:200px;max-width:260px;font-size:12px;line-height:1.4">` +
     `<div style="font-weight:700">${escapeHtml(schoolName)}</div>` +
-    `<div style="margin-top:4px">Semafor: <strong>${semaforSymbol} ${escapeHtml(semaforLabel)}</strong></div>` +
-    countsHtml +
-    multiPartHtml +
-    conditionsHtml +
-    `<div style="margin-top:8px">` +
-    `<a href="/districts/${encodeURIComponent(districtId)}" style="color:#2563eb;font-weight:600;text-decoration:underline">Zobraziť detail obvodu →</a>` +
-    `</div>` +
+    semaforHtml(color) +
+    countsHtml(summary) +
+    multiPartHtml(summary) +
+    conditionsHtml(summary) +
+    detailLinkHtml(districtId) +
+    `</div>`
+  )
+}
+
+// Popup for a district polygon body tap on the main map. Reuses the SAME
+// semafor / numbers / per-condition list / multi-part flag / detail-link
+// markup as the school popup, but headlines with the district name so the two
+// surfaces read consistently. No auto-navigation: the detail link is the only
+// way to open the isolated /districts/[id] view.
+export function buildDistrictSummaryPopup(
+  districtName: string,
+  districtId: string,
+  summary: DistrictPopupSummary | undefined,
+  compositionColorFallback: string | null
+): string {
+  const color = summary?.composition_color ?? compositionColorFallback
+
+  return (
+    `<div style="min-width:200px;max-width:260px;font-size:12px;line-height:1.4">` +
+    `<div style="font-weight:700">${escapeHtml(districtName)}</div>` +
+    semaforHtml(color) +
+    countsHtml(summary) +
+    multiPartHtml(summary) +
+    conditionsHtml(summary) +
+    detailLinkHtml(districtId) +
     `</div>`
   )
 }

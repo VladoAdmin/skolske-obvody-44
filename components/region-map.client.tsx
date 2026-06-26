@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
-import { buildDistrictSchoolPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
+import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
@@ -50,6 +50,9 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
   // Per-district layer map: id -> L.GeoJSON layer
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const districtLayersRef = useRef<Map<string, any>>(new Map())
+  // Currently click-selected district id (for highlight reset on next tap /
+  // popup close / empty-map tap). Mirrors the visual "selected" style.
+  const selectedDistrictIdRef = useRef<string | null>(null)
   const [mode, setMode] = useState<'sk' | 'psk'>(initialMode)
   const [mapReady, setMapReady] = useState(false)
   const modeRef = useRef(mode)
@@ -294,6 +297,33 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             const WEIGHT_DEFAULT = 2.5
             const WEIGHT_HOVER = 4.5
 
+            // Reset a previously click-selected district back to the default
+            // outline-dominant style (faint fill, thin border).
+            const resetSelectedDistrict = () => {
+              const prevId = selectedDistrictIdRef.current
+              if (!prevId) return
+              const prevLayer = newDistrictLayersMap.get(prevId)
+              if (prevLayer) {
+                prevLayer.setStyle({ weight: WEIGHT_DEFAULT, fillOpacity: FILL_OPACITY_DEFAULT })
+              }
+              selectedDistrictIdRef.current = null
+            }
+
+            // Apply the selected/hover style to one district, bring it to front,
+            // and remember it as the current selection (resetting the prior one).
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const selectDistrict = (id: string, layer: any) => {
+              if (selectedDistrictIdRef.current && selectedDistrictIdRef.current !== id) {
+                resetSelectedDistrict()
+              }
+              layer.setStyle({ weight: WEIGHT_HOVER, fillOpacity: FILL_OPACITY_HOVER })
+              layer.bringToFront()
+              selectedDistrictIdRef.current = id
+            }
+
+            // Tapping the empty map (outside any polygon) clears the highlight.
+            map.on('click', resetSelectedDistrict)
+
             features.forEach((feature, index) => {
               if (!feature.geom_geojson) return
 
@@ -340,11 +370,43 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                 geoJsonLayer.bringToFront()
               })
               geoJsonLayer.on('mouseout', () => {
+                // Keep the click-selected district highlighted on mouseout.
+                if (selectedDistrictIdRef.current === feature.id) return
                 geoJsonLayer.setStyle({ weight: WEIGHT_DEFAULT, fillOpacity: FILL_OPACITY_DEFAULT })
               })
 
-              geoJsonLayer.on('click', () => {
-                router.push(`/districts/${feature.id}`)
+              // Bind the district SUMMARY popup (same builder family as the
+              // school popup). maxWidth/autoPan keep it mobile-friendly.
+              geoJsonLayer.bindPopup(
+                buildDistrictSummaryPopup(
+                  feature.name,
+                  feature.id,
+                  districtSummaries[feature.id],
+                  feature.composition_color
+                ),
+                { maxWidth: 280, autoPan: true, autoPanPadding: [20, 20] }
+              )
+
+              // Tap the polygon body → highlight it (bring to front + stronger
+              // fill, reset any prior selection) and open the summary popup at
+              // the tap point. No auto-navigation — the popup's detail link is
+              // the way to open /districts/[id].
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              geoJsonLayer.on('click', (e: any) => {
+                // Don't let the click bubble to the map background handler,
+                // which would immediately clear the highlight we just set.
+                L.DomEvent.stopPropagation(e)
+                selectDistrict(feature.id, geoJsonLayer)
+                geoJsonLayer.openPopup(e.latlng)
+              })
+
+              // Closing the popup clears the highlight (unless another district
+              // was selected in the meantime).
+              geoJsonLayer.on('popupclose', () => {
+                if (selectedDistrictIdRef.current === feature.id) {
+                  geoJsonLayer.setStyle({ weight: WEIGHT_DEFAULT, fillOpacity: FILL_OPACITY_DEFAULT })
+                  selectedDistrictIdRef.current = null
+                }
               })
 
               geoJsonLayer.addTo(districtsGroup)
