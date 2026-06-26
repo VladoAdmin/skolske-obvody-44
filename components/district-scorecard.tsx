@@ -1,4 +1,4 @@
-import type { DistrictScorecardRow } from '@/lib/supabase/types'
+import type { DistrictScorecardRow, SoMockIndicator } from '@/lib/supabase/types'
 import { VerdictRow } from './verdict-row'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 
@@ -7,9 +7,12 @@ interface DistrictScorecardProps {
   // condition_code → AI-generated plain-Slovak explanation (precomputed,
   // optional; empty when explanations have not been generated yet).
   explanationByCode?: Record<string, string>
+  // condition_code → gap-filling DEMO value (P-a/P-c/P-d/P-f). Display-only,
+  // shown with a DEMO badge; never affects the verdict column.
+  mockByCode?: Record<string, SoMockIndicator>
 }
 
-export function DistrictScorecard({ rows, explanationByCode = {} }: DistrictScorecardProps) {
+export function DistrictScorecard({ rows, explanationByCode = {}, mockByCode = {} }: DistrictScorecardProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm" aria-label="Scorecard podmienok § 44">
@@ -59,6 +62,7 @@ export function DistrictScorecard({ rows, explanationByCode = {} }: DistrictScor
               key={row.condition_code}
               row={row}
               aiExplanation={explanationByCode[row.condition_code]}
+              mock={mockByCode[row.condition_code]}
             />
           ))}
         </tbody>
