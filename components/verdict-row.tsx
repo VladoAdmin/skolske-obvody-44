@@ -1,4 +1,4 @@
-import type { DistrictScorecardRow } from '@/lib/supabase/types'
+import type { DistrictScorecardRow, SoMockIndicator } from '@/lib/supabase/types'
 import { getColorClass, getColorSymbol } from '@/lib/compliance/colors'
 import { getConditionDescription } from '@/lib/compliance/labels'
 import { ProvenanceLink } from './provenance-link'
@@ -10,6 +10,29 @@ interface VerdictRowProps {
   // Precomputed AI-generated plain-Slovak explanation for this condition.
   // Optional — absent until the explanations have been generated.
   aiExplanation?: string
+  // Gap-filling DEMO value for this non-binding indicator (P-a/P-c/P-d/P-f).
+  // Display-only — shown with a DEMO badge; the verdict column stays REAL.
+  mock?: SoMockIndicator
+}
+
+const DEMO_TOOLTIP =
+  'Ukážkové dáta — ilustrácia funkcionality, nevstupuje do zákonného verdiktu'
+
+function DemoValue({ mock }: { mock: SoMockIndicator }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger className="mt-1 inline-flex items-center gap-1 cursor-help">
+        <span className="inline-flex items-center rounded border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fuchsia-800">
+          DEMO
+        </span>
+        <span className="text-xs text-fuchsia-900">{mock.display_value}</span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {DEMO_TOOLTIP}
+        {mock.source_gap ? ` · ${mock.source_gap}` : ''}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 function AiExplanation({ text }: { text: string }) {
@@ -79,7 +102,7 @@ function ProgressBar({ value, label }: { value: number | null | undefined; label
   )
 }
 
-export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
+export function VerdictRow({ row, aiExplanation, mock }: VerdictRowProps) {
   const colorSymbol = getColorSymbol(row.composition_color)
   const colorClass = getColorClass(row.composition_color)
 
@@ -102,9 +125,12 @@ export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
         </div>
       </td>
 
-      {/* Value */}
+      {/* Value (REAL verdict) + optional gap-filling DEMO value below it */}
       <td className="px-3 py-2 align-top">
-        <ValueBadge value={row.value} />
+        <div className="flex flex-col">
+          <ValueBadge value={row.value} />
+          {mock && <DemoValue mock={mock} />}
+        </div>
       </td>
 
       {/* Confidence */}

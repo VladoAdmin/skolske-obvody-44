@@ -16,6 +16,7 @@ import type {
   SoDistrictIsland,
   SoDistrictAddressStats,
   SoFindingExplanation,
+  SoMockIndicator,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -45,6 +46,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawFindings },
     { data: rawAddressStats },
     { data: rawExplanations },
+    { data: rawMockIndicators },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -58,6 +60,9 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
     sb.from('so_finding_explanations').select('condition_code,severity,explanation_sk'),
+    // Gap-filling DEMO values for non-binding indicators (P-a/P-c/P-d/P-f).
+    // Display-only — never feeds the legal verdict (see so_mock_indicators).
+    sb.from('so_mock_indicators').select('district_id,condition_code,display_value,detail,source_gap,is_demo').eq('district_id', id),
   ])
 
   if (scorecardError) throw scorecardError
@@ -87,6 +92,15 @@ export default async function DistrictPage({ params }: Props) {
       explanationByCode[e.condition_code] = e.explanation_sk
       explanationSeverityByCode[e.condition_code] = rank
     }
+  }
+
+  // Gap-filling DEMO values keyed by condition_code. The scorecard renders
+  // these next to the (REAL) verdict value with a DEMO badge. They never
+  // change the verdict — the so_mock_indicators view is physically separate
+  // from the verdicts the composition/scorecard read.
+  const mockByCode: Record<string, SoMockIndicator> = {}
+  for (const mi of (rawMockIndicators ?? []) as SoMockIndicator[]) {
+    mockByCode[mi.condition_code] = mi
   }
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
@@ -232,7 +246,7 @@ export default async function DistrictPage({ params }: Props) {
               právny verdikt podmienok § 44.
             </p>
           )}
-          <DistrictScorecard rows={sorted} explanationByCode={explanationByCode} />
+          <DistrictScorecard rows={sorted} explanationByCode={explanationByCode} mockByCode={mockByCode} />
         </section>
       ) : (
         <Alert>

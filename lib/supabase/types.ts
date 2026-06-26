@@ -247,6 +247,20 @@ export interface SoDistrictIsland {
   geom_geojson: Record<string, unknown> | null
 }
 
+// Gap-filling DEMO values for non-binding indicators (P-a/P-c/P-d/P-f).
+// Read ONLY by the scorecard UI for display. The verdict/composition path
+// (district_compositions, district_scorecard) NEVER reads this — so mock
+// values cannot affect the legal § 44 verdict. Always rendered with a DEMO
+// badge + tooltip.
+export interface SoMockIndicator {
+  district_id: string
+  condition_code: 'Pa' | 'Pc' | 'Pd' | 'Pf'
+  display_value: string
+  detail: Record<string, unknown> | null
+  source_gap: string
+  is_demo: boolean
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

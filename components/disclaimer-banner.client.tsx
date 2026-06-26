@@ -51,7 +51,11 @@ export function DisclaimerBannerClient({ alwaysShow, methodologyVersion, engineV
         <strong>Nie je oficiálnym výkladom súladu so § 44 zákona č. 596/2003.</strong> Hodnoty{' '}
         <code className="rounded bg-amber-100 px-1 font-mono text-xs">INCOMPLETE</code> /{' '}
         <code className="rounded bg-amber-100 px-1 font-mono text-xs">INSUFFICIENT_DATA</code>{' '}
-        znamenajú <strong>chýbajúce dáta</strong>, nie porušenie. Verzia metodiky:{' '}
+        znamenajú <strong>chýbajúce dáta</strong>, nie porušenie. Doplnkové hodnoty
+        označené odznakom{' '}
+        <span className="inline-flex items-center rounded border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase text-fuchsia-800">DEMO</span>{' '}
+        sú ukážkové (vyplnenie dátových medzier) a <strong>nevstupujú do zákonného verdiktu</strong>.
+        Verzia metodiky:{' '}
         <code className="font-mono text-xs">{methodologyVersion}</code>. Verzia enginu:{' '}
         <code className="font-mono text-xs">{engineVersion}</code>.
       </AlertDescription>
