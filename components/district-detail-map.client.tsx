@@ -18,6 +18,14 @@ import {
   PSK_DEFAULT_ZOOM,
 } from '@/lib/config/region'
 
+// On mobile (≤767px) the layer control starts collapsed so the legend
+// does not obscure the map; it expands into the full checkbox list on tap.
+// On desktop it stays open (collapsed: false) as before.
+function layerControlCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(max-width: 767px)').matches
+}
+
 interface DistrictDetailMapClientProps {
   currentDistrictId: string
   features: DistrictMapFeature[]
@@ -304,7 +312,7 @@ export function DistrictDetailMapClient({
       })
 
       // Layer control
-      L.control.layers(
+      const layersControl = L.control.layers(
         undefined,
         {
           'Voronoi obvody (všetky)': voronoiGroup,
@@ -314,8 +322,17 @@ export function DistrictDetailMapClient({
           'Domy z VZN (Google)': housePointsGroup,
           'Ulice (Street geocodes)': streetPointsGroup,
         },
-        { collapsed: false }
+        { collapsed: layerControlCollapsed() }
       ).addTo(map)
+      // Label the collapsed toggle so mobile users recognise it as "Vrstvy".
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const layersToggle = (layersControl as any)._container?.querySelector(
+        '.leaflet-control-layers-toggle'
+      ) as HTMLElement | null
+      if (layersToggle) {
+        layersToggle.setAttribute('title', 'Vrstvy mapy')
+        layersToggle.setAttribute('aria-label', 'Vrstvy mapy')
+      }
     }).catch(console.error)
 
     return () => {
