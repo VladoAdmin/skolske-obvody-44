@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot, DistrictScorecardRow } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
-import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
+import { buildDistrictSummaries, buildMultiPartByDistrict } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
 
@@ -201,7 +201,8 @@ export default async function MapPage() {
       openFindingsByDistrict[f.district_id] = (openFindingsByDistrict[f.district_id] ?? 0) + 1
     }
   }
-  const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict)
+  const multiPartByDistrict = buildMultiPartByDistrict(islands)
+  const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict, multiPartByDistrict)
   const cleanShowcaseCount = cleanGeom.filter(
     (d) => d.geom_clean_metadata?.method === 'clean_polygon'
   ).length
@@ -261,8 +262,9 @@ export default async function MapPage() {
           <span className="ml-auto text-blue-700" aria-hidden="true">▾</span>
         </summary>
         <p className="px-3 pb-2 text-xs text-blue-800">
-          Mapa ukazuje {features.length} školských obvodov v Prešove farebne odlíšené.
-          Sýto vyfarbené hranice = oblasť pridelená danej škole podľa VZN.
+          Mapa ukazuje {features.length} školských obvodov v Prešove, každý má vlastnú farbu hranice.
+          Hranice sú zvýraznené tenkou bielou linkou, aby ste jasne videli, kde jeden obvod
+          končí a druhý začína; po prejdení myšou (alebo ťuknutí) sa daný obvod vyfarbí.
           Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
           Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
         </p>

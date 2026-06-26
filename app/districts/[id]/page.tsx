@@ -17,7 +17,7 @@ import type {
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
-import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
+import { buildDistrictSummaries, buildMultiPartByDistrict } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
 
@@ -74,7 +74,10 @@ export default async function DistrictPage({ params }: Props) {
       openFindingsByDistrict[f.district_id] = (openFindingsByDistrict[f.district_id] ?? 0) + 1
     }
   }
-  const districtSummaries = buildDistrictSummaries(allScorecard, openFindingsByDistrict)
+  // Only the current district's islands are fetched here, so the popup
+  // multi-part flag is accurate for this obvod's own school pin.
+  const multiPartByDistrict = buildMultiPartByDistrict(islands)
+  const districtSummaries = buildDistrictSummaries(allScorecard, openFindingsByDistrict, multiPartByDistrict)
 
   // Header info
   let header: {
@@ -124,7 +127,19 @@ export default async function DistrictPage({ params }: Props) {
   const colorLabel = getColorLabel(header.composition_color)
   const colorClass = getColorClass(header.composition_color)
 
-  const multiIslandCount = islands.length
+  // Multi-part review flag: a school obvod should be a single contiguous
+  // polygon. After sliver cleanup, the parts that remain are substantial real
+  // splits that need human review. We derive parts straight from the (cleaned)
+  // island rows: real (non-demo) parts ordered by area, largest first.
+  const realParts = islands
+    .filter((i) => i.is_demo !== true)
+    .map((i) => (i.area_m2 ?? 0) / 1_000_000)
+    .sort((a, b) => b - a)
+  const partsCount = realParts.length
+  const isMultiPart = partsCount > 1
+  const biggestKm2 = realParts[0] ?? 0
+  const otherPartsKm2 = realParts.slice(1)
+
   const checkedUrl = 'zsmeralova.edupage.org, zsmeralova.sk, presov.sk'
 
   return (
@@ -194,23 +209,31 @@ export default async function DistrictPage({ params }: Props) {
         </Alert>
       )}
 
-      {/* Island geometry section */}
-      {multiIslandCount > 0 && (
+      {/* Island geometry section — only when the obvod is genuinely multi-part
+          (or carries a demo anomaly seed). Single-polygon obvody have one
+          main-body island row and should not show a spurious "ostrovy" block. */}
+      {(isMultiPart || islands.some((i) => i.is_demo === true)) && (
         <section aria-labelledby="islands-heading" className="space-y-3">
           <h2 id="islands-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Geometria a ostrovy obvodu
           </h2>
 
-          {multiIslandCount > 1 && (
+          {isMultiPart && (
             <Alert className="border-amber-300 bg-amber-50 text-amber-900">
               <AlertTitle className="text-amber-800">
-                {multiIslandCount} disconnected ostrov{multiIslandCount > 4 ? 'ov' : multiIslandCount > 1 ? 'y' : ''}
+                ⚠ Tento obvod má {partsCount} oddelených častí — na kontrolu
               </AlertTitle>
               <AlertDescription className="text-amber-800 text-xs">
-                Engine vytvoril <strong>{multiIslandCount}</strong> disconnected ostrovov pre tento obvod.
-                Toto je dôsledok VZN, ktorý priraďuje ZŠ aj vzdialené ulice.
-                Možné dôvody: školský obvod historicky vznikol z viacerých škôl, alebo škola má
-                špecializáciu pre konkrétne adresy.{' '}
+                Školský obvod by mal byť <strong>jedna súvislá plocha</strong>.
+                Tento sa skladá z <strong>{partsCount}</strong> oddelených častí
+                (najväčšia <strong>{biggestKm2.toFixed(2)} km²</strong>
+                {otherPartsKm2.length > 0 && (
+                  <>, ostatné: {otherPartsKm2.map((a) => `${a.toFixed(2)} km²`).join(', ')}</>
+                )}
+                ). Drobné artefakty geometrie už boli zlúčené do susedných obvodov;
+                tieto väčšie časti sú ponechané a označené na{' '}
+                <strong>manuálnu kontrolu</strong> (história zlúčených škôl,
+                špecializované adresy, alebo chyba vo VZN).{' '}
                 <strong>Aktuálne sa nepodarilo overiť žiaden školský dôvod</strong>{' '}
                 (overené na {checkedUrl}).
               </AlertDescription>
