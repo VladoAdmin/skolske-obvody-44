@@ -45,3 +45,6 @@ __pycache__/
 
 # raw register download (14MB XML) — JSON derivative is the tracked source
 /ingest/data/register_adries_presov_full.xml
+
+# AI-UAT screenshots (large viewport PNGs — not for diff history)
+/tools/ai-uat/screenshots/
