@@ -15,6 +15,9 @@ interface DistrictScorecardProps {
 export function DistrictScorecard({ rows, explanationByCode = {}, mockByCode = {} }: DistrictScorecardProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
+      <p className="px-3 py-1.5 text-xs text-muted-foreground border-b border-border bg-muted/30">
+        Kliknite na riadok a rozbalíte jeho dôkaz a vysvetlenie.
+      </p>
       <table className="w-full text-sm" aria-label="Scorecard podmienok § 44">
         <thead>
           <tr className="border-b border-border bg-muted/50">
@@ -26,7 +29,12 @@ export function DistrictScorecard({ rows, explanationByCode = {}, mockByCode = {
                 <TooltipTrigger className="cursor-help underline decoration-dotted">
                   Hodnota
                 </TooltipTrigger>
-                <TooltipContent>Výsledok podmienky: PASS, FAIL, INCOMPLETE, RISK alebo INSUFFICIENT_DATA</TooltipContent>
+                <TooltipContent>
+                  Výsledok podmienky: PASS (splnená), FAIL (nesplnená),
+                  INCOMPLETE (chýbajú dáta), RISK alebo INSUFFICIENT_DATA.
+                  SIGNAL je len upozornenie pri mäkkých ukazovateľoch (sociálny
+                  kontext, demografia) — nie je to verdikt a nevstupuje do semaforu.
+                </TooltipContent>
               </Tooltip>
             </th>
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">
@@ -52,7 +60,7 @@ export function DistrictScorecard({ rows, explanationByCode = {}, mockByCode = {
               Príznaky
             </th>
             <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">
-              Dôkaz
+              Detail
             </th>
           </tr>
         </thead>

@@ -4,6 +4,9 @@ const withMDX = createMDX({ extension: /\.mdx?$/ })
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Optional isolated build dir (local verification only; unset in CI/Vercel)
+  ...(process.env.SKO_DIST_DIR ? { distDir: process.env.SKO_DIST_DIR } : {}),
+
   // MDX page extensions
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
 

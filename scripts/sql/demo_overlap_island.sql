@@ -180,3 +180,107 @@ WHERE d.id = '022b88de-8f54-43fd-9a37-b165102db9f8'
   )
 ORDER BY v.computed_at DESC
 LIMIT 1;
+
+-- ============================================================================
+-- 4) SOFT-SIGNAL findings (P-e segregation, P-f demografia, P-d jazyková
+--    menšina). These surface the non-binding § 44 indicators as visible
+--    findings on the map + findings list, so the demo shows the FULL range of
+--    what the engine flags — not just topology (Š2) and distance (P-a).
+--
+--    Severity is medium/high so so_findings_panel (which shows only
+--    critical/high/medium) surfaces them. They attach to the matching demo
+--    SIGNAL verdict (verdict_id NOT NULL) and stay clearly flagged is_demo +
+--    tag 'demo:%' so the idempotent DELETE above wipes them on re-run.
+--
+--    IMPORTANT: these are SIGNALS, not verdicts — the evidence text says so
+--    explicitly and they never drive the legal semafor (Pe/Pf are illustrative).
+-- ============================================================================
+
+-- 4a) Mirka Nešpora č. 2 — P-e sociálny kontext / segregácia (Atlas MRK).
+INSERT INTO skolske_obvody.findings
+  (verdict_id, district_id, municipality_id, condition_code,
+   severity, status, evidence_text, engine_version, is_demo, tag)
+SELECT
+  v.id, d.id, d.municipality_id, 'Pe',
+  'high', 'open',
+  'DEMO SIGNÁL (nie verdikt): obvod ZŠ Mirka Nešpora č. 2 sa takmer celý ' ||
+  'prekrýva s lokalitou z Atlasu marginalizovaných rómskych komunít. Hranice ' ||
+  'obvodu tak môžu deti z tejto komunity koncentrovať do jednej školy. Zákon ' ||
+  '§ 44 sociálny kontext priamo nehodnotí — je to podnet na bližšie ' ||
+  'preskúmanie, nie porušenie. Demo dáta.',
+  'demo-sprint-m-3', true, 'demo:segregation:nespora'
+FROM skolske_obvody.districts d
+JOIN skolske_obvody.verdicts v
+  ON v.district_id = d.id AND v.condition_code = 'Pe'
+WHERE d.id = '022b88de-8f54-43fd-9a37-b165102db9f8'
+  AND NOT EXISTS (
+    SELECT 1 FROM skolske_obvody.findings WHERE tag = 'demo:segregation:nespora'
+  )
+ORDER BY v.computed_at DESC
+LIMIT 1;
+
+-- 4b) Mirka Nešpora č. 2 — P-f demografia detí (málo detí oproti kapacite).
+INSERT INTO skolske_obvody.findings
+  (verdict_id, district_id, municipality_id, condition_code,
+   severity, status, evidence_text, engine_version, is_demo, tag)
+SELECT
+  v.id, d.id, d.municipality_id, 'Pf',
+  'medium', 'open',
+  'DEMO SIGNÁL (nie verdikt): v obvode ubúda detí predškolského veku oproti ' ||
+  'kapacite školy. Pri pretrvávajúcom trende môže byť škola dlhodobo ' ||
+  'nedoplnená. Demografia nie je podmienkou § 44 — je to podklad pre plánovanie ' ||
+  'kapacít, nie nález o porušení. Demo dáta.',
+  'demo-sprint-m-3', true, 'demo:demografia:nespora'
+FROM skolske_obvody.districts d
+JOIN skolske_obvody.verdicts v
+  ON v.district_id = d.id AND v.condition_code = 'Pf'
+WHERE d.id = '022b88de-8f54-43fd-9a37-b165102db9f8'
+  AND NOT EXISTS (
+    SELECT 1 FROM skolske_obvody.findings WHERE tag = 'demo:demografia:nespora'
+  )
+ORDER BY v.computed_at DESC
+LIMIT 1;
+
+-- 4c) Šmeralova č. 25 — P-f demografia detí (veľa detí oproti kapacite).
+INSERT INTO skolske_obvody.findings
+  (verdict_id, district_id, municipality_id, condition_code,
+   severity, status, evidence_text, engine_version, is_demo, tag)
+SELECT
+  v.id, d.id, d.municipality_id, 'Pf',
+  'medium', 'open',
+  'DEMO SIGNÁL (nie verdikt): v obvode ZŠ Šmeralova č. 25 je vysoký počet detí ' ||
+  'oproti kapacite školy — obvod môže byť kapacitne preťažený. Demografia nie ' ||
+  'je podmienkou § 44; ide o podklad pre plánovanie, nie o nález o porušení. ' ||
+  'Demo dáta.',
+  'demo-sprint-m-3', true, 'demo:demografia:smeralova'
+FROM skolske_obvody.districts d
+JOIN skolske_obvody.verdicts v
+  ON v.district_id = d.id AND v.condition_code = 'Pf'
+WHERE d.id = 'cddfee4e-fb1d-48c1-bbb5-2626ae415f87'
+  AND NOT EXISTS (
+    SELECT 1 FROM skolske_obvody.findings WHERE tag = 'demo:demografia:smeralova'
+  )
+ORDER BY v.computed_at DESC
+LIMIT 1;
+
+-- 4d) Mirka Nešpora č. 2 — P-d jazyková menšina (dopyt po menšinovom jazyku).
+INSERT INTO skolske_obvody.findings
+  (verdict_id, district_id, municipality_id, condition_code,
+   severity, status, evidence_text, engine_version, is_demo, tag)
+SELECT
+  v.id, d.id, d.municipality_id, 'Pd',
+  'medium', 'open',
+  'DEMO SIGNÁL (nie verdikt): v obvode je nezanedbateľný podiel detí s nárokom ' ||
+  'na vzdelávanie v jazyku menšiny, no najbližšia spádová škola vyučuje len v ' ||
+  'slovenčine. § 44 jazykový nárok priamo neposudzuje — je to podnet pre ' ||
+  'zriaďovateľa, nie porušenie. Demo dáta.',
+  'demo-sprint-m-3', true, 'demo:jazyk:nespora'
+FROM skolske_obvody.districts d
+JOIN skolske_obvody.verdicts v
+  ON v.district_id = d.id AND v.condition_code = 'Pd'
+WHERE d.id = '022b88de-8f54-43fd-9a37-b165102db9f8'
+  AND NOT EXISTS (
+    SELECT 1 FROM skolske_obvody.findings WHERE tag = 'demo:jazyk:nespora'
+  )
+ORDER BY v.computed_at DESC
+LIMIT 1;

@@ -2,15 +2,15 @@
 // Mirrors SQL CASE in district_scorecard view. Used as fallback/TS safety net when view column is unavailable.
 
 export const CONDITION_LABELS_SK: Record<string, { label: string; order: number; description: string }> = {
-  S1: { label: 'Š1 — Adresy žiakov a obvod', order: 1, description: 'Mapa adries všetkých žiakov musí spadať do správneho obvodu. Bez Registra adries to overiť nevieme — preto Š1 zatiaľ ostáva NEÚPLNÉ.' },
-  S2: { label: 'Š2 — Topologické pokrytie', order: 2, description: 'Plocha obce musí byť pokrytá obvodmi bez medzier a bez prekryvov. Overujeme cez OSM geometriu.' },
-  S3: { label: 'Š3 — Kompozícia obvodu', order: 3, description: 'Jeden obvod patrí jednej škole. Ak je v obvode viac škôl, ide o porušenie zákona.' },
-  Pa: { label: 'P-a — Vzdialenosť ZŠ 1. stupeň ≤ 2 km', order: 4, description: 'Žiak 1. stupňa nemá mať školu vzdialenú viac než 2 km vzdušnou čiarou.' },
-  Pb: { label: 'P-b — Pešia trasa', order: 5, description: 'Reálna pešia trasa nemá presahovať 30 minút (cca 2,5 km mestskou cestou).' },
-  Pc: { label: 'P-c — MHD dostupnosť', order: 6, description: 'Ak chodí žiak MHD-kou, prestup nesmie byť potrebný viac než raz. Ilustratívny indikátor — nezáväzný.' },
-  Pd: { label: 'P-d — Bariéry (cesty, koľaje)', order: 7, description: 'Trasa z domu do školy neprekračuje rušnú cestu bez priechodu ani železnicu bez podchodu.' },
-  Pe: { label: 'P-e — Sociálny kontext (Atlas MRK)', order: 8, description: 'Obvod nevylučuje deti z marginalizovaných komunít. Kontrolujeme voči Atlasu MRK — ide o signál, nie verdikt.' },
-  Pf: { label: 'P-f — Demografia detí', order: 9, description: 'Demografická prognóza počtu detí v obvode súvisí s kapacitou školy. Odhadované z dát ŠTATSR.' },
+  S1: { label: 'Š1 — Adresy žiakov a obvod', order: 1, description: 'Adresy všetkých žiakov musia patriť do správneho obvodu. Kým nemáme Register adries, nevieme to overiť, preto Š1 zatiaľ ostáva NEÚPLNÉ.' },
+  S2: { label: 'Š2 — Topologické pokrytie', order: 2, description: 'Obvody musia pokryť celé územie obce bez medzier a bez prekryvov. Overujeme to na geometrii z OpenStreetMap.' },
+  S3: { label: 'Š3 — Kompozícia obvodu', order: 3, description: 'Každý obvod patrí jednej škole. Ak je v jednom obvode viac škôl, zákon je porušený.' },
+  Pa: { label: 'P-a — Vzdialenosť ZŠ 1. stupeň ≤ 2 km', order: 4, description: 'Žiak prvého stupňa by nemal mať školu vzdialenú viac ako 2 km vzdušnou čiarou.' },
+  Pb: { label: 'P-b — Pešia trasa', order: 5, description: 'Skutočná pešia trasa by nemala trvať viac ako 30 minút, čo je v meste asi 2,5 km.' },
+  Pc: { label: 'P-c — MHD dostupnosť', order: 6, description: 'Ak žiak chodí mestskou dopravou, nemal by potrebovať viac ako jeden prestup. Tento ukazovateľ je len ilustratívny a nezáväzný.' },
+  Pd: { label: 'P-d — Bariéry (cesty, koľaje)', order: 7, description: 'Cesta z domu do školy by nemala prechádzať cez rušnú cestu bez priechodu ani cez železnicu bez podchodu.' },
+  Pe: { label: 'P-e — Sociálny kontext (Atlas MRK)', order: 8, description: 'Obvod by nemal vyčleňovať deti z marginalizovaných komunít. Porovnávame ho s Atlasom MRK. Je to upozornenie, nie verdikt.' },
+  Pf: { label: 'P-f — Demografia detí', order: 9, description: 'Počet detí v obvode súvisí s kapacitou školy. Odhad vychádza z dát Štatistického úradu SR.' },
 }
 
 export function getConditionLabel(code: string): string {

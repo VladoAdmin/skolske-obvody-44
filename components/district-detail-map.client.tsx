@@ -176,8 +176,11 @@ export function DistrictDetailMapClient({
 
       // --- Island number labels ---
       const islandLabelsGroup = L.featureGroup()
-      islands.forEach((island) => {
+      islands.forEach((island, idx) => {
         if (!island.geom_geojson) return
+        // Contiguous display number (1, 2, 3 …) — matches the detail page and
+        // avoids leaking the sparse raw island_index (e.g. demo index 99 → 100).
+        const displayNo = idx + 1
         try {
           // Compute centroid via GeoJSON bounding approach
           const geom = island.geom_geojson as { type: string; coordinates: number[][][] | number[][] }
@@ -193,7 +196,7 @@ export function DistrictDetailMapClient({
           lat /= count
 
           const label = L.divIcon({
-            html: `<div style="background:rgba(255,255,255,0.85);border:1.5px solid #374151;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#111827;line-height:1">${island.island_index + 1}</div>`,
+            html: `<div style="background:rgba(255,255,255,0.85);border:1.5px solid #374151;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#111827;line-height:1">${displayNo}</div>`,
             className: '',
             iconSize: [22, 22],
             iconAnchor: [11, 11],
@@ -208,7 +211,7 @@ export function DistrictDetailMapClient({
             interactive: true,
           })
             .bindTooltip(
-              `<strong>Ostrov ${island.island_index + 1}</strong><br/>${((island.area_m2 ?? 0) / 1_000_000).toFixed(3)} km²<br/>${island.street_count ?? 0} ulíc · ${island.house_count ?? 0} domov<br/>${streetsList}${suffix}`,
+              `<strong>Ostrov ${displayNo}</strong><br/>${((island.area_m2 ?? 0) / 1_000_000).toFixed(3)} km²<br/>${island.street_count ?? 0} ulíc · ${island.house_count ?? 0} domov<br/>${streetsList}${suffix}`,
               { sticky: true }
             )
             .addTo(islandLabelsGroup)

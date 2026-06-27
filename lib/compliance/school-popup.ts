@@ -127,6 +127,7 @@ function escapeHtml(s: string): string {
 function valueDot(value: string): string {
   if (value === 'PASS') return '🟢'
   if (value === 'FAIL') return '🔴'
+  if (value === 'SIGNAL') return '🔵' // soft signal — not a PASS/FAIL verdict
   return '🟡' // INCOMPLETE / RISK / INSUFFICIENT_DATA
 }
 

@@ -310,11 +310,17 @@ export default async function DistrictPage({ params }: Props) {
           )}
 
           <div className="space-y-2">
-            {islands.map((island) => {
+            {islands.map((island, displayIdx) => {
               const areaKm2 = ((island.area_m2 ?? 0) / 1_000_000).toFixed(3)
               const streetCount = island.street_count ?? 0
               const houseCount = island.house_count ?? 0
               const streets = island.streets ?? []
+              // Display number is the contiguous position in the list (1, 2, 3 …),
+              // NOT the raw geometry island_index — that index can be sparse (demo
+              // anomalies are seeded at high indexes like 99) and would otherwise
+              // leak a confusing "Ostrov 100" into the UI.
+              const displayNo = displayIdx + 1
+              const isDemo = island.is_demo === true
 
               return (
                 <details
@@ -323,10 +329,15 @@ export default async function DistrictPage({ params }: Props) {
                 >
                   <summary className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none hover:bg-muted/40 transition-colors">
                     <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 text-xs font-bold shrink-0">
-                      {island.island_index + 1}
+                      {displayNo}
                     </span>
                     <span className="text-sm font-medium">
-                      Ostrov {island.island_index + 1}
+                      Ostrov {displayNo}
+                      {isDemo && (
+                        <span className="ml-2 inline-flex items-center rounded border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fuchsia-800 align-middle">
+                          DEMO
+                        </span>
+                      )}
                     </span>
                     <span className="text-xs text-muted-foreground ml-auto">
                       {areaKm2} km² · {streetCount} ulíc · {houseCount} domov
@@ -341,7 +352,11 @@ export default async function DistrictPage({ params }: Props) {
                         ))}
                       </ul>
                     ) : (
-                      <p className="italic">Žiadne priradiné ulice z geocódovaných adresných bodov.</p>
+                      <p className="italic">
+                        K tejto časti sa zatiaľ nepodarilo priradiť žiadnu ulicu
+                        z geokódovaných adresných bodov — je to len geometrický
+                        zvyšok plochy bez evidovaných adries.
+                      </p>
                     )}
                   </div>
                 </details>

@@ -162,14 +162,17 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
           <p className="text-xs text-muted-foreground p-3">Žiadne nálezy pre vybrané filtre.</p>
         ) : (
           <ul>
-            {filtered.map((item) => (
+            {filtered.map((item) => {
+              const isSelected = selectedId === item.finding_id
+              return (
               <li key={item.finding_id}>
                 <button
                   onClick={() => handleItemClick(item)}
+                  aria-expanded={isSelected}
                   className={[
                     'w-full text-left px-3 py-2 border-b border-border text-xs',
                     'hover:bg-muted/50 transition-colors',
-                    selectedId === item.finding_id ? 'bg-muted' : '',
+                    isSelected ? 'bg-muted' : '',
                   ].join(' ')}
                 >
                   <div className="flex items-start gap-2">
@@ -193,15 +196,23 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
                       <p className="font-medium text-foreground truncate">{item.district_name}</p>
                       <p className="text-muted-foreground truncate">{item.condition_label_sk}</p>
                       {item.evidence_public_text && (
-                        <p className="text-muted-foreground mt-0.5 line-clamp-2">
+                        <p className={isSelected
+                          ? 'text-muted-foreground mt-0.5 whitespace-pre-wrap leading-relaxed'
+                          : 'text-muted-foreground mt-0.5 line-clamp-2'}>
                           {item.evidence_public_text}
+                        </p>
+                      )}
+                      {isSelected && (
+                        <p className="mt-1 text-[11px] text-primary">
+                          Zvýraznené na mape →
                         </p>
                       )}
                     </div>
                   </div>
                 </button>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </div>
