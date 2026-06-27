@@ -1,7 +1,7 @@
 'use client'
 
+import { Fragment, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import type { FindingPublic } from '@/lib/supabase/types'
 import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
 import { relativeTime } from '@/lib/format/dates'
@@ -22,8 +22,19 @@ const STATUS_LABELS: Record<string, string> = {
   wont_fix: 'Neopravovať',
 }
 
+function DemoBadge() {
+  return (
+    <span
+      className="inline-flex items-center rounded border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fuchsia-800"
+      title="Ukážkové dáta — ilustrácia funkcionality, nevstupuje do zákonného verdiktu"
+    >
+      DEMO
+    </span>
+  )
+}
+
 export function FindingsTable({ findings, totalCount, page, pageSize }: FindingsTableProps) {
-  const router = useRouter()
+  const [openId, setOpenId] = useState<string | null>(null)
 
   if (findings.length === 0) {
     return (
@@ -43,59 +54,67 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
         Zobrazujem {start}–{end} z {totalCount} nálezov
       </p>
 
-      {/* Card stack — only on xs (< sm, < 640px) */}
+      {/* Card stack — only on xs (< sm, < 640px). Tapping a card expands the
+          full reason inline; the district link stays a separate control. */}
       <div className="block sm:hidden space-y-2">
-        {findings.map((finding) => (
-          <div
-            key={finding.finding_id}
-            className="rounded-lg border border-border p-3 space-y-1.5 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
-            onClick={() => router.push(`/districts/${finding.district_id}`)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(`/districts/${finding.district_id}`) }}
-            aria-label={`Nález pre obvod ${finding.district_name}`}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span
-                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
-              >
-                {getSeverityLabel(finding.severity)}
-              </span>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {STATUS_LABELS[finding.status] ?? finding.status}
-              </span>
-            </div>
-            <div>
-              <Link
-                href={`/districts/${finding.district_id}`}
-                className="text-sm font-medium text-primary underline hover:text-primary/80"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {finding.district_name}
-              </Link>
-              {finding.municipality_name && (
-                <p className="text-xs text-muted-foreground">{finding.municipality_name}</p>
+        {findings.map((finding) => {
+          const open = openId === finding.finding_id
+          return (
+            <div
+              key={finding.finding_id}
+              className="rounded-lg border border-border p-3 space-y-1.5 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
+              onClick={() => setOpenId(open ? null : finding.finding_id)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={open}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenId(open ? null : finding.finding_id) } }}
+              aria-label={`Nález pre obvod ${finding.district_name}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span
+                  className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
+                >
+                  {getSeverityLabel(finding.severity)}
+                </span>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {STATUS_LABELS[finding.status] ?? finding.status}
+                </span>
+              </div>
+              <div>
+                <Link
+                  href={`/districts/${finding.district_id}`}
+                  className="text-sm font-medium text-primary underline hover:text-primary/80"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {finding.district_name}
+                </Link>
+                {finding.municipality_name && (
+                  <p className="text-xs text-muted-foreground">{finding.municipality_name}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <code className="font-mono text-xs">{finding.condition_code}</code>
+                {finding.is_demo && <DemoBadge />}
+                <p className="text-xs text-muted-foreground">
+                  {getConditionLabel(finding.condition_code)}
+                </p>
+              </div>
+              {finding.evidence_public_text && (
+                <p className={`text-xs text-muted-foreground ${open ? 'whitespace-pre-wrap' : 'line-clamp-2'}`}>
+                  {finding.evidence_public_text}
+                </p>
               )}
-            </div>
-            <div>
-              <code className="font-mono text-xs">{finding.condition_code}</code>
               <p className="text-xs text-muted-foreground">
-                {getConditionLabel(finding.condition_code)}
+                {relativeTime(finding.created_at)}
               </p>
             </div>
-            {finding.evidence_public_text && (
-              <p className="text-xs text-muted-foreground line-clamp-2">
-                {finding.evidence_public_text}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              {relativeTime(finding.created_at)}
-            </p>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
-      {/* Table — sm and above */}
+      {/* Table — sm and above. The whole row is clickable; the reason expands
+          FULL-WIDTH BELOW the row (no page jump). A narrow "Dôkaz" column is
+          replaced by an expand affordance + an inline full-width detail row. */}
       <div className="hidden sm:block overflow-x-auto rounded-lg border border-border">
         <Table aria-label="Register nálezov">
           <TableHeader>
@@ -104,55 +123,93 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
               <TableHead className="text-xs">Obec</TableHead>
               <TableHead className="text-xs">Obvod</TableHead>
               <TableHead className="text-xs">Podmienka</TableHead>
-              <TableHead className="text-xs">Dôkaz</TableHead>
               <TableHead className="text-xs">Stav</TableHead>
               <TableHead className="text-xs">Vytvorený</TableHead>
+              <TableHead className="text-xs">Dôvod</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {findings.map((finding) => (
-              <TableRow
-                key={finding.finding_id}
-                className="cursor-pointer hover:bg-muted/30 transition-colors"
-                onClick={() => router.push(`/districts/${finding.district_id}`)}
-                aria-label={`Nález pre obvod ${finding.district_name}`}
-              >
-                <TableCell className="sticky left-0 bg-background z-10">
-                  <span
-                    className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
+            {findings.map((finding) => {
+              const open = openId === finding.finding_id
+              const hasReason = Boolean(finding.evidence_public_text)
+              return (
+                <Fragment key={finding.finding_id}>
+                  <TableRow
+                    className={`cursor-pointer hover:bg-muted/30 transition-colors ${open ? 'bg-muted/30' : ''}`}
+                    onClick={() => hasReason && setOpenId(open ? null : finding.finding_id)}
+                    onKeyDown={(e) => { if (hasReason && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpenId(open ? null : finding.finding_id) } }}
+                    tabIndex={hasReason ? 0 : undefined}
+                    role={hasReason ? 'button' : undefined}
+                    aria-expanded={hasReason ? open : undefined}
+                    aria-label={`Nález pre obvod ${finding.district_name}`}
                   >
-                    {getSeverityLabel(finding.severity)}
-                  </span>
-                </TableCell>
-                <TableCell className="text-xs">{finding.municipality_name ?? '—'}</TableCell>
-                <TableCell className="text-xs">
-                  <Link
-                    href={`/districts/${finding.district_id}`}
-                    className="text-primary underline hover:text-primary/80"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {finding.district_name}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-xs">
-                  <code className="font-mono text-xs">{finding.condition_code}</code>
-                  <span className="block text-muted-foreground text-xs">
-                    {getConditionLabel(finding.condition_code)}
-                  </span>
-                </TableCell>
-                <TableCell className="max-w-[300px] text-xs text-muted-foreground truncate overflow-hidden whitespace-nowrap">
-                  <span title={finding.evidence_public_text ?? undefined}>
-                    {finding.evidence_public_text ?? '—'}
-                  </span>
-                </TableCell>
-                <TableCell className="text-xs whitespace-nowrap overflow-hidden">
-                  {STATUS_LABELS[finding.status] ?? finding.status}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap overflow-hidden">
-                  {relativeTime(finding.created_at)}
-                </TableCell>
-              </TableRow>
-            ))}
+                    <TableCell className="sticky left-0 bg-background z-10">
+                      <span
+                        className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
+                      >
+                        {getSeverityLabel(finding.severity)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs">{finding.municipality_name ?? '—'}</TableCell>
+                    <TableCell className="text-xs">
+                      <Link
+                        href={`/districts/${finding.district_id}`}
+                        className="text-primary underline hover:text-primary/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {finding.district_name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <code className="font-mono text-xs">{finding.condition_code}</code>
+                        {finding.is_demo && <DemoBadge />}
+                      </div>
+                      <span className="block text-muted-foreground text-xs">
+                        {getConditionLabel(finding.condition_code)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs whitespace-nowrap overflow-hidden">
+                      {STATUS_LABELS[finding.status] ?? finding.status}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap overflow-hidden">
+                      {relativeTime(finding.created_at)}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {hasReason ? (
+                        <span className="inline-flex items-center gap-1 text-primary">
+                          <span aria-hidden className={`transition-transform ${open ? 'rotate-90' : ''}`}>▸</span>
+                          {open ? 'Skryť' : 'Zobraziť'}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {hasReason && open && (
+                    <TableRow className="bg-muted/20 hover:bg-muted/20">
+                      <TableCell colSpan={7} className="px-4 py-3">
+                        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                          {finding.evidence_public_text}
+                        </p>
+                        {finding.is_demo && (
+                          <p className="mt-2 text-xs text-fuchsia-700">
+                            Ukážkové (DEMO) dáta — ilustrácia funkcionality, nevstupuje do zákonného verdiktu.
+                          </p>
+                        )}
+                        <Link
+                          href={`/districts/${finding.district_id}`}
+                          className="mt-2 inline-block text-xs text-primary underline hover:text-primary/80"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Otvoriť detail obvodu →
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </Fragment>
+              )
+            })}
           </TableBody>
         </Table>
       </div>

@@ -20,28 +20,31 @@ import {
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
 
-// --- DEMO illustration scenario (Sprint demo-mode) -------------------------
-// The two RED demo districts whose § 44 findings the map must visually
-// illustrate the moment the user taps the polygon. IDs are the same UUIDs the
-// demo-mode verdict seed + demo_overlap_island.sql key their geometry on, so
-// the overlap/island demo polygons already arrive client-side via the
-// `overlaps` / `islands` props (is_demo = true) and we just need to surface the
-// relevant ones on click.
-const DEMO_DISTRICT_SMERALOVA = 'cddfee4e-fb1d-48c1-bbb5-2626ae415f87'
-const DEMO_DISTRICT_NESPORA = '022b88de-8f54-43fd-9a37-b165102db9f8'
-const DEMO_RED_DISTRICT_IDS = new Set<string>([
-  DEMO_DISTRICT_SMERALOVA,
-  DEMO_DISTRICT_NESPORA,
-])
+// --- § 44 map illustration (engine-driven) ---------------------------------
+// The map illustration is rebuilt entirely from the ENGINE output and REAL
+// geometry — NO hardcoded district IDs. For the SELECTED district we draw only
+// the illustrations that correspond to an actual engine finding for that
+// district (from the `findings` prop), and we derive geometry from real data:
+//   * Pa (vzdialenosť ≤ 2 km) → the real geocoded address (housePoints) that is
+//     farthest from the assigned school, drawn ONLY when a Pa FAIL finding exists.
+//   * S2 (topológia)          → the demo overlap polygon (overlaps prop, is_demo).
+//   * island (S2)             → demo island polygon (islands prop, is_demo).
+//   * Pe (Atlas MRK)          → real MRK locality the boundary splits, drawn when
+//                               a Pe SIGNAL finding exists.
+//   * Pf (demografia/kapacita)→ overcrowding ring + N/M badge, numbers from the
+//                               Pf finding evidence text, drawn when a Pf SIGNAL
+//                               finding exists.
+// This guarantees the map illustration matches the engine verdicts/findings.
 
-// DEMO P-f (demografia / kapacita) overcrowding numbers. These must stay in
-// sync with the matching demo P-f finding in
-// scripts/sql/demo_overlap_island.sql (tag demo:demografia:smeralova): the
-// finding text says "počet žiakov 712 prekračuje kapacitu školy 560".
-// schools.capacity / student_count are NULL in the live data for this school,
-// so these are DEMO numbers — surfaced here only to colour/annotate the map.
-const OVERCROWD_DEMO: Record<string, { students: number; capacity: number }> = {
-  [DEMO_DISTRICT_SMERALOVA]: { students: 712, capacity: 560 },
+// Pull "712 / 560" style numbers out of a Pf evidence string (žiakov X > kapacita Y).
+function parsePfNumbers(text: string | null | undefined): { students: number; capacity: number } | null {
+  if (!text) return null
+  const m = text.match(/(\d{2,5})\s*>\s*kapacita\s*(\d{2,5})/i)
+  if (!m) return null
+  const students = Number(m[1])
+  const capacity = Number(m[2])
+  if (!Number.isFinite(students) || !Number.isFinite(capacity) || capacity <= 0) return null
+  return { students, capacity }
 }
 
 // Ray-casting point-in-polygon against a GeoJSON (Multi)Polygon's OUTER rings.
@@ -112,40 +115,25 @@ function haversineMeters(a: [number, number], b: [number, number]): number {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-// Walk every coordinate of a (Multi)Polygon GeoJSON and return the vertex
-// ([lat, lon]) farthest (great-circle) from the given school point. Used to
-// derive the Pa "long distance" illustration line geometrically from the
-// existing district polygon — no extra DB columns needed.
-function farthestVertexFromSchool(
-  geom: Record<string, unknown> | null | undefined,
-  school: [number, number]
-): { point: [number, number]; meters: number } | null {
-  if (!geom) return null
-  const type = geom.type as string | undefined
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const coords = geom.coordinates as any
-  if (!coords) return null
-
-  let best: [number, number] | null = null
-  let bestM = -1
-  const consider = (lon: number, lat: number) => {
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return
-    const d = haversineMeters(school, [lat, lon])
-    if (d > bestM) {
-      bestM = d
-      best = [lat, lon]
+// Farthest REAL geocoded address (housePoints) of a district from its school.
+// This is the actual critical Pa address — not a polygon vertex.
+function farthestHousePointFromSchool(
+  points: { district_id: string; lat: number | null; lon: number | null; street: string | null; house_number: string | null; valid?: boolean | null }[],
+  districtId: string,
+  school: [number, number] // [lat, lon]
+): { point: [number, number]; meters: number; label: string } | null {
+  let best: { point: [number, number]; meters: number; label: string } | null = null
+  for (const p of points) {
+    if (p.district_id !== districtId) continue
+    if (p.valid === false) continue
+    if (p.lat == null || p.lon == null) continue
+    const d = haversineMeters(school, [p.lat, p.lon])
+    if (!best || d > best.meters) {
+      const label = `${(p.street ?? '').trim()} ${(p.house_number ?? '').trim()}`.trim()
+      best = { point: [p.lat, p.lon], meters: d, label }
     }
   }
-  // GeoJSON Polygon: coordinates = ring[][]; MultiPolygon: poly[ring[][]]
-  const rings: number[][][] =
-    type === 'MultiPolygon' ? coords.flat() : type === 'Polygon' ? coords : []
-  for (const ring of rings) {
-    for (const pt of ring) {
-      consider(pt[0], pt[1])
-    }
-  }
-  if (!best) return null
-  return { point: best, meters: bestM }
+  return best
 }
 
 // On small screens the Leaflet layer-toggle control must start COLLAPSED so it
@@ -178,7 +166,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, findings = [], overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -204,6 +192,9 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
   // demo illustration that is built inside the (separate) mode effect closure.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const drawDemoRef = useRef<((feature: any) => void) | null>(null)
+  // Bridge to clear the demo illustration + selection from outside the mode
+  // effect (used by the Esc-to-dismiss keyboard handler).
+  const clearDemoRef = useRef<(() => void) | null>(null)
   // Currently click-selected district id (for highlight reset on next tap /
   // popup close / empty-map tap). Mirrors the visual "selected" style.
   const selectedDistrictIdRef = useRef<string | null>(null)
@@ -379,11 +370,22 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
       }
       window.addEventListener(EVENT_DRAW_ROUTE, drawRouteHandler)
 
+      // Esc dismisses the open district popup + clears the selection and the
+      // § 44 illustration (in addition to outside-map click and other-district).
+      const escHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          if (clearDemoRef.current) clearDemoRef.current()
+          else { try { map.closePopup() } catch { /* ignore */ } }
+        }
+      }
+      window.addEventListener('keydown', escHandler)
+
       return () => {
         window.removeEventListener(EVENT_FLYTO, flyToHandler)
         window.removeEventListener(EVENT_TOGGLE_DISTRICT, toggleDistrictHandler)
         window.removeEventListener(EVENT_SELECT_DISTRICT, selectDistrictHandler)
         window.removeEventListener(EVENT_DRAW_ROUTE, drawRouteHandler)
+        window.removeEventListener('keydown', escHandler)
         // Remove route layer if still on the map
         if (routeLayerRef.current && mapRef.current) {
           mapRef.current.removeLayer(routeLayerRef.current)
@@ -580,7 +582,12 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const drawDemoIllustration = (feature: any) => {
               clearDemoIllustration()
-              if (!DEMO_RED_DISTRICT_IDS.has(feature.id)) return
+
+              // Findings the engine produced for THIS district (drives which
+              // illustrations to draw — keeps the map in sync with the engine).
+              const myFindings = findings.filter((f) => f.district_id === feature.id)
+              const hasFinding = (code: string) => myFindings.some((f) => f.condition_code === code)
+              const findingOf = (code: string) => myFindings.find((f) => f.condition_code === code)
 
               const group = L.featureGroup()
               const legendRows: string[] = []
@@ -655,21 +662,22 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                 )
               }
 
-              // (3) LONG DISTANCE (Pa) — dashed line school → farthest in-district
-              // vertex. Drawn ONLY for Šmeralova, the one demo district whose
-              // seed carries a Pa = RISK finding (Mirka Nešpora's Pa is PASS, so
-              // it must NOT get a distance line). The line geometry itself is
-              // derived from the polygon's farthest vertex; we still require the
-              // air-line to exceed the 2 km first-grade threshold.
+              // (3) LONG DISTANCE (Pa) — dashed line from the assigned school to
+              // the REAL geocoded address (housePoints) that is farthest from it.
+              // Drawn ONLY when the engine produced a Pa finding for this district
+              // (Pa FAIL) and the real air-line exceeds the 2 km first-grade
+              // threshold. The line ends at the actual critical address, not a
+              // polygon vertex.
               const schoolGeom = feature.school_geom_geojson as
                 | { type: string; coordinates: [number, number] }
                 | null
-              if (feature.id === DEMO_DISTRICT_SMERALOVA && schoolGeom && schoolGeom.type === 'Point') {
+              if (hasFinding('Pa') && schoolGeom && schoolGeom.type === 'Point') {
                 const [slon, slat] = schoolGeom.coordinates
                 const school: [number, number] = [slat, slon]
-                const far = farthestVertexFromSchool(feature.geom_geojson, school)
+                const far = farthestHousePointFromSchool(housePoints, feature.id, school)
                 if (far && far.meters > 2000) {
                   const km = (far.meters / 1000).toFixed(1)
+                  const addr = far.label || 'adresa'
                   L.polyline([school, far.point], {
                     color: '#dc2626', // red-600
                     weight: 3,
@@ -679,14 +687,25 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                     pane: 'overlaps' as any,
                   })
                     .bindTooltip(
-                      `<strong>~${km} km (Pa)</strong><br/>Najvzdialenejšia adresa 1. stupňa od školy (vzdušná čiara).`,
+                      `<strong>~${km} km (Pa)</strong><br/>Najvzdialenejšia adresa „${addr}“ od školy (vzdušná čiara, reálny geokód).`,
                       { sticky: true }
                     )
                     .addTo(group)
-                  // Small marker at the far end to anchor the label.
+                  // Highlight the critical address itself.
+                  L.circleMarker(far.point, {
+                    radius: 6,
+                    fillColor: '#dc2626',
+                    color: '#7f1d1d',
+                    weight: 2,
+                    fillOpacity: 0.95,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    pane: 'overlaps' as any,
+                  })
+                    .bindTooltip(`<strong>${addr}</strong><br/>~${km} km od školy`, { sticky: true })
+                    .addTo(group)
                   L.marker(far.point, {
                     icon: L.divIcon({
-                      html: `<div style="background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.4)">~${km} km (Pa)</div>`,
+                      html: `<div style="background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:1px 5px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translateY(-16px)">${addr} · ~${km} km (Pa)</div>`,
                       className: 'demo-distance-label',
                       iconSize: [0, 0],
                       iconAnchor: [0, 0],
@@ -695,7 +714,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                     pane: 'overlaps' as any,
                   }).addTo(group)
                   legendRows.push(
-                    `<span style="display:inline-block;width:14px;height:0;border-top:3px dashed #dc2626;margin-right:6px;vertical-align:3px"></span>~${km} km (Pa)`
+                    `<span style="display:inline-block;width:14px;height:0;border-top:3px dashed #dc2626;margin-right:6px;vertical-align:3px"></span>~${km} km — adresa „${addr}“ (Pa)`
                   )
                 }
               }
@@ -707,10 +726,10 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               // (so_mrk_overlays → mrkOverlays prop, from skolske_obvody.mrk_atlas)
               // and classify its outer-ring vertices: those the obvod boundary
               // leaves OUTSIDE the obvod are the "vyčlenená / segregačná" signal.
-              if (feature.id === DEMO_DISTRICT_NESPORA) {
-                // The Prešov MRK locality (the single 'large' Atlas polygon that
-                // intersects Prešov obvody). Pick the overlay whose geometry
-                // actually touches this district by classifying its vertices.
+              if (hasFinding('Pe')) {
+                // The MRK locality the obvod boundary splits. Pick the overlay
+                // whose geometry actually touches this district by classifying
+                // its vertices.
                 let drewMrk = false
                 mrkOverlays.forEach((mrk) => {
                   if (!mrk.geom_geojson) return
@@ -739,7 +758,7 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                     pane: 'overlaps' as any,
                   })
                     .bindTooltip(
-                      '<strong>MRK lokalita (Atlas MRK)</strong><br/>Hranica obvodu ju rozdeľuje — väčšina ostáva mimo obvodu ZŠ Mirka Nešpora č. 2.',
+                      `<strong>MRK lokalita (Atlas MRK)</strong><br/>Hranica obvodu ju rozdeľuje — časť ostáva mimo obvodu ${feature.name}.`,
                       { sticky: true }
                     )
                     .addTo(group)
@@ -788,10 +807,12 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
 
               // (5) P-f DEMOGRAFIA / KAPACITA — overcrowding. Colour the obvod
               // school pin + drop a "preplnené" badge showing N žiakov / M
-              // kapacita for the demo district that carries the P-f overcrowding
-              // SIGNAL. Numbers are DEMO (OVERCROWD_DEMO), kept in sync with the
-              // matching finding in scripts/sql/demo_overlap_island.sql.
-              const oc = OVERCROWD_DEMO[feature.id]
+              // kapacita. Drawn only when the engine produced a Pf SIGNAL finding
+              // for this district; the N/M numbers are read from that finding's
+              // evidence text (which the engine derived from schools.capacity /
+              // student_count).
+              const pfFinding = findingOf('Pf')
+              const oc = pfFinding ? parsePfNumbers(pfFinding.evidence_public_text) : null
               const schoolGeomPf = feature.school_geom_geojson as
                 | { type: string; coordinates: [number, number] }
                 | null
@@ -861,6 +882,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
             // selecting a district from the findings panel also surfaces its
             // demo § 44 illustration (same behaviour as tapping the polygon).
             drawDemoRef.current = drawDemoIllustration
+            // Expose a combined clear (selection + illustration + popup) for the
+            // Esc-to-dismiss keyboard handler in the init effect.
+            clearDemoRef.current = () => {
+              try { map.closePopup() } catch { /* ignore */ }
+              resetSelectedDistrict()
+              clearDemoIllustration()
+            }
 
             // Tapping the empty map (outside any polygon) clears the highlight
             // and any demo illustration.
@@ -942,8 +970,8 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                 // which would immediately clear the highlight we just set.
                 L.DomEvent.stopPropagation(e)
                 selectDistrict(feature.id, geoJsonLayer)
-                // Surface the geometric § 44 illustration for the two RED demo
-                // districts; a no-op (just clears) for every other obvod.
+                // Surface the engine-driven § 44 illustration for this obvod
+                // (draws only what the engine actually found for it).
                 drawDemoIllustration(feature)
                 geoJsonLayer.openPopup(e.latlng)
               })

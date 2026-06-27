@@ -74,11 +74,13 @@ export interface SoFindingPublic {
   evidence_public_text: string | null
   provenance_source: string | null
   created_at: string
+  is_demo: boolean
+  tag: string | null
 }
 
 export interface SoFindingExplanation {
   condition_code: string
-  severity: string
+  value: string
   explanation_sk: string
   model: string | null
   generated_at: string
