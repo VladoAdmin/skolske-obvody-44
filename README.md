@@ -69,6 +69,16 @@ npm run build    # musí prejsť bez chýb
 npm run lint     # musí prejsť bez chýb
 ```
 
+## AI-driven UAT (e2e)
+
+Reusable AI UAT tester (Playwright + Chrome + OpenAI gpt-4o-mini sudca), beží proti produkcii:
+
+```bash
+python3 tools/ai-uat/run_uat.py [BASE_URL]   # default: https://skolske-obvody-44.vercel.app
+```
+
+Výstup: `docs/ai-uat-report.md` (PASS/FAIL per flow + slovenské AI hodnotenie). Screenshoty idú do `tools/ai-uat/screenshots/` (gitignored).
+
 ## Routing (OSRM/Valhalla)
 
 Detaily inštalácie: `services/routing/README.md`
