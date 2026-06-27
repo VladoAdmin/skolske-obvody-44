@@ -1,64 +1,181 @@
 """
-P-a — Kapacita budov (School capacity indicator).
+P-a — Vzdialenosť ZŠ 1. stupeň ≤ 2 km (air-line distance address → assigned school).
 
-METHODOLOGY §P-a:
-  Without real EDUZBER capacity data, occupancy CANNOT be computed.
-  Value = INSUFFICIENT_DATA, confidence = 0.0, completeness = 0.0.
-  Provenance points to EDUZBER GAP.
-  This verdict NEVER contributes to legal status (gatekeeping).
+METHODOLOGY §P-a (labels.ts canonical = "Vzdialenosť ZŠ 1. stupeň ≤ 2 km"):
+  For each geocoded address assigned to the district, compute the air-line
+  (straight-line) distance to the district's assigned school.
+  §44 ods. 8 písm. a): a 1st-grade pupil should not have the school more than
+  2 km away as the crow flies.
 
-student_count from WFS is stored as an informational field only.
+  Value:
+    FAIL  = at least one real address is > 2 000 m from the assigned school.
+    PASS  = enough geocoded addresses (>= MIN_SAMPLES) and ALL are <= 2 000 m.
+    INSUFFICIENT_DATA = fewer than MIN_SAMPLES geocoded addresses in the district
+                        (we cannot honestly judge distance from 0–2 points).
+
+  Source: house_geocodes (Register adries → Google geocode), assigned to district
+  by district_id. Distance computed in EPSG:32634 (metres).
+
+  This is a risk INDICATOR (Pa ∈ INDICATOR_CONDITIONS): FAIL/INSUFFICIENT_DATA
+  can push the semafor to ORANGE but never RED (legal status is Š1–Š3 only).
+
+  DEMO addresses (house_geocodes.is_demo = TRUE) are included so a fabricated
+  >2 km address can be demonstrated; the verdict is flagged is_mock=TRUE only
+  when the deciding far address is a demo row.
 """
 
 from __future__ import annotations
 
-from engine.constants import V, METHODOLOGY_VERSION
+from engine.constants import V, METHODOLOGY_VERSION, PB_PASS_DISTANCE_M
 from engine.verdict import Verdict
+from ingest.supabase_client import query_sql
+
+# Minimum geocoded addresses required to make a confident PASS/FAIL judgement.
+MIN_SAMPLES = 3
 
 _METHODOLOGY = {
-    "rule": "Pa-capacity-proxy",
+    "rule": "Pa-airline-distance-2km",
     "version": METHODOLOGY_VERSION,
     "description": (
-        "Kapacita budov školy (EDUZBER) nie je v DB — GAP. "
-        "Obsadenosť (žiaci/kapacita) sa nepočíta bez skutočnej kapacity. "
-        "student_count z WFS je dostupný ako indikatívny údaj veľkosti školy."
+        "Vzdušná (priama) vzdialenosť každej geokódovanej adresy obvodu k pridelenej "
+        "škole. Prah pre 1. stupeň ZŠ: 2 km. FAIL = aspoň jedna adresa > 2 km."
     ),
-    "gap": "EDUZBER capacity data not available",
+    "threshold_m": PB_PASS_DISTANCE_M,
+    "min_samples": MIN_SAMPLES,
+    "data_source": "house_geocodes (Register adries + geokódovanie), district geom (q6)",
     "law_ref": "§44 ods. 8 písm. a)",
-    "never_claims": "škola je pre/podkapacitná bez skutočnej kapacity; žiadny právny záver",
-    "gatekeeping": "INSUFFICIENT_DATA nikdy nezhoršuje zákonný semafor",
+    "never_claims": "presný počet dotknutých detí; vzdušná čiara nie je pešia trasa (to je P-b)",
+    "gatekeeping": "rizikový indikátor — môže posunúť na ORANGE, nikdy nie RED",
 }
 
 
 def check_pa(district: dict) -> Verdict:
     district_id = district["id"]
+    school_id = district.get("school_id")
     school_name = district.get("school_name", "")
-    student_count = district.get("student_count")
+
+    if not school_id:
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pa",
+            value=V.INSUFFICIENT_DATA,
+            confidence=0.0,
+            data_completeness=0.0,
+            provenance={"reason": "school_id IS NULL — vzdialenosť nepočítaná"},
+            methodology=_METHODOLOGY,
+            evidence_text="MÁLO DÁT: k obvodu nie je priradená škola (school_id = NULL).",
+        )
+
+    # Air-line distance (EPSG:32634, metres) from each geocoded address in the
+    # district to the assigned school. Include demo rows; expose is_demo per row.
+    rows = query_sql(f"""
+        SELECT
+            h.street, h.house_number,
+            COALESCE(h.is_demo, FALSE) AS is_demo,
+            public.ST_Distance(
+                public.ST_Transform(h.geom, 32634),
+                public.ST_Transform(s.geom, 32634)
+            ) AS dist_m,
+            public.ST_Y(h.geom) AS lat,
+            public.ST_X(h.geom) AS lon
+        FROM skolske_obvody.house_geocodes h
+        JOIN skolske_obvody.schools s ON s.id = '{school_id}'
+        WHERE h.district_id = '{district_id}'
+          AND h.geom IS NOT NULL
+          AND h.valid IS NOT FALSE
+          AND s.geom IS NOT NULL
+        ORDER BY dist_m DESC
+    """)
+
+    n = len(rows)
+    if n == 0:
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pa",
+            value=V.INSUFFICIENT_DATA,
+            confidence=0.0,
+            data_completeness=0.0,
+            provenance={
+                "source": "house_geocodes (Register adries) — žiadne geokódované adresy v obvode",
+                "school_name": school_name,
+                "threshold_m": PB_PASS_DISTANCE_M,
+                "action_required": "Doplniť geokódované adresy obvodu (Register adries) odblokuje P-a.",
+            },
+            methodology=_METHODOLOGY,
+            evidence_text=(
+                f"MÁLO DÁT: v obvode nie sú geokódované adresy (Register adries). "
+                f"Vzdialenosť k škole {school_name} sa nedá overiť. "
+                "Indikátor môže posunúť na ORANGE, nikdy nie RED."
+            ),
+        )
+
+    farthest = rows[0]
+    far_dist = float(farthest["dist_m"])
+    far_addr = f"{(farthest['street'] or '').strip()} {(farthest['house_number'] or '').strip()}".strip()
+    over_2km = [r for r in rows if float(r["dist_m"]) > PB_PASS_DISTANCE_M]
+    n_over = len(over_2km)
+    decided_by_demo = bool(farthest["is_demo"]) and far_dist > PB_PASS_DISTANCE_M
 
     provenance = {
-        "source": "schools.capacity (EDUZBER) — GAP",
-        "schools_wfs_student_count": student_count,
-        "note": (
-            "Kapacita z EDUZBER nie je dostupná. "
-            "Počet žiakov z WFS je len indikátor veľkosti školy, nie obsadenosti. "
-            "Reálna obsadenosť = žiaci / kapacita — nedostupné."
-        ),
-        "action_required": "Admin import kapacít z EDUZBER odblokuje tento indikátor.",
+        "source": "house_geocodes (Register adries + geokódovanie)",
+        "school_name": school_name,
+        "addresses_checked": n,
+        "addresses_over_2km": n_over,
+        "max_distance_m": round(far_dist, 1),
+        "farthest_address": far_addr,
+        "farthest_lat": float(farthest["lat"]),
+        "farthest_lon": float(farthest["lon"]),
+        "farthest_is_demo": bool(farthest["is_demo"]),
+        "threshold_m": PB_PASS_DISTANCE_M,
+        "method": "ST_Distance vzdušná čiara, EPSG:32634",
     }
+
+    if far_dist > PB_PASS_DISTANCE_M:
+        value = V.FAIL
+        evidence = (
+            f"FAIL: {n_over} z {n} adries je nad 2 km vzdušnou čiarou od pridelenej školy "
+            f"{school_name}. Najvzdialenejšia: „{far_addr}“ = {round(far_dist)} m "
+            f"(prah 2 000 m)."
+            + (" [DEMO adresa]" if decided_by_demo else "")
+        )
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pa",
+            value=value,
+            confidence=0.7,
+            data_completeness=min(0.7, 0.3 + n * 0.02),
+            provenance=provenance,
+            methodology=_METHODOLOGY,
+            evidence_text=evidence,
+            is_mock=decided_by_demo,
+        )
+
+    if n < MIN_SAMPLES:
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pa",
+            value=V.INSUFFICIENT_DATA,
+            confidence=0.2,
+            data_completeness=0.2,
+            provenance=provenance,
+            methodology=_METHODOLOGY,
+            evidence_text=(
+                f"MÁLO DÁT: len {n} geokódovaná(é) adresa(y) v obvode (min. {MIN_SAMPLES}). "
+                f"Najvzdialenejšia „{far_addr}“ = {round(far_dist)} m (≤ 2 km), "
+                "ale vzorka je primalá na spoľahlivý záver."
+            ),
+        )
 
     return Verdict(
         district_id=district_id,
         condition_code="Pa",
-        value=V.INSUFFICIENT_DATA,
-        confidence=0.0,
-        data_completeness=0.0,
+        value=V.PASS,
+        confidence=0.7,
+        data_completeness=min(0.7, 0.3 + n * 0.02),
         provenance=provenance,
         methodology=_METHODOLOGY,
         evidence_text=(
-            f"MÁLO DÁT: kapacita budov z EDUZBER nedostupná (GAP). "
-            f"Škola: {school_name}. "
-            f"Počet žiakov (WFS, indikatívny): {student_count if student_count else 'N/A'}. "
-            "Indikátor nevstupuje do zákonného stavu."
+            f"PASS: všetkých {n} geokódovaných adries je do 2 km vzdušnou čiarou od školy "
+            f"{school_name}. Najvzdialenejšia: „{far_addr}“ = {round(far_dist)} m."
         ),
-        is_proxy=True,
     )

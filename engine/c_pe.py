@@ -1,36 +1,53 @@
 """
-P-e — Zákaz segregácie (Segregation signal — analytical only, never legal verdict).
+P-e — Sociálny kontext (Atlas MRK) — segregation/inclusion signal (analytical only).
 
-METHODOLOGY §P-e:
-  Compute MRK area share per district.
-  SIGNAL   = MRK area > 10% of district area (PE_MRK_AREA_THRESHOLD).
-  NO_SIGNAL = otherwise.
-  NOT_EVALUATED = no MRK Atlas data for this municipality.
+METHODOLOGY §P-e (labels.ts canonical = "Sociálny kontext (Atlas MRK)"):
+  Analytical signal, NEVER a legal verdict (Pe ∈ SIGNAL_CONDITIONS).
 
-  Source: Atlas MRK 2019 (q7) + mrk_buildings.
-  Deterministic only. No LLM in this sprint.
-  Always shown in "analytické signály" sub-panel, never in legal semafor.
-  Methodology JSONB notes data age (Atlas 2019).
+  Data reality in DB:
+    - mrk_atlas = obec-level boundaries from "Atlas rómskych komunít 2019" tagged
+      with a category (none/low/medium/large). For Prešov the whole obec is tagged
+      'large'. This is municipality-level context — it does NOT locate a community
+      within a particular district, so it cannot drive a per-district area share.
+    - mrk_buildings = locality-level building points. These DO locate a community.
+
+  Per-district signal logic:
+    SIGNAL        = >= MRK_BUILDING_SIGNAL_MIN marginalized-community buildings fall
+                    inside the district (real locality concentration), OR a DEMO
+                    inclusion case is seeded for the district.
+    NO_SIGNAL     = the obec has Atlas context but no locality buildings in this
+                    district.
+    NOT_EVALUATED = no Atlas context at all for this obec.
+
+  DEMO inclusion case (Part B): a district may carry a seeded marginalized share
+  (demographics_children provenance / mrk_buildings is_demo) to make an explicit
+  "inclusion fails" example; such verdicts are flagged is_mock=TRUE.
 """
 
 from __future__ import annotations
 
-from engine.constants import V, METHODOLOGY_VERSION, PE_MRK_AREA_THRESHOLD
+from engine.constants import V, METHODOLOGY_VERSION
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
+# Minimum locality buildings inside a district to raise a real segregation signal.
+MRK_BUILDING_SIGNAL_MIN = 5
+
 _METHODOLOGY = {
-    "rule": "Pe-segregation-mrk-area",
+    "rule": "Pe-mrk-locality-buildings",
     "version": METHODOLOGY_VERSION,
     "description": (
-        "Podiel plochy MRK polygónov (Atlas MRK 2019) v obvode voči celkovej ploche obvodu. "
-        "Prah: > 10% = SIGNÁL."
+        "Sociálny kontext z Atlasu rómskych komunít 2019. Obecná kategória "
+        "(mrk_atlas) je kontext na úrovni obce; konkrétnu lokalitu v obvode určujú "
+        "len budovy MRK (mrk_buildings). Signál = koncentrácia budov MRK v obvode."
     ),
-    "data_source": "Atlas MRK 2019 (q7) + mrk_buildings (q7)",
+    "data_source": "Atlas rómskych komunít 2019: mrk_atlas (kategória obce) + mrk_buildings (lokalita)",
     "data_age": "Atlas 2019 — 6-ročné dáta; výsledok je analytický signál, nie verdikt",
-    "threshold_pct": PE_MRK_AREA_THRESHOLD * 100,
+    "building_signal_min": MRK_BUILDING_SIGNAL_MIN,
     "law_ref": "§44 ods. 8 písm. e)",
-    "never_claims": "segregácia/nesegregácia ako zákonný verdikt; Atlas 2019; analytický signál",
+    "never_claims": (
+        "segregácia/inklúzia ako zákonný verdikt; obecná kategória != per-obvod podiel"
+    ),
     "panel": "analytické signály — NIKDY v zákonnom semafore",
 }
 
@@ -38,91 +55,85 @@ _METHODOLOGY = {
 def check_pe(district: dict, municipality_id: str) -> Verdict:
     district_id = district["id"]
 
-    # Check if Atlas MRK has any data for this municipality's region
-    # mrk_atlas is linked by obec_id (municipality id) or spatial intersection
-    mrk_rows = query_sql(f"""
-        SELECT
-            SUM(public.ST_Area(public.ST_Transform(
-                public.ST_Intersection(a.geom, d.geom),
-                32634
-            ))) AS mrk_area_m2,
-            public.ST_Area(public.ST_Transform(d.geom, 32634)) AS district_area_m2
-        FROM skolske_obvody.districts d
-        LEFT JOIN skolske_obvody.mrk_atlas a
-          ON public.ST_Intersects(a.geom, d.geom)
-        WHERE d.id = '{district_id}'
-        GROUP BY d.geom
+    # Obec-level Atlas category (context only).
+    cat_rows = query_sql(f"""
+        SELECT a.category, a.obec_name
+        FROM skolske_obvody.mrk_atlas a
+        JOIN skolske_obvody.municipalities mun ON mun.id = '{municipality_id}'
+        WHERE public.ST_Contains(a.geom, public.ST_Centroid(mun.geom))
+        ORDER BY a.category DESC
+        LIMIT 1
     """)
+    obec_category = cat_rows[0]["category"] if cat_rows else None
+    obec_name = cat_rows[0]["obec_name"] if cat_rows else None
 
-    # Also check mrk_buildings
+    # Locality-level: MRK buildings inside this district (real + demo).
     bld_rows = query_sql(f"""
-        SELECT COUNT(*) as n
+        SELECT
+            COUNT(*) AS n,
+            COUNT(*) FILTER (WHERE COALESCE(b.is_demo, FALSE)) AS n_demo
         FROM skolske_obvody.mrk_buildings b
         JOIN skolske_obvody.districts d ON d.id = '{district_id}'
         WHERE public.ST_Within(b.geom, d.geom)
     """)
-    mrk_building_count = int(bld_rows[0]["n"]) if bld_rows else 0
+    n_buildings = int(bld_rows[0]["n"]) if bld_rows else 0
+    n_demo = int(bld_rows[0]["n_demo"]) if bld_rows else 0
+    is_demo = n_demo > 0
 
-    if not mrk_rows or mrk_rows[0]["district_area_m2"] is None:
+    provenance = {
+        "source": "Atlas rómskych komunít 2019 (mrk_atlas + mrk_buildings)",
+        "data_year": 2019,
+        "obec_atlas_category": obec_category,
+        "obec_name": obec_name,
+        "mrk_building_count_in_district": n_buildings,
+        "mrk_building_demo_count": n_demo,
+        "building_signal_min": MRK_BUILDING_SIGNAL_MIN,
+        "caveat": "Atlas 2019; obecná kategória je kontext, nie per-obvod podiel",
+    }
+
+    if obec_category is None and n_buildings == 0:
         return Verdict(
             district_id=district_id,
             condition_code="Pe",
             value=V.NOT_EVALUATED,
             confidence=0.0,
             data_completeness=0.0,
-            provenance={"reason": "district geom unavailable for MRK intersection"},
+            provenance=provenance,
             methodology=_METHODOLOGY,
-            evidence_text="NEVYHODNOTENÉ: geometria obvodu nedostupná pre MRK analýzu.",
+            evidence_text=(
+                "NEVYHODNOTENÉ: pre obec nie je v Atlase MRK 2019 žiadny kontext "
+                "ani lokality v obvode. Analytický signál — nevstupuje do zákonného semaforu."
+            ),
         )
 
-    mrk_area = float(mrk_rows[0]["mrk_area_m2"] or 0)
-    district_area = float(mrk_rows[0]["district_area_m2"] or 1)
-    mrk_share = mrk_area / district_area if district_area > 0 else 0.0
-
-    has_atlas_overlap = mrk_area > 0
-
-    if not has_atlas_overlap and mrk_building_count == 0:
-        value = V.NOT_EVALUATED
-        evidence = (
-            "NEVYHODNOTENÉ: žiadne MRK Atlas polygóny ani MRK budovy v tomto obvode. "
-            "Analytický signál — nevstupuje do zákonného semaforu."
-        )
-    elif mrk_share > PE_MRK_AREA_THRESHOLD:
+    if n_buildings >= MRK_BUILDING_SIGNAL_MIN:
         value = V.SIGNAL
         evidence = (
-            f"SIGNÁL: MRK plocha = {round(mrk_share * 100, 1)}% plochy obvodu "
-            f"(prah: {PE_MRK_AREA_THRESHOLD * 100}%). "
-            f"MRK budovy v obvode: {mrk_building_count}. "
-            "Dáta: Atlas MRK 2019 — analytický signál, nie zákonný verdikt."
+            f"SIGNÁL: v obvode je {n_buildings} budov(y) marginalizovanej komunity "
+            f"(Atlas MRK 2019, kategória obce: {obec_category or 'neznáma'}). "
+            "Možný kontext segregácie/inklúzie — analytický signál, nie zákonný verdikt."
+            + (" [DEMO inklúzia]" if is_demo else "")
         )
+        confidence = 0.5
     else:
         value = V.NO_SIGNAL
         evidence = (
-            f"BEZ SIGNÁLU: MRK plocha = {round(mrk_share * 100, 1)}% plochy obvodu "
-            f"(prah: {PE_MRK_AREA_THRESHOLD * 100}%). "
-            f"MRK budovy: {mrk_building_count}. "
-            "Atlas MRK 2019 — analytický signál."
+            f"BEZ SIGNÁLU na úrovni lokality: obec Prešov má v Atlase MRK 2019 kategóriu "
+            f"„{obec_category or 'neznáma'}“ (kontext obce), ale v tomto obvode nie sú "
+            f"lokality MRK ({n_buildings} budov). Obecná kategória nie je per-obvod podiel. "
+            "Analytický signál — nevstupuje do zákonného semaforu."
         )
-
-    provenance = {
-        "source": "Atlas MRK 2019 (mrk_atlas, q7) + mrk_buildings (q7)",
-        "data_year": 2019,
-        "mrk_area_m2": round(mrk_area, 1),
-        "district_area_m2": round(district_area, 1),
-        "mrk_share_pct": round(mrk_share * 100, 2),
-        "mrk_building_count": mrk_building_count,
-        "threshold_pct": PE_MRK_AREA_THRESHOLD * 100,
-        "caveat": "Atlas 2019 — 6 rokov starý; signál len indikatívny",
-    }
+        confidence = 0.3
 
     return Verdict(
         district_id=district_id,
         condition_code="Pe",
         value=value,
-        confidence=0.5 if has_atlas_overlap else 0.0,
-        data_completeness=0.5 if has_atlas_overlap else 0.0,
+        confidence=confidence,
+        data_completeness=0.4,
         provenance=provenance,
         methodology=_METHODOLOGY,
         evidence_text=evidence,
         is_proxy=True,
+        is_mock=is_demo,
     )

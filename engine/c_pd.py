@@ -1,16 +1,26 @@
 """
-P-d — Jazykové právo (Language rights indicator).
+P-d — Bariéry (cesty, koľaje) — physical barriers on the home→school route.
 
-METHODOLOGY §P-d:
-  Without a minority-language nárok dataset, value = INSUFFICIENT_DATA.
-  school.teaching_language IS available (WFS q9) — stored informational only.
-  municipality.minority_language IS available for some municipalities.
+METHODOLOGY §P-d (labels.ts canonical = "Bariéry (cesty, koľaje)"):
+  §44 ods. 8 písm. d) (metodika): the route from home to school should not cross
+  a busy road without a crossing, nor a railway without an underpass.
 
-  For Prešov: no minority language in municipality record → P-d = INSUFFICIENT_DATA.
-  For municipalities with minority_language set: flag if school teaching_language
-  does not match, but still INSUFFICIENT_DATA (Fáza 2 for legal verdict).
+  Computing this honestly requires a dataset of barrier features (railway lines,
+  class-I/II roads WITH the locations of legal crossings) AND the pupil's pedestrian
+  route. We have road_network (road centerlines, classes I/II/III) but:
+    - no railway geometry,
+    - no crossing/underpass locations,
+    - no per-pupil route barrier intersection model.
+  A barrier verdict computed without crossing data would be misleading (every
+  district touches a class-I road), so we return INSUFFICIENT_DATA honestly.
 
-  Never a legal verdict. Confidence = 0.0.
+  Value:
+    INSUFFICIENT_DATA = no barrier dataset (railway + crossings) available.
+  This is a risk INDICATOR (Pd ∈ INDICATOR_CONDITIONS); INSUFFICIENT_DATA can
+  push to ORANGE but never RED.
+
+  IMPORTANT: P-d is NOT about language. Minority-language teaching is handled as
+  "podnet nad rámec § 44 (jazyk)" via a separate non-§44 finding — never under P-d.
 """
 
 from __future__ import annotations
@@ -20,61 +30,52 @@ from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
 _METHODOLOGY = {
-    "rule": "Pd-language-insufficient",
+    "rule": "Pd-barriers-insufficient",
     "version": METHODOLOGY_VERSION,
     "description": (
-        "Vyučovací jazyk školy (WFS q9) je dostupný. "
-        "Jazykový nárok dieťaťa v obvode nie je dostupný (GAP). "
-        "Bez dát o jazykovom nároku právny verdikt nie je možný."
+        "Fyzické bariéry na trase domov→škola (rušná cesta bez priechodu, "
+        "železnica bez podchodu). Vyžaduje dataset bariér (železnice + polohy "
+        "priechodov/podchodov) a pešiu trasu žiaka. Tieto dáta nie sú dostupné."
     ),
-    "gap": "Dataset jazykového nároku (municipality minority language enrollment) not available",
+    "data_available": "road_network (osi ciest I/II/III) — bez železníc a bez priechodov",
+    "gap": "železničné línie + polohy priechodov/podchodov; bez nich je verdikt zavádzajúci",
     "law_ref": "§44 ods. 8 písm. d)",
-    "never_claims": "porušenie jazykového práva ako zákonný verdikt (Fáza 2)",
-    "gatekeeping": "INSUFFICIENT_DATA nikdy nezhoršuje zákonný semafor",
+    "never_claims": "jazykové právo (to nie je P-d); bariéra bez dát o priechodoch",
+    "gatekeeping": "rizikový indikátor — INSUFFICIENT_DATA môže posunúť na ORANGE, nikdy nie RED",
 }
 
 
 def check_pd(district: dict) -> Verdict:
     district_id = district["id"]
-    school_id = district.get("school_id")
-    municipality_id = district.get("municipality_id")
-    teaching_language = district.get("teaching_language")
+    school_name = district.get("school_name", "")
 
-    # Get school teaching language if school_id available
-    school_lang = None
-    school_name = ""
-    if school_id:
-        rows = query_sql(f"""
-            SELECT teaching_language, name FROM skolske_obvody.schools
-            WHERE id = '{school_id}'
-        """)
-        if rows:
-            school_lang = rows[0].get("teaching_language")
-            school_name = rows[0].get("name", "")
-
-    # Get municipality minority language
-    mun_minority = None
-    if municipality_id:
-        rows = query_sql(f"""
-            SELECT minority_language FROM skolske_obvody.municipalities
-            WHERE id = '{municipality_id}'
-        """)
-        if rows:
-            mun_minority = rows[0].get("minority_language")
+    # Honest signal of what road data exists near the district (centerlines only).
+    class_i_rows = query_sql(f"""
+        SELECT count(*) AS n
+        FROM skolske_obvody.road_network r
+        JOIN skolske_obvody.districts d ON d.id = '{district_id}'
+        WHERE r.class IN ('I', 'II')
+          AND public.ST_Intersects(r.geom, d.geom)
+    """)
+    class_i_n = int(class_i_rows[0]["n"]) if class_i_rows else 0
 
     provenance = {
-        "source": "schools.teaching_language (WFS q9) + municipalities.minority_language (partial)",
-        "school_teaching_language": school_lang,
-        "municipality_minority_language": mun_minority,
-        "gap": "jazykový nárok dieťaťa v obvode — dataset nedostupný",
-        "action_required": "Dataset jazykového nároku (CVTI/RÚŠS) odblokuje Fáza 2.",
+        "source": "road_network (osi ciest I/II/III, q*) — bez železníc a priechodov",
+        "school_name": school_name,
+        "class_i_ii_road_segments_in_district": class_i_n,
+        "gap": "železničné línie + polohy priechodov/podchodov nie sú v DB",
+        "action_required": (
+            "Import železníc (OSM railway) a polôh priechodov/podchodov "
+            "odblokuje výpočet bariér na trase."
+        ),
     }
 
     evidence = (
-        f"MÁLO DÁT: jazykový nárok dieťaťa v obvode nie je dostupný (GAP). "
-        f"Škola {school_name}: vyuč. jazyk = {school_lang or 'N/A'}. "
-        f"Obec: menšinový jazyk = {mun_minority or 'žiaden/neznámy'}. "
-        "Indikátor nevstupuje do zákonného stavu (Fáza 2)."
+        "MÁLO DÁT: chýba dataset bariér (železnice + polohy priechodov/podchodov), "
+        "preto sa fyzické bariéry na trase domov→škola nedajú overiť. "
+        f"V obvode je {class_i_n} úsek(ov) ciest I/II. triedy, ale bez polôh priechodov "
+        "by bol verdikt zavádzajúci. "
+        "Indikátor môže posunúť na ORANGE, nikdy nie RED. (P-d sa netýka jazyka.)"
     )
 
     return Verdict(
