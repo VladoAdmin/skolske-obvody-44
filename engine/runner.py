@@ -29,6 +29,7 @@ from engine.c_pc import check_pc
 from engine.c_pd import check_pd
 from engine.c_pe import check_pe
 from engine.c_pf import check_pf
+from engine.c_lang import check_lang
 from engine.compose import compose_color, LEGAL_CONDITIONS, INDICATOR_CONDITIONS, SIGNAL_CONDITIONS
 from engine.constants import ENGINE_VERSION, PRESOV_MUN_ID
 from engine.verdict import Verdict
@@ -112,7 +113,16 @@ RETURNING id
     try:
         result = exec_sql(sql)
         if result.get("ok"):
-            return verdict_id
+            # On UPSERT-update the stored row keeps its original id (not the freshly
+            # generated verdict_id), so re-fetch the canonical id to keep the
+            # findings.verdict_id FK valid across re-runs.
+            row = query_sql(
+                f"SELECT id FROM skolske_obvody.verdicts "
+                f"WHERE district_id = '{v.district_id}' "
+                f"AND condition_code = '{v.condition_code}' "
+                f"AND engine_version = '{v.engine_version}' LIMIT 1"
+            )
+            return row[0]["id"] if row else verdict_id
         else:
             print(f"  WARN: verdict write failed for {v.condition_code}/{v.district_id}: "
                   f"{result.get('message', '')[:120]}", file=sys.stderr)
@@ -128,6 +138,8 @@ def _write_finding(
     condition_code: str,
     value: str,
     evidence_text: str,
+    is_demo: bool = False,
+    tag: Optional[str] = None,
 ) -> None:
     """Write a finding for non-PASS / non-green verdicts."""
     # Severity mapping
@@ -152,12 +164,13 @@ def _write_finding(
 
     finding_id = str(uuid.uuid4())
     evid_tag = f"$_fevid_{finding_id[:8]}$"
+    tag_sql = f"'{tag}'" if tag else "NULL"
 
     sql = f"""
 INSERT INTO skolske_obvody.findings (
     id, verdict_id, district_id, municipality_id,
     condition_code, severity, status, evidence_text,
-    engine_version, created_at
+    engine_version, is_demo, tag, created_at
 ) VALUES (
     '{finding_id}',
     '{verdict_id}',
@@ -168,12 +181,16 @@ INSERT INTO skolske_obvody.findings (
     'open',
     {evid_tag}{evidence_text[:500]}{evid_tag},
     '{ENGINE_VERSION}',
+    {'TRUE' if is_demo else 'FALSE'},
+    {tag_sql},
     now()
 )
 ON CONFLICT (district_id, condition_code, engine_version)
 DO UPDATE SET
     severity = EXCLUDED.severity,
     evidence_text = EXCLUDED.evidence_text,
+    is_demo = EXCLUDED.is_demo,
+    tag = EXCLUDED.tag,
     created_at = EXCLUDED.created_at
 """
     try:
@@ -182,6 +199,43 @@ DO UPDATE SET
             print(f"  WARN: finding write failed: {result.get('message', '')[:120]}", file=sys.stderr)
     except Exception as ex:
         print(f"  ERROR writing finding: {ex}", file=sys.stderr)
+
+
+def _write_demo_s2_finding(
+    verdict_id: str, district_id: str, municipality_id: str
+) -> bool:
+    """
+    Emit a clearly-flagged DEMO S2 (topology) finding when this district is part
+    of a demo overlap (district_overlaps.is_demo=TRUE). Real geometry stays PASS;
+    this finding is purely illustrative and badged DEMO. Returns True if written.
+    """
+    rows = query_sql(f"""
+        SELECT
+            o.overlap_area_m2,
+            CASE WHEN o.district_a_id = '{district_id}' THEN db.name ELSE da.name END AS partner_name
+        FROM skolske_obvody.district_overlaps o
+        LEFT JOIN skolske_obvody.districts da ON da.id = o.district_a_id
+        LEFT JOIN skolske_obvody.districts db ON db.id = o.district_b_id
+        WHERE o.is_demo = TRUE
+          AND ('{district_id}' = o.district_a_id::text OR '{district_id}' = o.district_b_id::text)
+    """)
+    if not rows:
+        return False
+
+    area = sum(float(r["overlap_area_m2"] or 0) for r in rows)
+    partners = sorted({r["partner_name"] for r in rows if r["partner_name"]})
+    evidence = (
+        f"DEMO topológia: ukážkový prekryv obvodov s {', '.join(partners)} "
+        f"({round(area)} m²). Reálna geometria Prešova prekryvy NEMÁ (S2 = PASS); "
+        "toto je len demonštračná vrstva. Reálna geometria ani priradenie adries "
+        "sa nemenia, semafor sa nezhoršuje."
+    )
+    _write_finding(
+        verdict_id, district_id, municipality_id,
+        "S2", "FAIL", evidence,
+        is_demo=True, tag=f"demo:s2:{district_id[:8]}",
+    )
+    return True
 
 
 def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
@@ -242,11 +296,15 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
         v_pe = check_pe(district, municipality_id)
         district_verdicts["Pe"] = v_pe
 
-        # P-f (not evaluated)
+        # P-f (demografia / kapacita signal)
         v_pf = check_pf(district)
         district_verdicts["Pf"] = v_pf
 
-        # Compose semafor
+        # JAZYK — podnet nad rámec § 44 (NEVER in semafor; compose_color ignores it).
+        v_lang = check_lang(district)
+        district_verdicts["JAZYK"] = v_lang
+
+        # Compose semafor (JAZYK is not in any semafor group, so it is ignored)
         composition = compose_color(district_verdicts)
         color = composition["color"]
 
@@ -256,15 +314,33 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
               f"Pd={v_pd.value} | Pe={v_pe.value} Pf={v_pf.value}")
 
         # Write verdicts to DB
+        s2_verdict_id = None
         for code, v in district_verdicts.items():
             vid = _write_verdict(v)
             if vid:
                 verdicts_written += 1
+                if code == "S2":
+                    s2_verdict_id = vid
+                # JAZYK only surfaces a finding when there is an actual podnet (SIGNAL);
+                # the NOT_EVALUATED "no podnet" case must not clutter the register.
+                if code == "JAZYK" and v.value != "SIGNAL":
+                    continue
+                demo_tag = f"demo:{code.lower()}:{district_id[:8]}" if v.is_mock else None
                 _write_finding(
                     vid, district_id, municipality_id,
                     code, v.value, v.evidence_text,
+                    is_demo=v.is_mock,
+                    tag=demo_tag,
                 )
                 findings_written += 1
+
+        # S2 DEMO topology finding: real geometry is PASS, but if a clearly-flagged
+        # demo overlap layer exists for this district, surface it as a DEMO finding
+        # (register + map) WITHOUT degrading the real S2 verdict or the semafor.
+        if s2_verdict_id and _write_demo_s2_finding(
+            s2_verdict_id, district_id, municipality_id
+        ):
+            findings_written += 1
 
         results.append({
             "district_id": district_id,
