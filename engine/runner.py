@@ -140,8 +140,8 @@ def _write_finding(
     evidence_text: str,
     is_demo: bool = False,
     tag: Optional[str] = None,
-) -> None:
-    """Write a finding for non-PASS / non-green verdicts."""
+) -> bool:
+    """Write a finding for non-PASS / non-green verdicts. Returns True if written."""
     # Severity mapping
     severity_map = {
         "FAIL": "critical",
@@ -156,9 +156,11 @@ def _write_finding(
         "PASS": "info",
     }
     severity = severity_map.get(value, "info")
-    # Skip writing findings for PASS and pure info conditions
-    if value == "PASS":
-        return
+    # Skip writing findings for clean / no-issue decisive states. The register
+    # surfaces problems (FAIL/RISK/SIGNAL/…); PASS and NO_SIGNAL are "all good"
+    # and must not clutter it.
+    if value in ("PASS", "NO_SIGNAL"):
+        return False
     if value in ("NOT_EVALUATED", "ILUSTRATIVE_AVAILABLE") and condition_code in ("Pf", "Pc"):
         severity = "info"
 
@@ -197,8 +199,11 @@ DO UPDATE SET
         result = exec_sql(sql)
         if not result.get("ok"):
             print(f"  WARN: finding write failed: {result.get('message', '')[:120]}", file=sys.stderr)
+            return False
+        return True
     except Exception as ex:
         print(f"  ERROR writing finding: {ex}", file=sys.stderr)
+        return False
 
 
 def _write_demo_s2_finding(
@@ -238,12 +243,46 @@ def _write_demo_s2_finding(
     return True
 
 
+def _cleanup_stale_findings(
+    municipality_id: str,
+    engine_version: str,
+    keep_keys: set,
+) -> int:
+    """
+    Delete findings for this engine_version + municipality that were NOT written
+    in the current run (i.e. their condition flipped to PASS/NO_SIGNAL). Keeps the
+    register/map consistent with the single current engine run. Returns delete count.
+    """
+    rows = query_sql(
+        f"SELECT id, district_id, condition_code FROM skolske_obvody.findings "
+        f"WHERE municipality_id = '{municipality_id}' "
+        f"AND engine_version = '{engine_version}'"
+    )
+    stale_ids = [
+        r["id"] for r in rows
+        if (r["district_id"], r["condition_code"]) not in keep_keys
+    ]
+    if not stale_ids:
+        return 0
+    id_list = ", ".join(f"'{i}'" for i in stale_ids)
+    result = exec_sql(
+        f"DELETE FROM skolske_obvody.findings WHERE id IN ({id_list})"
+    )
+    if not result.get("ok"):
+        print(f"  WARN: stale findings cleanup failed: {result.get('message','')[:120]}",
+              file=sys.stderr)
+        return 0
+    return len(stale_ids)
+
+
 def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
     """
     Run all checkers for all districts in the given municipality.
     Returns list of per-district result dicts (for report generation).
     """
     validate_config()
+    from engine.demo_inputs import reset_cache
+    reset_cache()
     print(f"\n{'='*70}")
     print(f"§ 44 Compliance Engine  v{ENGINE_VERSION}")
     print(f"Municipality: {municipality_id}")
@@ -255,6 +294,7 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
     results = []
     verdicts_written = 0
     findings_written = 0
+    written_finding_keys: set[tuple[str, str]] = set()
 
     for district in districts:
         district_id = district["id"]
@@ -314,33 +354,23 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
               f"Pd={v_pd.value} | Pe={v_pe.value} Pf={v_pf.value}")
 
         # Write verdicts to DB
-        s2_verdict_id = None
         for code, v in district_verdicts.items():
             vid = _write_verdict(v)
             if vid:
                 verdicts_written += 1
-                if code == "S2":
-                    s2_verdict_id = vid
                 # JAZYK only surfaces a finding when there is an actual podnet (SIGNAL);
                 # the NOT_EVALUATED "no podnet" case must not clutter the register.
                 if code == "JAZYK" and v.value != "SIGNAL":
                     continue
                 demo_tag = f"demo:{code.lower()}:{district_id[:8]}" if v.is_mock else None
-                _write_finding(
+                if _write_finding(
                     vid, district_id, municipality_id,
                     code, v.value, v.evidence_text,
                     is_demo=v.is_mock,
                     tag=demo_tag,
-                )
-                findings_written += 1
-
-        # S2 DEMO topology finding: real geometry is PASS, but if a clearly-flagged
-        # demo overlap layer exists for this district, surface it as a DEMO finding
-        # (register + map) WITHOUT degrading the real S2 verdict or the semafor.
-        if s2_verdict_id and _write_demo_s2_finding(
-            s2_verdict_id, district_id, municipality_id
-        ):
-            findings_written += 1
+                ):
+                    written_finding_keys.add((district_id, code))
+                    findings_written += 1
 
         results.append({
             "district_id": district_id,
@@ -359,9 +389,19 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
             "reason": composition["reason"],
         })
 
+    # --- Stale-findings cleanup (idempotency) ---
+    # A condition that flips to PASS/NO_SIGNAL on a re-run no longer emits a finding,
+    # so its previous finding (same engine_version) would otherwise linger and
+    # pollute the register/map. Delete every finding for this engine_version that
+    # was NOT (re)written this run, scoped to this municipality.
+    stale_deleted = _cleanup_stale_findings(
+        municipality_id, ENGINE_VERSION, written_finding_keys
+    )
+
     print(f"\n{'='*70}")
     print(f"Verdicts written: {verdicts_written}")
     print(f"Findings written: {findings_written}")
+    print(f"Stale findings deleted: {stale_deleted}")
     print(f"{'='*70}\n")
 
     return results

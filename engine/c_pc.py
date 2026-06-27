@@ -26,6 +26,7 @@ import urllib.error
 from datetime import datetime, timedelta, timezone
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -113,6 +114,41 @@ def _call_google_routes(
 def check_pc(district: dict) -> Verdict:
     district_id = district["id"]
     school_id = district.get("school_id")
+
+    # DEMO MODE: complete MHD model (transfers + minutes) → decisive PASS/FAIL.
+    # In demo mode P-c is a real risk indicator (not illustrative): >= 2 transfers
+    # means poor accessibility (§ 44 ods. 8 písm. c), can push to ORANGE.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("pc_transfers") is not None:
+        transfers = int(demo["pc_transfers"])
+        minutes = demo.get("pc_total_minutes")
+        is_fail = transfers >= 2
+        if is_fail:
+            evidence = (
+                f"FAIL [DEMO]: modelovaná MHD trasa do školy má {transfers} prestupy "
+                f"({minutes} min). Viac ako jeden prestup = slabá dostupnosť MHD "
+                "(§ 44 ods. 8 písm. c). Ukážkové dáta."
+            )
+        else:
+            evidence = (
+                f"PASS [DEMO]: MHD trasa do školy má {transfers} prestup(ov) "
+                f"({minutes} min) — dostupné bez nadmerného prestupovania. Ukážkové dáta."
+            )
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pc",
+            value=V.FAIL if is_fail else V.PASS,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — MHD dostupnosť (ukážkový model)", "demo": True,
+                        "transfers": transfers, "total_minutes": minutes,
+                        "max_transfers_ok": 1},
+            methodology={**_METHODOLOGY, "rule": "Pc-transit-demo",
+                         "threshold_transfers": 1},
+            evidence_text=evidence,
+            is_illustrative=False,
+            is_mock=True,
+        )
 
     if not school_id:
         return _no_data_verdict(district_id, "school_id IS NULL")

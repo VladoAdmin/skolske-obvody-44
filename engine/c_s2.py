@@ -17,6 +17,7 @@ Evidence: record overlap area and partner district for each FAIL.
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -38,10 +39,70 @@ _METHODOLOGY = {
 }
 
 
+def _check_s2_demo(district: dict, demo: dict, municipality_id: str) -> Verdict:
+    """DEMO Š2: overlap flag drives a decisive PASS/FAIL with a named partner."""
+    district_id = district["id"]
+    has_overlap = bool(demo.get("s2_overlap"))
+    if not has_overlap:
+        return Verdict(
+            district_id=district_id,
+            condition_code="S2",
+            value=V.PASS,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — topológia (ukážkové dáta)", "demo": True,
+                        "overlap": False},
+            methodology={**_METHODOLOGY, "rule": "Š2-overlap-demo"},
+            evidence_text=(
+                "PASS [DEMO]: obvod pokrýva svoje územie bez prekryvu s inými obvodmi "
+                "rovnakého typu. Ukážkové dáta."
+            ),
+            is_mock=True,
+        )
+    # Find the demo overlap partner (district_overlaps.is_demo).
+    rows = query_sql(f"""
+        SELECT o.overlap_area_m2,
+            CASE WHEN o.district_a_id = '{district_id}' THEN db.name ELSE da.name END AS partner_name
+        FROM skolske_obvody.district_overlaps o
+        LEFT JOIN skolske_obvody.districts da ON da.id = o.district_a_id
+        LEFT JOIN skolske_obvody.districts db ON db.id = o.district_b_id
+        WHERE o.is_demo = TRUE
+          AND ('{district_id}' = o.district_a_id::text OR '{district_id}' = o.district_b_id::text)
+    """)
+    area = sum(float(r["overlap_area_m2"] or 0) for r in rows)
+    partners = sorted({r["partner_name"] for r in rows if r["partner_name"]}) or ["susedný obvod"]
+    evidence = (
+        f"FAIL [DEMO]: obvod sa prekrýva s {', '.join(partners)} "
+        f"({round(area)} m² dvojitého pokrytia). Tie isté ulice patria dvom obvodom "
+        "rovnakého typu (§ 44 ods. 1 a 7). Ukážková topologická vrstva — reálna "
+        "geometria Prešova prekryvy nemá."
+    )
+    return Verdict(
+        district_id=district_id,
+        condition_code="S2",
+        value=V.FAIL,
+        confidence=DEMO_CONFIDENCE,
+        data_completeness=DEMO_COMPLETENESS,
+        provenance={"source": "DEMO — topológia (ukážková vrstva prekryvu)", "demo": True,
+                    "overlap": True, "overlap_partners": partners,
+                    "overlap_area_m2": round(area, 1)},
+        methodology={**_METHODOLOGY, "rule": "Š2-overlap-demo"},
+        evidence_text=evidence,
+        is_mock=True,
+    )
+
+
 def check_s2(district: dict, all_districts: list[dict], municipality_id: str) -> Verdict:
     district_id = district["id"]
     school_type = district.get("school_type")
     teaching_language = district.get("teaching_language")
+
+    # DEMO MODE: topology input → decisive PASS/FAIL, flagged DEMO. The real
+    # geometry is unchanged (no overlap); the demo overlap layer makes the
+    # double-coverage violation type demonstrable.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("s2_overlap") is not None:
+        return _check_s2_demo(district, demo, municipality_id)
 
     if not school_type:
         return Verdict(

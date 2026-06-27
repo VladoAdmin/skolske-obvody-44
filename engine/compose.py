@@ -36,7 +36,10 @@ SIGNAL_CONDITIONS = {"Pe", "Pf"}
 RED_TRIGGERS = {V.FAIL}
 # Values that cause ORANGE (in legal conditions: INCOMPLETE; in indicators: RISK or INSUFFICIENT_DATA)
 ORANGE_LEGAL_TRIGGERS = {V.INCOMPLETE}
-ORANGE_INDICATOR_TRIGGERS = {V.RISK, V.INSUFFICIENT_DATA}
+# An indicator that FAILs (e.g. Pa > 2 km, Pc >= 2 transfers, Pd barrier on route)
+# is a real §44 risk and must push the semafor to ORANGE — never RED (legal status
+# stays Š1–Š3 only), but it cannot be silently green.
+ORANGE_INDICATOR_TRIGGERS = {V.RISK, V.INSUFFICIENT_DATA, V.FAIL}
 
 
 def compose_color(verdicts: dict) -> dict:

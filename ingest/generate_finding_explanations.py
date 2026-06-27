@@ -219,7 +219,7 @@ def _store(code: str, value: str, explanation: str) -> bool:
     )
     result = exec_sql(sql)
     if not result.get("ok"):
-        print(f"[explanations] store FAILED for {code}/{severity}: {result}")
+        print(f"[explanations] store FAILED for {code}/{value}: {result}")
         return False
     return True
 

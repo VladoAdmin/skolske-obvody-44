@@ -17,6 +17,7 @@ between FK assignment and spatial count is flagged in evidence.
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -35,10 +36,48 @@ _METHODOLOGY = {
 }
 
 
+def _check_s3_demo(district_id: str, demo: dict, school_type: str) -> Verdict:
+    """DEMO Š3: school-count input drives a decisive PASS(1)/FAIL(0 or >1)."""
+    count = int(demo.get("s3_school_count") or 0)
+    is_pass = count == 1
+    provenance = {
+        "source": "DEMO — kompozícia obvodu (ukážkové dáta)",
+        "demo": True,
+        "public_school_count": count,
+    }
+    methodology = {**_METHODOLOGY, "rule": "Š3-one-school-demo"}
+    if is_pass:
+        evidence = (
+            f"PASS [DEMO]: práve 1 verejná škola typu {school_type} v obvode. Ukážkové dáta."
+        )
+    else:
+        evidence = (
+            f"FAIL [DEMO]: {count} verejné školy typu {school_type} v jednom obvode "
+            "(očakáva sa práve 1). Obvod nemá jednoznačnú kompozíciu (§ 44 ods. 1). "
+            "Ukážkové dáta."
+        )
+    return Verdict(
+        district_id=district_id,
+        condition_code="S3",
+        value=V.PASS if is_pass else V.FAIL,
+        confidence=DEMO_CONFIDENCE,
+        data_completeness=DEMO_COMPLETENESS,
+        provenance=provenance,
+        methodology=methodology,
+        evidence_text=evidence,
+        is_mock=True,
+    )
+
+
 def check_s3(district: dict) -> Verdict:
     district_id = district["id"]
     school_id = district.get("school_id")
     school_type = district.get("school_type", "ZS")
+
+    # DEMO MODE: complete school-count input → decisive PASS(1)/FAIL(>1), DEMO.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("s3_school_count") is not None:
+        return _check_s3_demo(district_id, demo, school_type)
 
     # If FK missing → INCOMPLETE
     if not school_id:

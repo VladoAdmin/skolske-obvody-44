@@ -30,6 +30,7 @@ from engine.constants import (
     V, METHODOLOGY_VERSION,
     PB_PASS_DISTANCE_M, PB_PASS_DURATION_S, PB_RISK_DISTANCE_M,
 )
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -125,10 +126,59 @@ def _sample_points(district_id: str, n: int = MAX_SAMPLES) -> list[dict]:
     return points[:n]
 
 
+def _check_pb_demo(district: dict, demo: dict) -> Verdict:
+    """DEMO P-b: curated walking minutes + distance → decisive PASS/RISK/FAIL."""
+    district_id = district["id"]
+    school_name = district.get("school_name", "")
+    minutes = int(demo["pb_minutes"])
+    dist_m = float(demo.get("pb_distance_m") or 0)
+    dur_s = minutes * 60
+
+    if dist_m <= PB_PASS_DISTANCE_M and dur_s <= PB_PASS_DURATION_S:
+        value = V.PASS
+        evidence = (
+            f"PASS [DEMO]: pešia trasa do školy {school_name} trvá {minutes} min "
+            f"({round(dist_m)} m) — do 30 minút. Ukážkové dáta."
+        )
+    elif dist_m <= PB_RISK_DISTANCE_M:
+        value = V.RISK
+        evidence = (
+            f"RISK [DEMO]: pešia trasa do školy {school_name} trvá {minutes} min "
+            f"({round(dist_m)} m) — viac ako 30 minút (§ 44 ods. 8 písm. b). "
+            "Rizikový indikátor — môže posunúť na ORANGE. Ukážkové dáta."
+        )
+    else:
+        value = V.FAIL
+        evidence = (
+            f"FAIL [DEMO]: pešia trasa do školy {school_name} je {round(dist_m)} m "
+            f"({minutes} min) — nad 4 km. Ukážkové dáta."
+        )
+    return Verdict(
+        district_id=district_id,
+        condition_code="Pb",
+        value=value,
+        confidence=DEMO_CONFIDENCE,
+        data_completeness=DEMO_COMPLETENESS,
+        provenance={"source": "DEMO — pešia trasa (ukážkový model)", "demo": True,
+                    "median_distance_m": round(dist_m, 1), "median_duration_s": dur_s,
+                    "minutes": minutes, "threshold_pass_m": PB_PASS_DISTANCE_M,
+                    "threshold_pass_s": PB_PASS_DURATION_S, "threshold_risk_m": PB_RISK_DISTANCE_M,
+                    "school_name": school_name},
+        methodology={**_METHODOLOGY, "rule": "Pb-walking-demo"},
+        evidence_text=evidence,
+        is_mock=True,
+    )
+
+
 def check_pb(district: dict) -> Verdict:
     district_id = district["id"]
     school_id = district.get("school_id")
     school_type = district.get("school_type", "ZS")
+
+    # DEMO MODE: curated walking time/distance → decisive PASS/RISK/FAIL.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("pb_minutes") is not None:
+        return _check_pb_demo(district, demo)
 
     if not school_id:
         return Verdict(

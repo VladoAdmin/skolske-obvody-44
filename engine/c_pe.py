@@ -27,6 +27,7 @@ METHODOLOGY §P-e (labels.ts canonical = "Sociálny kontext (Atlas MRK)"):
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -54,6 +55,38 @@ _METHODOLOGY = {
 
 def check_pe(district: dict, municipality_id: str) -> Verdict:
     district_id = district["id"]
+
+    # DEMO MODE: complete social-context input → decisive SIGNAL / NO_SIGNAL.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("pe_mrk_signal") is not None:
+        signal = bool(demo["pe_mrk_signal"])
+        if signal:
+            evidence = (
+                "SIGNÁL [DEMO]: v obvode je koncentrácia lokality marginalizovanej "
+                "komunity (Atlas MRK). Možný kontext segregácie/inklúzie pri tvorbe "
+                "obvodu (§ 44 ods. 8 písm. e). Analytický signál — nevstupuje do "
+                "zákonného semaforu. Ukážkové dáta."
+            )
+            value = V.SIGNAL
+        else:
+            evidence = (
+                "PASS [DEMO]: v obvode nie je koncentrácia lokality marginalizovanej "
+                "komunity — obvod nevyčleňuje deti z MRK. Analytický signál nevstupuje "
+                "do zákonného semaforu. Ukážkové dáta."
+            )
+            value = V.PASS
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pe",
+            value=value,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — sociálny kontext (Atlas MRK, ukážkové dáta)",
+                        "demo": True, "mrk_signal": signal},
+            methodology={**_METHODOLOGY, "rule": "Pe-mrk-demo"},
+            evidence_text=evidence,
+            is_mock=True,
+        )
 
     # Obec-level Atlas category (context only).
     cat_rows = query_sql(f"""

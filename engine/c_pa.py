@@ -27,6 +27,7 @@ METHODOLOGY §P-a (labels.ts canonical = "Vzdialenosť ZŠ 1. stupeň ≤ 2 km")
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION, PB_PASS_DISTANCE_M
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -53,6 +54,36 @@ def check_pa(district: dict) -> Verdict:
     district_id = district["id"]
     school_id = district.get("school_id")
     school_name = district.get("school_name", "")
+
+    # DEMO MODE: complete distance input → decisive PASS/FAIL at the 2 km threshold.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("pa_max_distance_m") is not None:
+        max_m = float(demo["pa_max_distance_m"])
+        is_fail = max_m > PB_PASS_DISTANCE_M
+        if is_fail:
+            evidence = (
+                f"FAIL [DEMO]: najvzdialenejšia adresa obvodu je {round(max_m)} m vzdušnou "
+                f"čiarou od pridelenej školy {school_name} (prah 2 000 m pre 1. stupeň). "
+                "Žiak má školu ďalej než 2 km (§ 44 ods. 8 písm. a). Ukážkové dáta."
+            )
+        else:
+            evidence = (
+                f"PASS [DEMO]: najvzdialenejšia adresa obvodu je {round(max_m)} m vzdušnou "
+                f"čiarou od školy {school_name} (≤ 2 km). Ukážkové dáta."
+            )
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pa",
+            value=V.FAIL if is_fail else V.PASS,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — vzdialenosť adresa→škola (ukážkové dáta)",
+                        "demo": True, "max_distance_m": round(max_m, 1),
+                        "threshold_m": PB_PASS_DISTANCE_M, "school_name": school_name},
+            methodology={**_METHODOLOGY, "rule": "Pa-airline-distance-2km-demo"},
+            evidence_text=evidence,
+            is_mock=True,
+        )
 
     if not school_id:
         return Verdict(

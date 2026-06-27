@@ -22,6 +22,7 @@ Proxy methodology:
 from __future__ import annotations
 
 from engine.constants import V, ENGINE_VERSION, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -53,6 +54,11 @@ def check_s1(district: dict, all_districts: list[dict], municipality_id: str) ->
     """
     district_id = district["id"]
 
+    # DEMO MODE: complete address-coverage input → decisive PASS/FAIL, flagged DEMO.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("s1_total_addresses") is not None:
+        return _check_s1_demo(district_id, demo)
+
     # Check if real address_points exist for this municipality
     ap_rows = query_sql(
         f"SELECT COUNT(*) as n FROM skolske_obvody.address_points "
@@ -64,6 +70,46 @@ def check_s1(district: dict, all_districts: list[dict], municipality_id: str) ->
         return _check_s1_real(district_id, municipality_id, address_point_count)
     else:
         return _check_s1_proxy(district_id, municipality_id, all_districts)
+
+
+def _check_s1_demo(district_id: str, demo: dict) -> Verdict:
+    """DEMO Š1: complete address-coverage input drives a decisive PASS/FAIL."""
+    total = int(demo.get("s1_total_addresses") or 0)
+    uncovered = int(demo.get("s1_uncovered") or 0)
+    wrong = int(demo.get("s1_wrong_district") or 0)
+    is_pass = uncovered == 0 and wrong == 0
+    provenance = {
+        "source": "DEMO — kompletné adresné pokrytie (ukážkové dáta)",
+        "demo": True,
+        "total_addresses": total,
+        "uncovered_count": uncovered,
+        "wrong_district_count": wrong,
+        "method": "DEMO: každá adresa priradená práve jednému obvodu; kontrola nesprávneho priradenia",
+    }
+    methodology = {**_METHODOLOGY, "rule": "Š1-coverage-demo"}
+    if is_pass:
+        evidence = (
+            f"PASS [DEMO]: všetkých {total} adries obvodu patrí do správneho obvodu "
+            "(0 nepokrytých, 0 v nesprávnom obvode). Ukážkové dáta — demonštrácia "
+            "kompletného Registra adries."
+        )
+    else:
+        evidence = (
+            f"FAIL [DEMO]: z {total} adries je {wrong} priradených do NESPRÁVNEHO obvodu "
+            f"a {uncovered} nepokrytých. Adresy žiakov nepatria do správneho obvodu "
+            "(§ 44 ods. 1). Ukážkové dáta."
+        )
+    return Verdict(
+        district_id=district_id,
+        condition_code="S1",
+        value=V.PASS if is_pass else V.FAIL,
+        confidence=DEMO_CONFIDENCE,
+        data_completeness=DEMO_COMPLETENESS,
+        provenance=provenance,
+        methodology=methodology,
+        evidence_text=evidence,
+        is_mock=True,
+    )
 
 
 def _check_s1_real(district_id: str, municipality_id: str, ap_count: int) -> Verdict:

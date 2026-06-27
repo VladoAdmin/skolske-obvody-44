@@ -26,6 +26,7 @@ METHODOLOGY §P-d (labels.ts canonical = "Bariéry (cesty, koľaje)"):
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -48,6 +49,36 @@ _METHODOLOGY = {
 def check_pd(district: dict) -> Verdict:
     district_id = district["id"]
     school_name = district.get("school_name", "")
+
+    # DEMO MODE: complete barrier model → decisive PASS/FAIL (barrier on route).
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("pd_barrier") is not None:
+        barrier = bool(demo["pd_barrier"])
+        kind = demo.get("pd_barrier_kind") or "rušná cesta bez priechodu"
+        if barrier:
+            evidence = (
+                f"FAIL [DEMO]: pešia trasa domov→škola kríži bariéru ({kind}) bez "
+                "bezpečného priechodu/podchodu (§ 44 ods. 8 písm. d). Ukážkové dáta. "
+                "(P-d sa netýka jazyka.)"
+            )
+        else:
+            evidence = (
+                "PASS [DEMO]: pešia trasa domov→škola nekríži rušnú cestu bez priechodu "
+                "ani železnicu bez podchodu. Ukážkové dáta. (P-d sa netýka jazyka.)"
+            )
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pd",
+            value=V.FAIL if barrier else V.PASS,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — bariéry na trase (ukážkový model)", "demo": True,
+                        "barrier": barrier, "barrier_kind": kind if barrier else None,
+                        "school_name": school_name},
+            methodology={**_METHODOLOGY, "rule": "Pd-barriers-demo"},
+            evidence_text=evidence,
+            is_mock=True,
+        )
 
     # Honest signal of what road data exists near the district (centerlines only).
     class_i_rows = query_sql(f"""

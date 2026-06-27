@@ -24,6 +24,7 @@ METHODOLOGY §P-f (labels.ts canonical = "Demografia detí"):
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -48,6 +49,41 @@ def check_pf(district: dict) -> Verdict:
     district_id = district["id"]
     school_id = district.get("school_id")
     school_name = district.get("school_name", "")
+
+    # DEMO MODE: complete capacity/enrolment input → decisive SIGNAL / NO_SIGNAL.
+    demo = get_demo_input(district_id)
+    if demo is not None and demo.get("pf_capacity") is not None and demo.get("pf_enrolment") is not None:
+        cap = int(demo["pf_capacity"])
+        enr = int(demo["pf_enrolment"])
+        util = round(enr / cap * 100, 1) if cap > 0 else 0.0
+        over = enr > cap
+        if over:
+            value = V.SIGNAL
+            evidence = (
+                f"SIGNÁL preťaženia [DEMO]: zapísaných žiakov {enr} > kapacita {cap} "
+                f"({util} %). Škola {school_name}. Analytický signál (demografia/kapacita) "
+                "— nevstupuje do zákonného semaforu. Ukážkové dáta."
+            )
+        else:
+            value = V.PASS
+            evidence = (
+                f"PASS [DEMO]: zapísaných žiakov {enr} ≤ kapacita {cap} ({util} %) — "
+                f"kapacita školy {school_name} postačuje. Analytický signál nevstupuje "
+                "do zákonného semaforu. Ukážkové dáta."
+            )
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pf",
+            value=value,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — demografia/kapacita (ukážkové dáta)",
+                        "demo": True, "capacity": cap, "student_count": enr,
+                        "utilization_pct": util},
+            methodology={**_METHODOLOGY, "rule": "Pf-demografia-kapacita-demo"},
+            evidence_text=evidence,
+            is_mock=True,
+        )
 
     capacity = None
     student_count = None

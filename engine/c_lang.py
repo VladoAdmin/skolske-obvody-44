@@ -20,6 +20,7 @@ compose_color ignores it entirely).
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -44,6 +45,32 @@ def check_lang(district: dict) -> Verdict:
     district_id = district["id"]
     school_id = district.get("school_id")
     school_name = district.get("school_name", "")
+
+    # DEMO MODE: jazyk podnet driven by demo input (minority code → SIGNAL).
+    demo = get_demo_input(district_id)
+    if demo is not None:
+        dlang = (demo.get("jazyk_language") or "").strip().upper() or None
+        if dlang and dlang not in _MAJORITY_LANGS:
+            return Verdict(
+                district_id=district_id,
+                condition_code="JAZYK",
+                value=V.SIGNAL,
+                confidence=DEMO_CONFIDENCE,
+                data_completeness=DEMO_COMPLETENESS,
+                provenance={"source": "DEMO — vyučovací jazyk (ukážkové dáta)",
+                            "teaching_language": dlang, "scope": "mimo § 44", "demo": True},
+                methodology=_METHODOLOGY,
+                evidence_text=(
+                    f"PODNET NAD RÁMEC § 44 (jazyk) [DEMO]: pridelená škola {school_name} "
+                    f"vyučuje v menšinovom jazyku ({dlang}). Žiaci, ktorí potrebujú výučbu "
+                    "v slovenčine, musia dochádzať do školy v inom obvode. Toto NIE je "
+                    "§ 44 podmienka a NEVSTUPUJE do semaforu (nepoužíva sa kód P-d). "
+                    "Ukážkové dáta."
+                ),
+                is_mock=True,
+            )
+        # demo present but no minority language → no podnet (handled below as
+        # NOT_EVALUATED via the real path, which is correct for "no jazyk podnet").
 
     lang = None
     is_demo = False
