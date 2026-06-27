@@ -217,6 +217,20 @@ def flow_home(browser, viewport, vp_name) -> FlowResult:
     return f
 
 
+def drill_into_psk(page) -> bool:
+    """The /map view opens at the Slovakia overview; the user clicks the PSK
+    kraj (single purple polygon, stroke #7c3aed) to drill into Prešov districts
+    where the Obvody/Školy/MRK/expert overlays appear. Returns True on success."""
+    purple = page.locator(".leaflet-overlay-pane svg path[stroke='#7c3aed']")
+    if purple.count() == 0:
+        return False
+    purple.first.click(force=True)
+    page.wait_for_timeout(3500)
+    # PSK mode is confirmed by the "Obvody (…)" overlay appearing in the control.
+    labels = page.locator(".leaflet-control-layers-overlays label").all_inner_texts()
+    return any("Obvody" in t for t in labels)
+
+
 def flow_map(browser, viewport, vp_name) -> FlowResult:
     f = FlowResult("Mapa PSK — vykreslenie + vrstvy + declutter", vp_name)
     ctx, page = new_page(browser, viewport, f)
@@ -224,10 +238,17 @@ def flow_map(browser, viewport, vp_name) -> FlowResult:
         page.goto(f"{BASE_URL}/map", wait_until="domcontentloaded")
         # Leaflet container appears once the dynamic map mounts.
         page.wait_for_selector(".leaflet-container", timeout=NAV_TIMEOUT)
-        page.wait_for_timeout(3500)  # let polygons + pins render
+        page.wait_for_timeout(3500)  # let the SK overview render
 
-        # Polygons render as SVG paths in the overlay pane.
-        paths = page.locator(".leaflet-overlay-pane svg path").count()
+        # The map opens at the Slovakia overview — drill into PSK to reach the
+        # district view (this is the real UX path a user takes).
+        drilled = drill_into_psk(page)
+        f.check(drilled,
+                "preklik z prehľadu SR do PSK (Prešov) zobrazil obvody",
+                "nepodarilo sa prekliknúť do PSK (kraj polygón nereagoval)")
+
+        # District polygons render as SVG paths in the custom 'districts' pane.
+        paths = page.locator(".leaflet-districts-pane svg path").count()
         f.check(paths > 0, f"obvody vykreslené ({paths} SVG polygónov)",
                 "žiadne polygóny obvodov sa nevykreslili")
 
@@ -236,20 +257,11 @@ def flow_map(browser, viewport, vp_name) -> FlowResult:
         f.check(layer_ctrl > 0, "ovládač vrstiev (layer control) je prítomný",
                 "ovládač vrstiev chýba")
 
-        # Decluttered by default: MRK and expert overlays OFF. The layer control
-        # renders a checkbox per overlay; assert MRK + expert ones are unchecked.
-        # Expand the control first (hover/click the toggle).
-        try:
-            toggle = page.locator(".leaflet-control-layers-toggle")
-            if toggle.count() > 0:
-                toggle.first.hover()
-                page.wait_for_timeout(400)
-        except PWTimeout:
-            pass
-
+        # Decluttered by default: Obvody + Školy ON; MRK + expert overlays OFF.
         labels = page.locator(".leaflet-control-layers-overlays label").all()
         mrk_off = expert_off = True
         mrk_seen = expert_seen = False
+        districts_on = schools_on = False
         for lab in labels:
             txt = (lab.inner_text() or "").strip()
             cb = lab.locator("input[type=checkbox]")
@@ -257,6 +269,10 @@ def flow_map(browser, viewport, vp_name) -> FlowResult:
                 continue
             checked = cb.first.is_checked()
             low = txt.lower()
+            if low.startswith("obvody"):
+                districts_on = checked
+            if low.startswith("školy"):
+                schools_on = checked
             if "mrk" in low:
                 mrk_seen = True
                 if checked:
@@ -265,12 +281,15 @@ def flow_map(browser, viewport, vp_name) -> FlowResult:
                 expert_seen = True
                 if checked:
                     expert_off = False
+        f.check(districts_on and schools_on,
+                "default ZAPNUTÉ: Obvody + Školy (čistý high-level pohľad)",
+                f"default vrstvy nie sú zapnuté (Obvody={districts_on}, Školy={schools_on})")
         f.check(mrk_seen and mrk_off,
                 "MRK vrstva je v ovládači a je VYPNUTÁ (declutter)",
                 f"MRK vrstva: videná={mrk_seen}, vypnutá={mrk_off}")
-        f.check((not expert_seen) or expert_off,
-                "expert vrstvy sú vypnuté (declutter)",
-                "niektorá expert vrstva je zapnutá by-default")
+        f.check(expert_seen and expert_off,
+                "expert vrstvy sú v ovládači a VYPNUTÉ (declutter)",
+                f"expert vrstvy: videné={expert_seen}, vypnuté={expert_off}")
 
         shoot(page, f, f"map-{vp_name}")
     except Exception as exc:  # noqa: BLE001
@@ -325,28 +344,29 @@ def flow_findings_register(browser, viewport, vp_name) -> FlowResult:
         page.wait_for_load_state("networkidle")
         page.wait_for_timeout(600)
 
-        row = None
-        # On >= sm a <table> renders; on xs a card stack with role=button.
-        table_rows = page.locator("table[aria-label='Register nálezov'] tbody tr")
-        card_rows = page.locator("div[role='button'][aria-label^='Nález pre obvod']")
+        # On >= sm a <table> renders (xs hides it); on xs a card stack with
+        # role=button. Select the VISIBLE variant for the current viewport.
+        table_rows = page.locator("table[aria-label='Register nálezov'] tbody tr:visible")
+        card_rows = page.locator(
+            "div[role='button'][aria-label^='Nález pre obvod']:visible"
+        )
+        clicked = False
         if table_rows.count() > 0:
-            row = table_rows.first
+            # Click the "Stav" cell (index 5) — it has no inner link, so we test
+            # the whole-row onClick navigation, not the district name link.
+            cell = table_rows.first.locator("td").nth(5)
+            cell.click()
+            clicked = True
         elif card_rows.count() > 0:
-            row = card_rows.first
+            card_rows.first.click()
+            clicked = True
 
-        if f.check(row is not None, "v registri sú nálezy na kliknutie",
-                   "register neobsahuje žiadne nálezy"):
-            # Click the row body (avoid the inner district link to test row click).
-            box = row.bounding_box()
-            if box:
-                # click near the right side to avoid the underlined name link
-                page.mouse.click(box["x"] + box["width"] - 30, box["y"] + box["height"] / 2)
-            else:
-                row.click()
+        if f.check(clicked, "v registri sú viditeľné nálezy na kliknutie",
+                   "register neobsahuje žiadne viditeľné nálezy"):
             page.wait_for_load_state("domcontentloaded")
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(900)
             f.check("/districts/" in page.url,
-                    f"klik na riadok naviguje na detail obvodu ({page.url.split('/')[-1][:8]}…)",
+                    f"klik na celý riadok naviguje na detail obvodu ({page.url.split('/')[-1][:8]}…)",
                     f"klik na riadok nenavigoval na /districts/ (url={page.url})")
         shoot(page, f, f"findings-{vp_name}")
     except Exception as exc:  # noqa: BLE001
@@ -459,42 +479,64 @@ def flow_finding_click_draws(browser, viewport, vp_name) -> FlowResult:
         page.wait_for_selector(".leaflet-container", timeout=NAV_TIMEOUT)
         page.wait_for_timeout(3500)
 
+        # Drill into PSK so the district polygons + findings panel are live.
+        drilled = drill_into_psk(page)
+        f.check(drilled, "preklik do PSK pred klikaním na nálezy",
+                "nepodarilo sa prekliknúť do PSK")
+
         # On mobile the findings panel is behind the "Nálezy" tab.
         if viewport is IPHONE_VIEWPORT:
             try:
                 page.get_by_role("button", name="Nálezy").first.click()
-                page.wait_for_timeout(500)
+                page.wait_for_timeout(600)
             except Exception:  # noqa: BLE001
                 pass
 
-        # Findings panel buttons: <button> rows inside the panel list.
-        finding_btns = page.locator("ul li button")
+        # Findings panel list buttons live in the scrollable panel body.
+        finding_btns = page.locator("div.flex-1.overflow-y-auto > ul > li > button")
         n = finding_btns.count()
         if not f.check(n > 0, f"panel nálezov má klikateľné položky ({n})",
                        "panel nálezov je prázdny / bez položiek"):
             shoot(page, f, f"findingclick-{vp_name}")
             return f
 
-        # Baseline SVG path count in the overlay pane.
-        before = page.locator(".leaflet-overlay-pane svg path").count()
+        def map_signature():
+            """Capture map drawing state: stroke-widths of district polygons
+            (highlight bumps weight), dashed route-polyline count, total paths."""
+            return page.evaluate(
+                """() => {
+                  const dp = [...document.querySelectorAll('.leaflet-districts-pane svg path')];
+                  const ws = dp.map(p => p.getAttribute('stroke-width') || '').join(',');
+                  const ov = document.querySelector('.leaflet-overlay-pane svg');
+                  const routes = ov
+                    ? [...ov.querySelectorAll('path')].filter(
+                        p => (p.getAttribute('stroke-dasharray') || '').includes('8')).length
+                    : 0;
+                  const total = document.querySelectorAll('.leaflet-container svg path').length;
+                  return { ws, routes, total };
+                }"""
+            )
 
-        # Click a few findings until the drawing changes (route polyline added,
-        # or a polygon style changes — both manifest as overlay-pane mutations).
+        before = map_signature()
         drew = False
-        for i in range(min(n, 6)):
+        for i in range(min(n, 10)):
             try:
                 finding_btns.nth(i).click()
-                page.wait_for_timeout(900)
+                page.wait_for_timeout(800)
             except Exception:  # noqa: BLE001
                 continue
-            after = page.locator(".leaflet-overlay-pane svg path").count()
-            # A dashed route polyline shows up as an extra <path> with a
-            # dash-array stroke; a boundary highlight bumps a path's weight.
-            dashed = page.locator(".leaflet-overlay-pane svg path[stroke-dasharray='8,5']").count()
-            if after > before or dashed > 0:
+            cur = map_signature()
+            route_added = cur["routes"] > before["routes"]
+            style_changed = cur["ws"] != before["ws"]
+            path_added = cur["total"] > before["total"]
+            if route_added or style_changed or path_added:
                 drew = True
-                f.ok(f"klik na nález #{i} prekreslil mapu "
-                     f"(paths {before}->{after}, dashed-route={dashed})")
+                kind = ("trasa (route polyline)" if route_added
+                        else "zvýraznenie hranice (highlight)" if style_changed
+                        else "nový tvar na mape")
+                f.ok(f"klik na nález #{i} prekreslil mapu: {kind} "
+                     f"(routes {before['routes']}->{cur['routes']}, "
+                     f"total {before['total']}->{cur['total']})")
                 break
         f.check(drew,
                 "klik na nález nakreslil niečo na mape (highlight alebo trasa)",
