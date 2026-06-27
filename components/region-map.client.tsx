@@ -34,6 +34,70 @@ const DEMO_RED_DISTRICT_IDS = new Set<string>([
   DEMO_DISTRICT_NESPORA,
 ])
 
+// DEMO P-f (demografia / kapacita) overcrowding numbers. These must stay in
+// sync with the matching demo P-f finding in
+// scripts/sql/demo_overlap_island.sql (tag demo:demografia:smeralova): the
+// finding text says "počet žiakov 712 prekračuje kapacitu školy 560".
+// schools.capacity / student_count are NULL in the live data for this school,
+// so these are DEMO numbers — surfaced here only to colour/annotate the map.
+const OVERCROWD_DEMO: Record<string, { students: number; capacity: number }> = {
+  [DEMO_DISTRICT_SMERALOVA]: { students: 712, capacity: 560 },
+}
+
+// Ray-casting point-in-polygon against a GeoJSON (Multi)Polygon's OUTER rings.
+// Used to classify which MRK locality vertices the district boundary leaves
+// OUTSIDE the obvod (the P-e segregation / exclusion signal) without pulling in
+// a geometry library.
+function pointInGeom(
+  pt: [number, number], // [lon, lat]
+  geom: Record<string, unknown> | null | undefined
+): boolean {
+  if (!geom) return false
+  const type = geom.type as string | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const coords = geom.coordinates as any
+  if (!coords) return false
+  const polys: number[][][][] =
+    type === 'MultiPolygon' ? coords : type === 'Polygon' ? [coords] : []
+  const [x, y] = pt
+  for (const poly of polys) {
+    const ring = poly[0]
+    if (!ring) continue
+    let inside = false
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const xi = ring[i][0]
+      const yi = ring[i][1]
+      const xj = ring[j][0]
+      const yj = ring[j][1]
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
+        inside = !inside
+      }
+    }
+    if (inside) return true
+  }
+  return false
+}
+
+// Collect outer-ring vertices of a GeoJSON (Multi)Polygon as [lon, lat] pairs.
+function outerRingVertices(
+  geom: Record<string, unknown> | null | undefined
+): [number, number][] {
+  if (!geom) return []
+  const type = geom.type as string | undefined
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const coords = geom.coordinates as any
+  if (!coords) return []
+  const polys: number[][][][] =
+    type === 'MultiPolygon' ? coords : type === 'Polygon' ? [coords] : []
+  const out: [number, number][] = []
+  for (const poly of polys) {
+    const ring = poly[0]
+    if (!ring) continue
+    for (const pt of ring) out.push([pt[0], pt[1]])
+  }
+  return out
+}
+
 // Haversine straight-line distance in metres between two [lat, lon] points.
 function haversineMeters(a: [number, number], b: [number, number]): number {
   const R = 6371000
@@ -636,6 +700,136 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
                 }
               }
 
+              // (4) P-e SEGREGÁCIA (Atlas MRK) — exclusion of the marginalised
+              // Roma community locality by the obvod boundary. Drawn only for
+              // Mirka Nešpora č. 2, the demo district whose seed carries the
+              // P-e segregation SIGNAL. We overlay the REAL MRK locality polygon
+              // (so_mrk_overlays → mrkOverlays prop, from skolske_obvody.mrk_atlas)
+              // and classify its outer-ring vertices: those the obvod boundary
+              // leaves OUTSIDE the obvod are the "vyčlenená / segregačná" signal.
+              if (feature.id === DEMO_DISTRICT_NESPORA) {
+                // The Prešov MRK locality (the single 'large' Atlas polygon that
+                // intersects Prešov obvody). Pick the overlay whose geometry
+                // actually touches this district by classifying its vertices.
+                let drewMrk = false
+                mrkOverlays.forEach((mrk) => {
+                  if (!mrk.geom_geojson) return
+                  const verts = outerRingVertices(mrk.geom_geojson)
+                  if (verts.length === 0) return
+                  const outside = verts.filter(
+                    (v) => !pointInGeom(v, feature.geom_geojson)
+                  )
+                  const inside = verts.length - outside.length
+                  // Only the locality the boundary actually splits (some in, most
+                  // out) carries the exclusion story; skip far-away localities.
+                  if (inside === 0 || outside.length === 0) return
+
+                  // (4a) MRK locality area — strong purple outline so it reads as
+                  // the marginalised-community locality the obvod relates to.
+                  L.geoJSON(mrk.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+                    style: {
+                      color: '#6d28d9', // violet-700 outline
+                      weight: 2.5,
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      fillColor: 'url(#mrkHatch)' as any,
+                      fillOpacity: 1,
+                      dashArray: '4,3',
+                    },
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    pane: 'overlaps' as any,
+                  })
+                    .bindTooltip(
+                      '<strong>MRK lokalita (Atlas MRK)</strong><br/>Hranica obvodu ju rozdeľuje — väčšina ostáva mimo obvodu ZŠ Mirka Nešpora č. 2.',
+                      { sticky: true }
+                    )
+                    .addTo(group)
+
+                  // (4b) The EXCLUDED MRK vertices — small violet dots just
+                  // OUTSIDE the obvod boundary, visualising the part of the
+                  // locality the obvod cuts off. Thin the set for legibility.
+                  const step = Math.max(1, Math.round(outside.length / 40))
+                  outside.forEach((v, i) => {
+                    if (i % step !== 0) return
+                    L.circleMarker([v[1], v[0]], {
+                      radius: 3,
+                      fillColor: '#7c3aed',
+                      color: '#4c1d95',
+                      weight: 1,
+                      fillOpacity: 0.9,
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      pane: 'overlaps' as any,
+                    }).addTo(group)
+                  })
+
+                  // (4c) Annotation marker at the excluded-cluster centroid.
+                  const ox =
+                    outside.reduce((a, v) => a + v[0], 0) / outside.length
+                  const oy =
+                    outside.reduce((a, v) => a + v[1], 0) / outside.length
+                  L.marker([oy, ox], {
+                    icon: L.divIcon({
+                      html:
+                        '<div style="background:#6d28d9;color:#fff;font-size:11px;font-weight:700;padding:2px 6px;border-radius:5px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.45);max-width:180px">vyčlenená MRK lokalita<br/><span style="font-weight:500;font-size:10px">segregačný signál (P-e)</span></div>',
+                      className: 'demo-mrk-exclusion-label',
+                      iconSize: [0, 0],
+                      iconAnchor: [0, 0],
+                    }),
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    pane: 'overlaps' as any,
+                  }).addTo(group)
+                  drewMrk = true
+                })
+                if (drewMrk) {
+                  legendRows.push(
+                    '<span style="display:inline-block;width:12px;height:12px;border:2px dashed #6d28d9;background:repeating-linear-gradient(45deg,#7c3aed,#7c3aed 2px,transparent 2px,transparent 5px);margin-right:6px;vertical-align:-2px"></span>vyčlenená MRK lokalita (P-e signál)'
+                  )
+                }
+              }
+
+              // (5) P-f DEMOGRAFIA / KAPACITA — overcrowding. Colour the obvod
+              // school pin + drop a "preplnené" badge showing N žiakov / M
+              // kapacita for the demo district that carries the P-f overcrowding
+              // SIGNAL. Numbers are DEMO (OVERCROWD_DEMO), kept in sync with the
+              // matching finding in scripts/sql/demo_overlap_island.sql.
+              const oc = OVERCROWD_DEMO[feature.id]
+              const schoolGeomPf = feature.school_geom_geojson as
+                | { type: string; coordinates: [number, number] }
+                | null
+              if (oc && schoolGeomPf && schoolGeomPf.type === 'Point') {
+                const [plon, plat] = schoolGeomPf.coordinates
+                const pct = Math.round((oc.students / oc.capacity) * 100)
+                // Red ring around the school to mark it as overcrowded.
+                L.circleMarker([plat, plon], {
+                  radius: 16,
+                  fillColor: '#dc2626',
+                  fillOpacity: 0.18,
+                  color: '#b91c1c',
+                  weight: 2.5,
+                  dashArray: '5,4',
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  pane: 'overlaps' as any,
+                })
+                  .bindTooltip(
+                    `<strong>Preplnené (P-f, demo)</strong><br/>Počet žiakov ${oc.students} prekračuje kapacitu ${oc.capacity} (≈ ${pct} %).<br/>Odhad — podklad pre plánovanie, nie nález o porušení.`,
+                    { sticky: true }
+                  )
+                  .addTo(group)
+                // Badge label with the N / M numbers.
+                L.marker([plat, plon], {
+                  icon: L.divIcon({
+                    html: `<div style="background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.4);transform:translateY(-22px)">${oc.students}/${oc.capacity} žiakov (preplnené)</div>`,
+                    className: 'demo-overcrowd-label',
+                    iconSize: [0, 0],
+                    iconAnchor: [0, 0],
+                  }),
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  pane: 'overlaps' as any,
+                }).addTo(group)
+                legendRows.push(
+                  `<span style="display:inline-block;width:12px;height:12px;border:2px dashed #b91c1c;border-radius:50%;background:rgba(220,38,38,.18);margin-right:6px;vertical-align:-2px"></span>preplnené ${oc.students}/${oc.capacity} (P-f signál)`
+                )
+              }
+
               if (legendRows.length === 0) return
 
               group.addTo(map)
@@ -648,8 +842,17 @@ export function RegionMapClient({ features, schools, mrkOverlays, overlaps = [],
               legend.className = 'demo-finding-legend'
               legend.style.cssText =
                 'position:absolute;left:8px;bottom:24px;z-index:1000;background:rgba(255,255,255,.95);border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.7;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:230px;pointer-events:none'
+              // Footnote: P-e (sociálny kontext) and P-f (demografia) are
+              // SIGNALS (upozornenia), not verdicts — plain-Slovak per
+              // lib/compliance/labels.ts. Shown only when such a signal is drawn.
+              const hasSignal = legendRows.some(
+                (r) => r.includes('P-e') || r.includes('P-f')
+              )
+              const signalNote = hasSignal
+                ? '<div style="margin-top:6px;padding-top:5px;border-top:1px solid #e5e7eb;font-weight:500;color:#6b7280;font-size:10px;line-height:1.5">P-e a P-f sú <strong>signály (upozornenia)</strong>, nie verdikt — § 44 ich priamo nehodnotí.</div>'
+                : ''
               legend.innerHTML =
-                `<div style="font-weight:700;margin-bottom:4px">Nálezy § 44 (demo)</div>${legendRows.join('<br/>')}`
+                `<div style="font-weight:700;margin-bottom:4px">Nálezy § 44 (demo)</div>${legendRows.join('<br/>')}${signalNote}`
               containerRef.current?.appendChild(legend)
               demoLegendRef.current = legend
             }

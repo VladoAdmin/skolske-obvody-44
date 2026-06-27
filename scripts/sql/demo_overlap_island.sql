@@ -241,17 +241,23 @@ WHERE d.id = '022b88de-8f54-43fd-9a37-b165102db9f8'
 ORDER BY v.computed_at DESC
 LIMIT 1;
 
--- 4c) Šmeralova č. 25 — P-f demografia detí (veľa detí oproti kapacite).
+-- 4c) Šmeralova č. 25 — P-f demografia / kapacita: vysoký počet žiakov.
+--     DEMO numbers (schools.capacity / student_count are NULL for this school
+--     in the live data, so no real overcrowding exists yet). The map + findings
+--     list render N (počet žiakov) vs M (kapacita) from the same numbers below;
+--     keep them in sync with components/region-map.client.tsx OVERCROWD_DEMO.
+--       N = 712 žiakov, M = 560 kapacita  →  preplnené o 152 (≈ 127 %).
 INSERT INTO skolske_obvody.findings
   (verdict_id, district_id, municipality_id, condition_code,
    severity, status, evidence_text, engine_version, is_demo, tag)
 SELECT
   v.id, d.id, d.municipality_id, 'Pf',
-  'medium', 'open',
-  'DEMO SIGNÁL (nie verdikt): v obvode ZŠ Šmeralova č. 25 je vysoký počet detí ' ||
-  'oproti kapacite školy — obvod môže byť kapacitne preťažený. Demografia nie ' ||
-  'je podmienkou § 44; ide o podklad pre plánovanie, nie o nález o porušení. ' ||
-  'Demo dáta.',
+  'high', 'open',
+  'DEMO SIGNÁL (nie verdikt): počet žiakov 712 prekračuje kapacitu školy 560 ' ||
+  '(obvod ZŠ Šmeralova č. 25 — preplnené o 152 žiakov, ≈ 127 %). Počet detí v ' ||
+  'obvode súvisí s kapacitou školy; odhad vychádza z dát Štatistického úradu SR. ' ||
+  'Demografia nie je podmienkou § 44 — je to podklad pre plánovanie kapacít, nie ' ||
+  'nález o porušení. Demo čísla.',
   'demo-sprint-m-3', true, 'demo:demografia:smeralova'
 FROM skolske_obvody.districts d
 JOIN skolske_obvody.verdicts v
@@ -263,24 +269,11 @@ WHERE d.id = 'cddfee4e-fb1d-48c1-bbb5-2626ae415f87'
 ORDER BY v.computed_at DESC
 LIMIT 1;
 
--- 4d) Mirka Nešpora č. 2 — P-d jazyková menšina (dopyt po menšinovom jazyku).
-INSERT INTO skolske_obvody.findings
-  (verdict_id, district_id, municipality_id, condition_code,
-   severity, status, evidence_text, engine_version, is_demo, tag)
-SELECT
-  v.id, d.id, d.municipality_id, 'Pd',
-  'medium', 'open',
-  'DEMO SIGNÁL (nie verdikt): v obvode je nezanedbateľný podiel detí s nárokom ' ||
-  'na vzdelávanie v jazyku menšiny, no najbližšia spádová škola vyučuje len v ' ||
-  'slovenčine. § 44 jazykový nárok priamo neposudzuje — je to podnet pre ' ||
-  'zriaďovateľa, nie porušenie. Demo dáta.',
-  'demo-sprint-m-3', true, 'demo:jazyk:nespora'
-FROM skolske_obvody.districts d
-JOIN skolske_obvody.verdicts v
-  ON v.district_id = d.id AND v.condition_code = 'Pd'
-WHERE d.id = '022b88de-8f54-43fd-9a37-b165102db9f8'
-  AND NOT EXISTS (
-    SELECT 1 FROM skolske_obvody.findings WHERE tag = 'demo:jazyk:nespora'
-  )
-ORDER BY v.computed_at DESC
-LIMIT 1;
+-- 4d) REMOVED (bug fix 2026-06-27): a prior demo finding tagged
+--     'demo:jazyk:nespora' attached a "jazyková menšina" (language-minority)
+--     description to condition_code = 'Pd'. That is a MISLABEL — per
+--     lib/compliance/labels.ts, Pd = "Bariéry (cesty, koľaje)", not language.
+--     Language-minority is OUT OF SCOPE pending a product decision and was NOT
+--     moved onto any other § 44 condition. The idempotent DELETE at the top of
+--     this seed (findings WHERE is_demo AND tag LIKE 'demo:%') already removes
+--     any previously-seeded 'demo:jazyk:nespora' row on re-apply.
