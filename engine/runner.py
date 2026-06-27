@@ -275,6 +275,28 @@ def _cleanup_stale_findings(
     return len(stale_ids)
 
 
+def _purge_other_versions(municipality_id: str, keep_version: str) -> None:
+    """
+    Keep exactly ONE engine run in the DB. Delete verdicts + findings for this
+    municipality whose engine_version != the current one, so a re-run after a code
+    change (engine_version is the git short-hash) never leaves a stale parallel run
+    that desyncs verdicts vs findings (the tag-unique index also blocks duplicate
+    demo findings across versions).
+    """
+    dist_filter = (
+        f"district_id IN (SELECT id FROM skolske_obvody.districts "
+        f"WHERE municipality_id = '{municipality_id}')"
+    )
+    for table in ("findings", "verdicts"):
+        res = exec_sql(
+            f"DELETE FROM skolske_obvody.{table} "
+            f"WHERE {dist_filter} AND engine_version <> '{keep_version}'"
+        )
+        if not res.get("ok"):
+            print(f"  WARN: purge {table} failed: {res.get('message','')[:120]}",
+                  file=sys.stderr)
+
+
 def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
     """
     Run all checkers for all districts in the given municipality.
@@ -283,6 +305,8 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
     validate_config()
     from engine.demo_inputs import reset_cache
     reset_cache()
+    # Findings reference verdicts via FK; purge findings first then verdicts.
+    _purge_other_versions(municipality_id, ENGINE_VERSION)
     print(f"\n{'='*70}")
     print(f"§ 44 Compliance Engine  v{ENGINE_VERSION}")
     print(f"Municipality: {municipality_id}")
