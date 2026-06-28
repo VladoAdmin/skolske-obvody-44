@@ -11,10 +11,15 @@ verdict.
 Value:
   SIGNAL        = assigned school teaches in a minority language code
                   (anything other than SK/SLOVE/NULL).
-  NOT_EVALUATED = school teaches in SK / unknown.
+  NO_SIGNAL     = school teaches in Slovak — DECISIVELY evaluated, "bez
+                  jazykového podnetu — vyučovanie v slovenčine".
+  NOT_EVALUATED = teaching language genuinely unknown (real data only). In DEMO
+                  mode JAZYK is ALWAYS decisively evaluated (NO_SIGNAL / SIGNAL),
+                  never the literal NOT_EVALUATED.
 
 condition_code = 'JAZYK' (deliberately NOT in LEGAL/INDICATOR/SIGNAL groups, so
-compose_color ignores it entirely).
+compose_color ignores it entirely — JAZYK never enters the semafor regardless of
+value; it is rendered "mimo semaforu").
 """
 
 from __future__ import annotations
@@ -69,8 +74,24 @@ def check_lang(district: dict) -> Verdict:
                 ),
                 is_mock=True,
             )
-        # demo present but no minority language → no podnet (handled below as
-        # NOT_EVALUATED via the real path, which is correct for "no jazyk podnet").
+        # DEMO present, no minority language → decisively evaluated NO_SIGNAL.
+        # The demo must never show the literal NOT_EVALUATED for JAZYK (owner
+        # requirement): Slovak-teaching districts read "bez jazykového podnetu".
+        return Verdict(
+            district_id=district_id,
+            condition_code="JAZYK",
+            value=V.NO_SIGNAL,
+            confidence=DEMO_CONFIDENCE,
+            data_completeness=DEMO_COMPLETENESS,
+            provenance={"source": "DEMO — vyučovací jazyk (ukážkové dáta)",
+                        "teaching_language": "SK", "scope": "mimo § 44", "demo": True},
+            methodology=_METHODOLOGY,
+            evidence_text=(
+                f"Bez jazykového podnetu: pridelená škola {school_name} vyučuje v "
+                "slovenčine. Jazyk je mimo § 44 — nevstupuje do semaforu. Ukážkové dáta."
+            ),
+            is_mock=True,
+        )
 
     lang = None
     is_demo = False

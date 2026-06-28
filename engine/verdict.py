@@ -7,12 +7,35 @@ All checkers return a Verdict. runner.py collects them and writes to DB.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from engine.constants import ENGINE_VERSION, METHODOLOGY_VERSION, DATASET_VERSION
+
+
+# Inline demo notices the UI must NOT show (the single top page banner is the
+# only demo notice — item 7). The is_mock flag still carries the demo status
+# internally; only the human-facing inline tags are stripped from evidence_text.
+_DEMO_TAG_RE = re.compile(
+    r"\s*\[DEMO[^\]]*\]"                      # [DEMO], [DEMO adresa], [DEMO dáta], ...
+    r"|\s*Ukážková?\s+[^.]*\.?"               # "Ukážkové dáta.", "Ukážková vrstva..."
+    r"|\s*Ukážkové\s+dáta\.?",
+    re.IGNORECASE,
+)
+
+
+def strip_demo_tags(text: str) -> str:
+    """Remove scattered inline [DEMO]/Ukážkové-dáta notices from evidence text."""
+    if not text:
+        return text
+    cleaned = _DEMO_TAG_RE.sub("", text)
+    # Collapse any double spaces left behind, tidy spacing before punctuation.
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([.,;])", r"\1", cleaned)
+    return cleaned.strip()
 
 
 @dataclass
@@ -49,6 +72,6 @@ class Verdict:
             "dataset_version": self.dataset_version,
             "methodology_version": self.methodology_version,
             "engine_version": self.engine_version,
-            "evidence_text": self.evidence_text,
+            "evidence_text": strip_demo_tags(self.evidence_text),
             "evidence_refs": json.dumps(self.evidence_refs, ensure_ascii=False),
         }

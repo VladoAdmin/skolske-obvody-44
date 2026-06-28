@@ -32,7 +32,7 @@ from engine.c_pf import check_pf
 from engine.c_lang import check_lang
 from engine.compose import compose_color, LEGAL_CONDITIONS, INDICATOR_CONDITIONS, SIGNAL_CONDITIONS
 from engine.constants import ENGINE_VERSION, PRESOV_MUN_ID
-from engine.verdict import Verdict
+from engine.verdict import Verdict, strip_demo_tags
 from ingest.config import validate_config
 from ingest.supabase_client import exec_sql, query_sql
 
@@ -167,6 +167,9 @@ def _write_finding(
     finding_id = str(uuid.uuid4())
     evid_tag = f"$_fevid_{finding_id[:8]}$"
     tag_sql = f"'{tag}'" if tag else "NULL"
+    # Strip inline [DEMO]/Ukážkové-dáta tags — the single top banner is the only
+    # demo notice (item 7). is_demo column still carries the flag internally.
+    evidence_text = strip_demo_tags(evidence_text)
 
     sql = f"""
 INSERT INTO skolske_obvody.findings (
@@ -229,11 +232,13 @@ def _write_demo_s2_finding(
 
     area = sum(float(r["overlap_area_m2"] or 0) for r in rows)
     partners = sorted({r["partner_name"] for r in rows if r["partner_name"]})
+    # Address-level wording (item 5): the violation is the SAME full address
+    # (street + house number) claimed by two districts — not a shared boundary.
     evidence = (
-        f"DEMO topológia: ukážkový prekryv obvodov s {', '.join(partners)} "
-        f"({round(area)} m²). Reálna geometria Prešova prekryvy NEMÁ (S2 = PASS); "
-        "toto je len demonštračná vrstva. Reálna geometria ani priradenie adries "
-        "sa nemenia, semafor sa nezhoršuje."
+        f"Prekryv obvodov s {', '.join(partners)}: tie isté adresy "
+        f"(ulica + súpisné číslo) na ploche {round(area)} m² nárokujú dva obvody "
+        "rovnakého typu naraz (§ 44 ods. 1 a 7). Jedna adresa musí patriť práve "
+        "jednému obvodu."
     )
     _write_finding(
         verdict_id, district_id, municipality_id,
