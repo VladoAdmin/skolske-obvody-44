@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Rubik } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppNav } from "@/components/layout/app-nav";
 import { EngineFooter } from "@/components/engine-footer";
+import { DisclaimerBanner } from "@/components/disclaimer-banner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
+// minedu.sk uses Rubik. latin-ext is required for Slovak diacritics (š, č, ž, ô, ľ).
+const rubik = Rubik({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-rubik",
 });
+
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
@@ -30,8 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="sk" className={cn(geistSans.variable, geistMono.variable)}>
-      <body className="antialiased min-h-screen flex flex-col bg-background text-foreground">
+    <html lang="sk" className={cn(rubik.variable, geistMono.variable)}>
+      <body className="font-sans antialiased min-h-screen flex flex-col bg-gov-canvas text-gov-ink">
         {/* Skip link — WCAG 2.4.1 */}
         <a
           href="#main-content"
@@ -41,6 +46,10 @@ export default function RootLayout({
         </a>
         <TooltipProvider>
         <AppHeader />
+        {/* Single app-wide DEMO disclaimer: a slim banner + a first-load popup
+            (item 17). Per-page banners and inline disclaimer prose were removed;
+            small per-value DEMO provenance chips stay (mock-data invariant). */}
+        <DisclaimerBanner />
         <div className="flex flex-1">
           <AppNav />
           <main id="main-content" className="flex-1 p-4 md:p-6 overflow-auto min-w-0">

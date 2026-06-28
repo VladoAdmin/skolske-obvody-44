@@ -1,7 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/server'
-import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { DistrictScorecard } from '@/components/district-scorecard'
 import { DistrictDetailMap } from '@/components/district-detail-map'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -167,9 +166,6 @@ export default async function DistrictPage({ params }: Props) {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Disclaimer always shown on district page */}
-      <DisclaimerBanner alwaysShow />
-
       {/* Header */}
       <div className="space-y-1">
         <div className="flex items-center gap-3">

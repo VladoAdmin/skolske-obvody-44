@@ -23,6 +23,32 @@ export const COLOR_LABEL: Record<CompositionColor, string> = {
   NONE:   'Nezhodnotené',
 }
 
+// Gov-style semafor ROW styling (minedu manual): a soft tint wash + a strong
+// left bar + strong-coloured text. Used to tint the obvody results list so the
+// legend's traffic light actually appears on the rows. The textual verdict is
+// always rendered alongside — colour is an addition, never colour-only.
+export const ROW_TINT: Record<CompositionColor, string> = {
+  GREEN:  'bg-success-tint border-l-success',
+  ORANGE: 'bg-warning-tint border-l-warning',
+  RED:    'bg-danger-tint border-l-danger',
+  NONE:   'bg-gray-50 border-l-gray-300',
+}
+
+export const ROW_TEXT: Record<CompositionColor, string> = {
+  GREEN:  'text-success',
+  ORANGE: 'text-warning',
+  RED:    'text-danger',
+  NONE:   'text-gray-600',
+}
+
+export function getRowTint(color: string | null | undefined): string {
+  return ROW_TINT[(color as CompositionColor) ?? 'NONE'] ?? ROW_TINT.NONE
+}
+
+export function getRowText(color: string | null | undefined): string {
+  return ROW_TEXT[(color as CompositionColor) ?? 'NONE'] ?? ROW_TEXT.NONE
+}
+
 export function getColorClass(color: string | null | undefined): string {
   return COLOR_CLASSES[(color as CompositionColor) ?? 'NONE'] ?? COLOR_CLASSES.NONE
 }

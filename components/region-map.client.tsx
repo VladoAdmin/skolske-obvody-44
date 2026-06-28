@@ -136,12 +136,11 @@ function farthestHousePointFromSchool(
   return best
 }
 
-// On small screens the Leaflet layer-toggle control must start COLLAPSED so it
-// does not obscure the map; it expands into the full checkbox list on tap.
-// On desktop it stays open (collapsed: false) as before.
+// The Leaflet layer-toggle control starts COLLAPSED at every width (item 16) so
+// it never obscures the map; it expands into the full checkbox list on
+// hover/click. Styled as a labelled "Vrstvy" pill in app/globals.css.
 function layerControlCollapsed(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.matchMedia('(max-width: 767px)').matches
+  return true
 }
 
 interface RegionMapClientProps {

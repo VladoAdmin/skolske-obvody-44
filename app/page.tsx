@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { KpiCard } from '@/components/kpi-card'
-import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { createPublicClient } from '@/lib/supabase/server'
 import type { EngineMetadata, MunicipalitySummary } from '@/lib/supabase/types'
 
@@ -27,8 +26,6 @@ export default async function Home() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
-      <DisclaimerBanner />
-
       <section aria-labelledby="portal-heading">
         <h1 id="portal-heading" className="text-2xl font-semibold tracking-tight mb-3">
           Školské obvody — kontrola podľa § 44

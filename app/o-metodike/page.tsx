@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
-import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { ConditionCard, SemaforCard } from '@/components/o-metodike-cards'
 import {
   Table,
@@ -31,8 +30,6 @@ const TOC_ITEMS: Array<{ id: string; label: string }> = [
 export default function OMetodikePage() {
   return (
     <article className="prose prose-sm max-w-3xl space-y-8">
-      <DisclaimerBanner alwaysShow />
-
       <header>
         <h1 className="text-2xl font-semibold tracking-tight mb-2 not-prose">Metodika kontroly § 44</h1>
         <p className="text-muted-foreground leading-relaxed not-prose">

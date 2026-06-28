@@ -3,11 +3,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { DisclaimerBannerClient } from './disclaimer-banner.client'
 import type { EngineMetadata } from '@/lib/supabase/types'
 
-interface Props {
-  alwaysShow?: boolean
-}
-
-export async function DisclaimerBanner({ alwaysShow = false }: Props) {
+export async function DisclaimerBanner() {
   let methodologyVersion = 'n/a'
   let engineVersion = 'n/a'
 
@@ -26,7 +22,6 @@ export async function DisclaimerBanner({ alwaysShow = false }: Props) {
 
   return (
     <DisclaimerBannerClient
-      alwaysShow={alwaysShow}
       methodologyVersion={methodologyVersion}
       engineVersion={engineVersion}
     />

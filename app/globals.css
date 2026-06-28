@@ -4,26 +4,48 @@
 
 @layer base {
   :root {
+    /* shadcn tokens, retuned to the minedu.sk gov palette
+       (see docs/design/minedu-design-manual.md). Signature blue #0055A0
+       drives --primary; flag-red #AF0D15 drives --destructive; the canvas
+       and hairline border match the ministry portal. */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 210 11% 15%;        /* #212529 ink */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 210 11% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --popover-foreground: 210 11% 15%;
+    --primary: 209 100% 31%;          /* #0055A0 ministry blue */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 17% 95%;
+    --secondary-foreground: 209 100% 31%;
+    --muted: 0 0% 97.6%;              /* #F9F9F9 canvas */
+    --muted-foreground: 210 9% 31%;   /* #495057 */
+    --accent: 209 100% 96%;           /* faint blue wash for active/hover */
+    --accent-foreground: 209 100% 31%;
+    --destructive: 358 86% 37%;       /* #AF0D15 flag red */
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 14% 89%;            /* #DEE2E6 hairline */
+    --input: 210 14% 89%;
+    --ring: 209 100% 31%;
+    --radius: 0.25rem;                /* institutional near-square (4px) */
+
+    /* --- gov brand & semafor tokens (manual §6) --- */
+    --gov-blue: #0055A0;
+    --gov-blue-50: rgba(0, 85, 160, 0.1);
+    --gov-red: #AF0D15;
+    --gov-canvas: #F9F9F9;
+    --gov-border: #DEE2E6;
+    --gov-ink: #212529;
+    --gov-muted: #495057;
+    --c-success: #0F663E;
+    --c-warning: #8A5300;
+    --c-danger: #AF0D15;
+    --tint-success: #E7F2EC;
+    --tint-warning: #FBF1DD;
+    --tint-danger: #FBE7E8;
+    --bar-success: #0F663E;
+    --bar-warning: #C77700;
+    --bar-danger: #AF0D15;
   }
 
   .dark {
@@ -53,8 +75,14 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background: var(--gov-canvas);
     overflow-x: hidden;
+  }
+
+  /* Uppercase blue section rhythm — minedu's primary structural cue. */
+  h2 {
+    color: var(--gov-blue);
   }
 }
 
@@ -65,29 +93,34 @@
   }
 }
 
-/* On mobile the Leaflet layer-toggle starts collapsed (collapsed: true) and is
-   shown as a labeled "Vrstvy" pill instead of the bare icon, so users recognise
-   it and have a >=44px touch target. The expanded list keeps Leaflet defaults. */
-@media (max-width: 767px) {
-  .leaflet-control-layers.leaflet-control-layers-collapsed .leaflet-control-layers-toggle {
-    width: auto;
-    height: 44px;
-    min-width: 44px;
-    background-image: none;
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
-    font-size: 13px;
-    font-weight: 600;
-    color: hsl(var(--foreground));
-  }
-  .leaflet-control-layers.leaflet-control-layers-collapsed .leaflet-control-layers-toggle::after {
-    content: "Vrstvy";
-  }
-  /* Cap the expanded list so it never covers the whole small map */
+/* The Leaflet layer-toggle starts COLLAPSED at every width (item 16) so it never
+   blocks the map. Collapsed, it shows as a labeled "Vrstvy" pill instead of the
+   bare icon, so users recognise it and have a >=44px touch target; it expands to
+   the full checkbox list on hover/click. */
+.leaflet-control-layers.leaflet-control-layers-collapsed .leaflet-control-layers-toggle {
+  width: auto;
+  height: 40px;
+  min-width: 44px;
+  background-image: none;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gov-ink);
+  box-shadow: var(--shadow, 0 1px 4px rgba(0, 0, 0, 0.15));
+}
+.leaflet-control-layers.leaflet-control-layers-collapsed .leaflet-control-layers-toggle::after {
+  content: "▤ Vrstvy";
+}
+/* Cap the expanded list so it never covers the whole map */
+.leaflet-control-layers-expanded {
+  max-width: 78vw;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+@media (min-width: 768px) {
   .leaflet-control-layers-expanded {
-    max-width: 78vw;
-    max-height: 55vh;
-    overflow-y: auto;
+    max-width: 340px;
   }
 }

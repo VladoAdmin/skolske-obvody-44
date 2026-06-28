@@ -22,7 +22,7 @@ export function AppNav() {
   return (
     <nav
       aria-label="Hlavná navigácia"
-      className="w-52 flex-shrink-0 border-r border-border py-4 hidden md:block"
+      className="w-52 flex-shrink-0 border-r border-gov-border bg-white py-4 hidden md:block"
     >
       <ul className="space-y-0.5 px-2 list-none m-0 p-0">
         {NAV_LINKS.map((link) => {
@@ -36,10 +36,10 @@ export function AppNav() {
                 href={link.href}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "block rounded px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "block rounded-sm border-l-2 px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   isActive
-                    ? "bg-accent font-medium text-accent-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                    ? "border-l-gov-blue bg-gov-blue50 font-semibold text-gov-blue"
+                    : "border-l-transparent text-gov-muted hover:text-gov-blue hover:bg-gov-blue50/60"
                 )}
               >
                 {link.label}

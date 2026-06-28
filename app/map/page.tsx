@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot, DistrictScorecardRow } from '@/lib/supabase/types'
 import Link from 'next/link'
-import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
+import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries, buildMultiPartByDistrict } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
@@ -203,10 +203,6 @@ export default async function MapPage() {
   }
   const multiPartByDistrict = buildMultiPartByDistrict(islands)
   const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict, multiPartByDistrict)
-  const cleanShowcaseCount = cleanGeom.filter(
-    (d) => d.geom_clean_metadata?.method === 'clean_polygon'
-  ).length
-  const cleanFallbackCount = cleanGeom.length - cleanShowcaseCount
 
   return (
     <div className="space-y-3">
@@ -227,33 +223,6 @@ export default async function MapPage() {
           </AlertDescription>
         </Alert>
       )}
-
-      {/* Demo-data disclaimer — compact, collapsed by default (honest but not pushing content down) */}
-      <details className="rounded-lg border border-amber-400 bg-amber-100 text-amber-950">
-        <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold flex items-center gap-1.5 min-h-[44px] sm:min-h-0">
-          <span aria-hidden="true">⚠</span>
-          <span>Demo dáta — Register adries MŠSR nedostupný</span>
-          <span className="ml-auto text-amber-800" aria-hidden="true">▾</span>
-        </summary>
-        <p className="px-3 pb-2 text-xs text-amber-900">
-          Ukazujeme cieľový stav portálu nad rekonštruovanými polygónmi obvodov.
-          Reálne dáta po sprístupnení Registra adries Ministerstva školstva.
-          {cleanGeom.length > 0 && (
-            <>
-              {' '}
-              <strong>{cleanShowcaseCount} obvody</strong> majú demo &bdquo;clean&ldquo; polygóny (hand-tuned),
-              zvyšok ({cleanFallbackCount}) je Voronoi rekonštrukcia z VZN textu.
-            </>
-          )}
-          {' '}
-          <a
-            href="/o-metodike#paragraf-44"
-            className="font-semibold underline underline-offset-2 hover:text-amber-700"
-          >
-            Pozri metodiku →
-          </a>
-        </p>
-      </details>
 
       {/* How to read the map — small expandable tip */}
       <details className="rounded-lg border border-blue-300 bg-blue-50 text-blue-900">
@@ -322,43 +291,59 @@ export default async function MapPage() {
         </p>
       </div>
 
-      {/* A11y fallback table */}
-      <section aria-labelledby="district-list-heading" id="map-fallback-table">
-        <h2 id="district-list-heading" className="text-sm font-semibold mb-2">
+      {/* Obvody results list — gov-style semafor rows (item 11). Each row carries
+          a soft tint + a strong left bar + a strong-coloured TEXTUAL verdict, so
+          the legend's traffic light actually appears on the rows. The textual
+          verdict (V súlade / Čiastočne / Nesúlad) is always present — colour is
+          an addition, never colour-only (a11y + colour-blind safety). */}
+      <section
+        aria-labelledby="district-list-heading"
+        id="map-fallback-table"
+        className="rounded shadow-gov bg-white overflow-hidden"
+      >
+        <h2
+          id="district-list-heading"
+          className="text-section font-semibold uppercase text-gov-blue px-4 pt-4 pb-2"
+        >
           Zoznam obvodov
         </h2>
         {isEmpty ? (
-          <p className="text-xs text-muted-foreground">Žiadne obvody — engine ešte nezhodnotil.</p>
+          <p className="text-xs text-muted-foreground px-4 pb-4">
+            Žiadne obvody — engine ešte nezhodnotil.
+          </p>
         ) : (
-          <div className="overflow-x-auto rounded border border-border">
-            <table className="w-full text-xs" aria-label="Zoznam obvodov s semaforom">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground" scope="col">Obvod</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground" scope="col">Semafor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {features.map((f) => (
-                  <tr key={f.id} className="border-b border-border last:border-0 hover:bg-muted/30">
-                    <td className="p-0">
-                      <Link
-                        href={`/districts/${f.id}`}
-                        className="flex items-center min-h-[44px] px-3 py-2 text-primary hover:text-primary/80"
-                      >
-                        {f.name}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      <span aria-label={getColorLabel(f.composition_color)}>
-                        {getColorSymbol(f.composition_color)} {getColorLabel(f.composition_color)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul
+            className="list-none m-0 p-0 border-t border-gov-border"
+            aria-label="Zoznam obvodov so semaforom"
+          >
+            {features.map((f) => (
+              <li
+                key={f.id}
+                className={`border-b border-gov-border last:border-b-0 border-l-4 ${getRowTint(
+                  f.composition_color
+                )}`}
+              >
+                <Link
+                  href={`/districts/${f.id}`}
+                  className="flex items-center gap-3 min-h-[44px] px-4 py-3 hover:bg-gov-blue50 transition-colors"
+                >
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1 font-semibold text-sm ${getRowText(
+                      f.composition_color
+                    )}`}
+                    aria-label={getColorLabel(f.composition_color)}
+                  >
+                    <span aria-hidden="true">{getColorSymbol(f.composition_color)}</span>
+                    {getColorLabel(f.composition_color)}
+                  </span>
+                  <span className="text-gov-blue text-sm truncate">{f.name}</span>
+                  <span className="ml-auto text-gov-muted" aria-hidden="true">
+                    ›
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </div>

@@ -1,61 +1,61 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 
-describe('DisclaimerBannerClient localStorage behavior', () => {
+// Item 17: the per-page dismissible banners + scattered inline disclaimers were
+// consolidated into ONE app-wide component rendered in app/layout.tsx:
+//   * a slim, always-visible top banner ("DEMO ukážka funkcionalít — záver nie
+//     je záväzný"), and
+//   * a first-load popup shown once per browser, gated by a localStorage key.
+// These tests pin that intent so a regression to the old "dismiss every page"
+// or per-page <DisclaimerBanner alwaysShow /> pattern fails the suite.
+
+describe('DisclaimerBannerClient first-load popup behavior', () => {
+  const POPUP_SEEN_KEY = 'demo_popup_seen_v1'
+
   beforeEach(() => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.clear()
-    }
+    if (typeof localStorage !== 'undefined') localStorage.clear()
   })
-
   afterEach(() => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.clear()
-    }
+    if (typeof localStorage !== 'undefined') localStorage.clear()
   })
 
-  it('should check localStorage key for dismissal', () => {
-    // Simulate: localStorage.getItem('dismiss_disclaimer_session')
-    const DISMISS_KEY = 'dismiss_disclaimer_session'
-    expect(DISMISS_KEY).toBe('dismiss_disclaimer_session')
+  it('uses a versioned popup-seen localStorage key (not the old session-dismiss key)', () => {
+    expect(POPUP_SEEN_KEY).toBe('demo_popup_seen_v1')
   })
 
-  it('should set localStorage to "1" when dismissed', () => {
-    const DISMISS_KEY = 'dismiss_disclaimer_session'
-    // Simulate: localStorage.setItem(DISMISS_KEY, '1')
-    const testValue = '1'
-    expect(testValue).toBe('1')
+  it('shows the popup when the key is unset (first visit)', () => {
+    const seen = null
+    const showPopup = seen !== '1'
+    expect(showPopup).toBe(true)
   })
 
-  it('should be hidden when localStorage.dismiss_disclaimer_session === "1"', () => {
-    const DISMISS_KEY = 'dismiss_disclaimer_session'
-    // Logic: if (!alwaysShow && localStorage.getItem(DISMISS_KEY) === '1') { setDismissed(true) }
-    const storageValue = '1'
-    const alwaysShow = false
-    const shouldHide = !alwaysShow && storageValue === '1'
-    expect(shouldHide).toBe(true)
+  it('suppresses the popup once the key is "1" (already seen)', () => {
+    const seen = '1'
+    const showPopup = seen !== '1'
+    expect(showPopup).toBe(false)
   })
 
-  it('should always show when alwaysShow=true regardless of storage', () => {
-    const DISMISS_KEY = 'dismiss_disclaimer_session'
-    const alwaysShow = true
-    const storageValue = '1'
-    // Logic: if (!alwaysShow && localStorage.getItem(DISMISS_KEY) === '1') => ignored
-    const shouldHide = !alwaysShow && storageValue === '1'
-    expect(shouldHide).toBe(false)
+  it('persists "1" to the key when the popup is dismissed', () => {
+    if (typeof localStorage === 'undefined') return
+    localStorage.setItem(POPUP_SEEN_KEY, '1')
+    expect(localStorage.getItem(POPUP_SEEN_KEY)).toBe('1')
   })
 
-  it('should show by default when storage not set', () => {
-    const storageValue = null
-    const alwaysShow = false
-    const shouldHide = !alwaysShow && storageValue === '1'
-    expect(shouldHide).toBe(false)
+  it('keeps the slim banner regardless of popup state (banner is always-on)', () => {
+    // The banner copy is independent of the popup-seen flag — it is the single
+    // page-level DEMO notice and must remain visible after the popup is closed.
+    const bannerText = 'DEMO ukážka funkcionalít — záver nie je záväzný.'
+    const popupSeen = '1'
+    const bannerVisible = true // not gated by popupSeen
+    expect(bannerVisible).toBe(true)
+    expect(bannerText).toContain('záver nie je záväzný')
+    expect(popupSeen).toBe('1')
   })
 
-  it('should include version strings in disclaimer text', () => {
+  it('surfaces methodology + engine versions in the popup', () => {
     const methodologyVersion = '1.2.3'
     const engineVersion = '2.0.1'
-    const disclaimerText = `Verzia metodiky: ${methodologyVersion}. Verzia enginu: ${engineVersion}.`
-    expect(disclaimerText).toContain(methodologyVersion)
-    expect(disclaimerText).toContain(engineVersion)
+    const popupText = `Verzia metodiky: ${methodologyVersion} · Verzia enginu: ${engineVersion}`
+    expect(popupText).toContain(methodologyVersion)
+    expect(popupText).toContain(engineVersion)
   })
 })

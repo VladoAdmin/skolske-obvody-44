@@ -31,7 +31,10 @@ export function AppHeader() {
   const pathname = usePathname();
 
   return (
-    <header className="border-b border-border bg-background" role="banner">
+    <header
+      className="bg-white border-b-2 border-gov-red shadow-sm"
+      role="banner"
+    >
       <div className="flex items-center justify-between px-4 md:px-6 py-3">
         <div className="flex items-center gap-3">
           {/* Mobile hamburger — only visible on < md */}
@@ -86,12 +89,12 @@ export function AppHeader() {
             className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
             aria-label="Kontrola § 44 — domov"
           >
-            <span className="font-semibold text-sm tracking-tight">
+            <span className="font-semibold text-base tracking-tight text-gov-blue">
               Kontrola § 44
             </span>
             <span
               aria-hidden="true"
-              className="text-xs text-muted-foreground border border-border rounded px-1.5 py-0.5 font-mono hidden sm:inline"
+              className="text-xs text-gov-blue border border-gov-blue/30 bg-gov-blue50 rounded-sm px-1.5 py-0.5 font-mono hidden sm:inline"
             >
               PSK pilot
             </span>

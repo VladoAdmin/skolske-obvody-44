@@ -1,5 +1,4 @@
 import { Suspense } from 'react'
-import { DisclaimerBanner } from '@/components/disclaimer-banner'
 import { FindingsTable } from '@/components/findings-table'
 import { FindingsFilters } from '@/components/findings-filters'
 import { createPublicClient } from '@/lib/supabase/server'
@@ -63,8 +62,6 @@ export default async function FindingsPage({ searchParams }: Props) {
 
   return (
     <div className="space-y-4">
-      <DisclaimerBanner />
-
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Register nálezov</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
