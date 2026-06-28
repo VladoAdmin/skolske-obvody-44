@@ -85,11 +85,8 @@ export function DisclaimerBannerClient({ methodologyVersion, engineVersion }: Pr
               </strong>
             </p>
             <p className="mt-2 text-sm text-gov-muted">
-              Hodnoty označené malým odznakom{' '}
-              <span className="inline-flex items-center rounded-sm border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase text-fuchsia-800">
-                Demo
-              </span>{' '}
-              sú ukážkové (vyplnenie dátových medzier) a nevstupujú do zákonného verdiktu.
+              Časť hodnôt je ukážková (vyplnenie dátových medzier) a nevstupuje do zákonného
+              verdiktu; slúžia na demonštráciu funkcionality.
             </p>
             <p className="mt-2 text-xs text-gov-muted">
               Verzia metodiky: <code className="font-mono">{methodologyVersion}</code> · Verzia
