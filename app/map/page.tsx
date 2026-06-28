@@ -6,10 +6,10 @@ import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot, DistrictScorecardRow } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
-import { buildDistrictSummaries, buildMultiPartByDistrict } from '@/lib/compliance/school-popup'
+import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
 
@@ -75,23 +75,17 @@ async function fetchFindings(): Promise<SoFindingsPanelItem[]> {
   }
 }
 
-async function fetchOverlaps(): Promise<SoDistrictOverlap[]> {
+// STREETS PIVOT: districts render as their VZN-assigned streets, coloured per
+// school. One row per drawn segment (LineString, or a Point for fallback streets
+// with no OSM line). Single SSOT used by the main map and the detail page.
+async function fetchStreetLines(): Promise<SoDistrictStreetLine[]> {
   try {
     const sb = createPublicClient()
-    const { data, error } = await sb.from('so_district_overlaps').select('*')
+    const { data, error } = await sb
+      .from('so_district_street_linestrings')
+      .select('district_id,school_id,street,is_fallback_point,linestring_geojson')
     if (error) throw error
-    return (data ?? []) as SoDistrictOverlap[]
-  } catch {
-    return []
-  }
-}
-
-async function fetchIslands(): Promise<SoDistrictIsland[]> {
-  try {
-    const sb = createPublicClient()
-    const { data, error } = await sb.from('so_district_islands').select('*')
-    if (error) throw error
-    return (data ?? []) as SoDistrictIsland[]
+    return (data ?? []) as SoDistrictStreetLine[]
   } catch {
     return []
   }
@@ -106,43 +100,6 @@ async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
       .select('id,name,slug,geom_geojson,schools_count,districts_count')
     if (error) throw error
     return (data ?? []) as SoPskMunicipality[]
-  } catch {
-    return []
-  }
-}
-
-async function fetchStreetGeocodes(): Promise<SoStreetGeocode[]> {
-  try {
-    const sb = createPublicClient()
-    const { data, error } = await sb
-      .from('so_street_geocodes')
-      .select('district_id,street,lat,lon,status,partial_match,formatted_address,point_geojson')
-    if (error) throw error
-    return (data ?? []) as SoStreetGeocode[]
-  } catch {
-    return []
-  }
-}
-
-async function fetchVoronoiGeom(): Promise<SoDistrictVoronoi[]> {
-  try {
-    const sb = createPublicClient()
-    const { data, error } = await sb.from('so_district_voronoi').select('id,name,geom_voronoi_geojson,geom_voronoi_metadata')
-    if (error) throw error
-    return (data ?? []) as SoDistrictVoronoi[]
-  } catch {
-    return []
-  }
-}
-
-async function fetchCleanGeom(): Promise<SoDistrictCleanGeom[]> {
-  try {
-    const sb = createPublicClient()
-    const { data, error } = await sb
-      .from('so_district_clean_geom')
-      .select('id,name,school_id,geom_clean_geojson,geom_clean_metadata')
-    if (error) throw error
-    return (data ?? []) as SoDistrictCleanGeom[]
   } catch {
     return []
   }
@@ -188,33 +145,31 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots, scorecardRows] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
     fetchMrkLocalities(),
     fetchFindings(),
-    fetchOverlaps(),
-    fetchIslands(),
     fetchMunicipalities(),
-    fetchStreetGeocodes(),
+    fetchStreetLines(),
     fetchHousePoints(),
-    fetchVoronoiGeom(),
-    fetchCleanGeom(),
     fetchHouseDots(),
     fetchScorecard(),
   ])
   const isEmpty = features.length === 0
 
   // Open-findings count per district (status = open) for the school-pin popup.
+  // Step 1: findings are wiped, so this is empty — kept so the popup builder
+  // signature is unchanged when findings return in step 2.
   const openFindingsByDistrict: Record<string, number> = {}
   for (const f of findings) {
     if (f.status === 'open') {
       openFindingsByDistrict[f.district_id] = (openFindingsByDistrict[f.district_id] ?? 0) + 1
     }
   }
-  const multiPartByDistrict = buildMultiPartByDistrict(islands)
-  const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict, multiPartByDistrict)
+  // No polygon islands in the streets pivot → no multi-part flag.
+  const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict, {})
 
   return (
     <div className="space-y-3">
@@ -243,10 +198,10 @@ export default async function MapPage() {
           <span className="ml-auto text-blue-700" aria-hidden="true">▾</span>
         </summary>
         <p className="px-3 pb-2 text-xs text-blue-800">
-          Mapa ukazuje {features.length} školských obvodov v Prešove, každý má vlastnú farbu hranice.
-          Hranice sú zvýraznené tenkou bielou linkou, aby ste jasne videli, kde jeden obvod
-          končí a druhý začína; po prejdení myšou (alebo ťuknutí) sa daný obvod vyfarbí.
-          Šrafované oblasti = prekryvy (chyba VZN — 2 obvody nárokujú tú istú adresu).
+          Mapa ukazuje {features.length} školských obvodov v Prešove. Každý obvod je vykreslený
+          ako sústava jeho ulíc (podľa VZN) vo vlastnej farbe. Kliknutím na školu sa jej ulice
+          zvýraznia a ostatné obvody sa stlmia. Ulica, ktorá patrí viacerým obvodom (hraničná),
+          sa kreslí vo farbe každého z nich — nie je to chyba.
           Pre kompletný overview kliknite na konkrétny obvod v zozname dole.
         </p>
         <p className="px-3 pb-2 text-xs text-blue-800">
@@ -267,14 +222,9 @@ export default async function MapPage() {
                 schools={schools}
                 mrkOverlays={mrkOverlays}
                 mrkLocalities={mrkLocalities}
-                findings={findings}
-                overlaps={overlaps}
-                islands={islands}
                 municipalities={municipalities}
-                streetGeocodes={streetGeocodes}
+                streetLines={streetLines}
                 housePoints={housePoints}
-                voronoiGeom={voronoiGeom}
-                cleanGeom={cleanGeom}
                 houseDots={houseDots}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
@@ -288,15 +238,13 @@ export default async function MapPage() {
       {/* Map legend */}
       <div className="hidden md:block">
         <p className="text-xs text-muted-foreground mt-2">
-          Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'hsl(40,65%,60%)', opacity: 0.5 }}></span> Obvod (kategorická farba)</span>
+          Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-1 rounded-sm" style={{ background: 'hsl(210,70%,45%)' }}></span> Ulice obvodu (farba podľa školy)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#7c3aed' }}></span> MRK lokalita — bod (Atlas MRK, budova/lokalita)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#2563eb' }}></span> Škola verejná (mesto Prešov)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#d97706' }}></span> Škola súkromná / cirkevná</span>
-          <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#dc2626', opacity: 0.25 }}></span> Prekryv obvodov: svetlejšie = 1, tmavšie = viac</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body obvodov (Google geokód, priblížte sa)</span>
         </p>

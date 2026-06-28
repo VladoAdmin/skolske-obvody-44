@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/server'
-import type { DistrictMapFeature, MunicipalitySummary } from '@/lib/supabase/types'
+import type { DistrictMapFeature, MunicipalitySummary, SoDistrictStreetLine } from '@/lib/supabase/types'
 import { RegionMap } from '@/components/region-map'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 
@@ -15,9 +15,10 @@ export default async function MunicipalityDetailPage({ params }: Props) {
   const { id } = params
   const sb = createPublicClient()
 
-  const [summaryRes, featuresRes] = await Promise.all([
+  const [summaryRes, featuresRes, streetLinesRes] = await Promise.all([
     sb.from('so_municipalities_summary').select('*').eq('municipality_id', id).maybeSingle(),
     sb.from('so_district_map_features').select('*'),
+    sb.from('so_district_street_linestrings').select('district_id,school_id,street,is_fallback_point,linestring_geojson'),
   ])
 
   const summary = summaryRes.data as MunicipalitySummary | null
@@ -25,6 +26,7 @@ export default async function MunicipalityDetailPage({ params }: Props) {
   if (!summary) notFound()
 
   const features = (featuresRes.data ?? []) as DistrictMapFeature[]
+  const streetLines = (streetLinesRes.data ?? []) as SoDistrictStreetLine[]
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -46,7 +48,7 @@ export default async function MunicipalityDetailPage({ params }: Props) {
 
       {/* Mini map */}
       <div className="rounded-lg border border-border overflow-hidden" style={{ height: 300 }}>
-        <RegionMap features={features} schools={[]} mrkOverlays={[]} findings={[]} />
+        <RegionMap features={features} schools={[]} mrkOverlays={[]} streetLines={streetLines} initialMode="psk" />
       </div>
 
       {/* Districts list */}

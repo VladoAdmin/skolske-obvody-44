@@ -39,6 +39,13 @@ from ingest.supabase_client import exec_sql, query_sql
 
 MUNICIPALITY_ID = PRESOV_MUN_ID
 
+# STREETS PIVOT step 1 (2026-06-28): ship a clean street map with ZERO findings.
+# The engine still computes + persists every verdict (SSOT intact), but the
+# findings register/panel is wiped pending the step-2 mock-analysis rebuild.
+# Set SO_EMIT_FINDINGS=1 to re-enable finding writes (step 2).
+import os as _os
+EMIT_FINDINGS = _os.environ.get("SO_EMIT_FINDINGS", "0") == "1"
+
 
 class RedOnlyStructuralError(AssertionError):
     """A district composed to RED for a reason other than an Š1/Š2/Š3 FAIL."""
@@ -424,11 +431,14 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
               f"Pa={v_pa.value} Pb={v_pb.value} Pc={v_pc.value} "
               f"Pd={v_pd.value} | Pe={v_pe.value} Pf={v_pf.value}")
 
-        # Write verdicts to DB
+        # Write verdicts to DB (always — verdicts are the SSOT). Findings are
+        # gated by EMIT_FINDINGS: step 1 ships zero findings (clean street map).
         for code, v in district_verdicts.items():
             vid = _write_verdict(v)
             if vid:
                 verdicts_written += 1
+                if not EMIT_FINDINGS:
+                    continue
                 # JAZYK only surfaces a finding when there is an actual podnet (SIGNAL);
                 # the NOT_EVALUATED "no podnet" case must not clutter the register.
                 if code == "JAZYK" and v.value != "SIGNAL":

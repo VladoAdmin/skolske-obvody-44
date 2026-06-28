@@ -217,6 +217,17 @@ export interface SoStreetGeocode {
   point_geojson: Record<string, unknown> | null
 }
 
+// STREETS PIVOT: each district drawn as its VZN-assigned streets (coloured per
+// school). One row per drawn segment — linestring_geojson is a LineString for an
+// OSM-matched street, a Point for the ~5% fallback streets with no OSM line.
+export interface SoDistrictStreetLine {
+  district_id: string
+  school_id: string | null
+  street: string
+  is_fallback_point: boolean
+  linestring_geojson: Record<string, unknown> | null
+}
+
 export interface SoDistrictAddressStats {
   district_id: string
   habitable_addresses: number

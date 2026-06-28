@@ -8,18 +8,13 @@ import type {
   DistrictScorecardRow,
   DistrictMapFeature,
   SoSchoolMarker,
-  SoMrkOverlay,
   SoHousePoint,
-  SoStreetGeocode,
-  SoDistrictVoronoi,
-  SoDistrictIsland,
   SoDistrictAddressStats,
-  SoFindingsPanelItem,
-  SoDistrictOverlap,
+  SoDistrictStreetLine,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
-import { buildDistrictSummaries, buildMultiPartByDistrict } from '@/lib/compliance/school-popup'
+import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
 
 export const revalidate = 60
 
@@ -35,51 +30,35 @@ export default async function DistrictPage({ params }: Props) {
   const [
     { data: rawRows, error: scorecardError },
     { data: allFeatures },
-    { data: rawVoronoi },
     { data: rawSchools },
-    { data: rawMrk },
     { data: rawHousePoints },
-    { data: rawStreetGeocodes },
-    { data: rawIslands },
+    { data: rawStreetLines },
     { data: rawAllScorecard },
     { data: rawFindings },
     { data: rawAddressStats },
-    { data: rawDistrictFindings },
-    { data: rawOverlaps },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
-    sb.from('so_district_voronoi').select('id,name,geom_voronoi_geojson,geom_voronoi_metadata'),
     sb.from('so_school_markers').select('*'),
-    sb.from('so_mrk_overlays').select('*'),
     sb.from('so_house_points').select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason'),
-    sb.from('so_street_geocodes').select('district_id,street,lat,lon,status,partial_match,formatted_address,point_geojson'),
-    sb.from('so_district_islands').select('*').eq('district_id', id).order('island_index'),
+    // Streets pivot: the detail map uses the SAME street source as the main map.
+    sb.from('so_district_street_linestrings').select('district_id,school_id,street,is_fallback_point,linestring_geojson'),
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
-    // This district's full findings + overlaps drive the detail-map § 44
-    // illustrations (same builder the PSK region map uses), so the user sees
-    // WHERE each failing condition is, not just a table row.
-    sb.from('so_findings_panel').select('*').eq('district_id', id),
-    sb.from('so_district_overlaps').select('*').or(`district_a_id.eq.${id},district_b_id.eq.${id}`),
   ])
 
   if (scorecardError) throw scorecardError
 
   const rows = (rawRows ?? []) as DistrictScorecardRow[]
   const features = (allFeatures ?? []) as DistrictMapFeature[]
-  const voronoiFeatures = (rawVoronoi ?? []) as SoDistrictVoronoi[]
   const schools = (rawSchools ?? []) as SoSchoolMarker[]
-  const mrkOverlays = (rawMrk ?? []) as SoMrkOverlay[]
   const housePoints = (rawHousePoints ?? []) as SoHousePoint[]
-  const streetGeocodes = (rawStreetGeocodes ?? []) as SoStreetGeocode[]
-  const islands = (rawIslands ?? []) as SoDistrictIsland[]
+  const streetLines = (rawStreetLines ?? []) as SoDistrictStreetLine[]
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
-  const districtFindings = (rawDistrictFindings ?? []) as SoFindingsPanelItem[]
-  const overlaps = (rawOverlaps ?? []) as SoDistrictOverlap[]
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
+  // Step 1: findings are wiped, so open-findings is empty.
   const allScorecard = (rawAllScorecard ?? []) as DistrictScorecardRow[]
   const findingsRows = (rawFindings ?? []) as { district_id: string; status: string }[]
   const openFindingsByDistrict: Record<string, number> = {}
@@ -88,10 +67,8 @@ export default async function DistrictPage({ params }: Props) {
       openFindingsByDistrict[f.district_id] = (openFindingsByDistrict[f.district_id] ?? 0) + 1
     }
   }
-  // Only the current district's islands are fetched here, so the popup
-  // multi-part flag is accurate for this obvod's own school pin.
-  const multiPartByDistrict = buildMultiPartByDistrict(islands)
-  const districtSummaries = buildDistrictSummaries(allScorecard, openFindingsByDistrict, multiPartByDistrict)
+  // No polygon islands in the streets pivot → no multi-part flag.
+  const districtSummaries = buildDistrictSummaries(allScorecard, openFindingsByDistrict, {})
 
   // Header info
   let header: {
@@ -141,21 +118,6 @@ export default async function DistrictPage({ params }: Props) {
   const colorLabel = getColorLabel(header.composition_color)
   const colorClass = getColorClass(header.composition_color)
 
-  // Multi-part review flag: a school obvod should be a single contiguous
-  // polygon. After sliver cleanup, the parts that remain are substantial real
-  // splits that need human review. We derive parts straight from the (cleaned)
-  // island rows: real (non-demo) parts ordered by area, largest first.
-  const realParts = islands
-    .filter((i) => i.is_demo !== true)
-    .map((i) => (i.area_m2 ?? 0) / 1_000_000)
-    .sort((a, b) => b - a)
-  const partsCount = realParts.length
-  const isMultiPart = partsCount > 1
-  const biggestKm2 = realParts[0] ?? 0
-  const otherPartsKm2 = realParts.slice(1)
-
-  const checkedUrl = 'zsmeralova.edupage.org, zsmeralova.sk, presov.sk'
-
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
@@ -190,18 +152,13 @@ export default async function DistrictPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Full-width detail map */}
+      {/* Full-width detail map — SAME street rendering as the main map */}
       <DistrictDetailMap
         currentDistrictId={id}
         features={features}
-        voronoiFeatures={voronoiFeatures}
         schools={schools}
-        mrkOverlays={mrkOverlays}
         housePoints={housePoints}
-        streetGeocodes={streetGeocodes}
-        islands={islands}
-        findings={districtFindings}
-        overlaps={overlaps}
+        streetLines={streetLines}
         districtSummaries={districtSummaries}
       />
 
@@ -253,93 +210,6 @@ export default async function DistrictPage({ params }: Props) {
         </Alert>
       )}
 
-      {/* Island geometry section — only when the obvod is genuinely multi-part
-          (or carries a demo anomaly seed). Single-polygon obvody have one
-          main-body island row and should not show a spurious "ostrovy" block. */}
-      {(isMultiPart || islands.some((i) => i.is_demo === true)) && (
-        <section aria-labelledby="islands-heading" className="space-y-3">
-          <h2 id="islands-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Geometria a ostrovy obvodu
-          </h2>
-
-          {isMultiPart && (
-            <Alert className="border-amber-300 bg-amber-50 text-amber-900">
-              <AlertTitle className="text-amber-800">
-                ⚠ Tento obvod má {partsCount} oddelených častí — na kontrolu
-              </AlertTitle>
-              <AlertDescription className="text-amber-800 text-xs">
-                Školský obvod by mal byť <strong>jedna súvislá plocha</strong>.
-                Tento sa skladá z <strong>{partsCount}</strong> oddelených častí
-                (najväčšia <strong>{biggestKm2.toFixed(2)} km²</strong>
-                {otherPartsKm2.length > 0 && (
-                  <>, ostatné: {otherPartsKm2.map((a) => `${a.toFixed(2)} km²`).join(', ')}</>
-                )}
-                ). Drobné artefakty geometrie už boli zlúčené do susedných obvodov;
-                tieto väčšie časti sú ponechané a označené na{' '}
-                <strong>manuálnu kontrolu</strong> (história zlúčených škôl,
-                špecializované adresy, alebo chyba vo VZN).{' '}
-                <strong>Aktuálne sa nepodarilo overiť žiaden školský dôvod</strong>{' '}
-                (overené na {checkedUrl}).
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            {islands.map((island, displayIdx) => {
-              const areaKm2 = ((island.area_m2 ?? 0) / 1_000_000).toFixed(3)
-              const streetCount = island.street_count ?? 0
-              const houseCount = island.house_count ?? 0
-              const streets = island.streets ?? []
-              // Display number is the contiguous position in the list (1, 2, 3 …),
-              // NOT the raw geometry island_index — that index can be sparse (demo
-              // anomalies are seeded at high indexes like 99) and would otherwise
-              // leak a confusing "Ostrov 100" into the UI.
-              const displayNo = displayIdx + 1
-              const isDemo = island.is_demo === true
-
-              return (
-                <details
-                  key={island.island_index}
-                  className="rounded border border-border bg-muted/20"
-                >
-                  <summary className="flex items-center gap-3 px-4 py-2.5 cursor-pointer select-none hover:bg-muted/40 transition-colors">
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-800 text-xs font-bold shrink-0">
-                      {displayNo}
-                    </span>
-                    <span className="text-sm font-medium">
-                      Ostrov {displayNo}
-                      {isDemo && (
-                        <span className="ml-2 inline-flex items-center rounded border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fuchsia-800 align-middle">
-                          DEMO
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs text-muted-foreground ml-auto">
-                      {areaKm2} km² · {streetCount} ulíc · {houseCount} domov
-                    </span>
-                  </summary>
-
-                  <div className="px-4 pb-3 pt-1 text-xs text-muted-foreground">
-                    {streets.length > 0 ? (
-                      <ul className="mt-1 space-y-0.5">
-                        {streets.map((street) => (
-                          <li key={street} className="text-foreground">{street}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="italic">
-                        K tejto časti sa zatiaľ nepodarilo priradiť žiadnu ulicu
-                        z geokódovaných adresných bodov — je to len geometrický
-                        zvyšok plochy bez evidovaných adries.
-                      </p>
-                    )}
-                  </div>
-                </details>
-              )
-            })}
-          </div>
-        </section>
-      )}
     </div>
   )
 }
