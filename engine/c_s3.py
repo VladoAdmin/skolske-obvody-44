@@ -102,6 +102,7 @@ def check_s3(district: dict) -> Verdict:
         JOIN skolske_obvody.districts d ON d.id = '{district_id}'
         WHERE s.is_public = TRUE
           AND s.type = '{school_type}'
+          AND s.is_demo IS NOT TRUE
           AND public.ST_Within(s.geom, d.geom)
     """)
     spatial_count = int(count_rows[0]["n"]) if count_rows else 0
@@ -112,6 +113,7 @@ def check_s3(district: dict) -> Verdict:
         FROM skolske_obvody.schools s
         JOIN skolske_obvody.districts d ON d.id = '{district_id}'
         WHERE s.id = '{school_id}'
+          AND s.is_demo IS NOT TRUE
     """)
     fk_inside = bool(fk_inside_rows[0]["inside"]) if fk_inside_rows else False
 

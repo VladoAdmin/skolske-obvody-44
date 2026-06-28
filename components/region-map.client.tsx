@@ -1480,7 +1480,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, mrkLocalities 
           {/* Item 13 — Home / reset view: restores default center/zoom + default
               layer visibility. */}
           <button
-            onClick={() => homeResetRef.current?.()}
+            onClick={() => {
+              if (homeResetRef.current) homeResetRef.current()
+              // Fallback: the PSK-mode effect assigns homeResetRef async; if the
+              // user clicks before it runs, still reset the view directly so the
+              // button never silently no-ops.
+              else if (mapRef.current) mapRef.current.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
+            }}
             className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-sm bg-white border border-gov-border shadow-gov hover:bg-gov-blue50 transition-colors"
             aria-label="Obnoviť pôvodné zobrazenie mapy"
             title="Obnoviť pôvodné zobrazenie"
