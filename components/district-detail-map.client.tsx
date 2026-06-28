@@ -10,6 +10,8 @@ import type {
   SoStreetGeocode,
   SoDistrictVoronoi,
   SoDistrictIsland,
+  SoFindingsPanelItem,
+  SoDistrictOverlap,
 } from '@/lib/supabase/types'
 import {
   COMPOSITION_COLOR_MAP,
@@ -18,6 +20,7 @@ import {
   PSK_DEFAULT_ZOOM,
 } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
+import { buildDistrictIllustration } from '@/lib/map/district-illustration'
 
 // On mobile (≤767px) the layer control starts collapsed so the legend
 // does not obscure the map; it expands into the full checkbox list on tap.
@@ -36,6 +39,8 @@ interface DistrictDetailMapClientProps {
   housePoints: SoHousePoint[]
   streetGeocodes: SoStreetGeocode[]
   islands: SoDistrictIsland[]
+  findings?: SoFindingsPanelItem[]
+  overlaps?: SoDistrictOverlap[]
   districtSummaries?: Record<string, DistrictPopupSummary>
 }
 
@@ -48,11 +53,16 @@ export function DistrictDetailMapClient({
   housePoints,
   streetGeocodes,
   islands,
+  findings = [],
+  overlaps = [],
   districtSummaries = {},
 }: DistrictDetailMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
+  // DOM legend node for the § 44 illustration — held so cleanup can remove it
+  // (it is appended to the map container, not managed by Leaflet's layer group).
+  const illustrationLegendRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -85,6 +95,10 @@ export function DistrictDetailMapClient({
       schoolsPane.style.zIndex = '700'
       const streetPointsPane = map.createPane('streetPoints')
       streetPointsPane.style.zIndex = '680'
+      // § 44 illustration pane (overlap strips / island / Pa line / P-e / P-f) —
+      // above districts, below school pins, matching the region map's ordering.
+      const overlapsPane = map.createPane('overlaps')
+      overlapsPane.style.zIndex = '470'
       const islandLabelsPane = map.createPane('islandLabels')
       islandLabelsPane.style.zIndex = '750'
 
@@ -283,6 +297,36 @@ export function DistrictDetailMapClient({
 
       schoolsGroup.addTo(map)
 
+      // --- § 44 findings illustration (same builder as the PSK region map) ---
+      // Render THIS district's failing conditions as map features (overlap strip
+      // / island / long-distance Pa line / P-e MRK exclusion / P-f overcrowding)
+      // so the user sees WHERE the problem is, not just a scorecard row. Drawn ON
+      // by default (this is the district's own detail view) and registered in the
+      // layer control so it can be toggled off. Engine-driven — nothing here
+      // changes a verdict.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let illustrationGroup: any = null
+      const currentFeature = features.find((f) => f.id === currentDistrictId)
+      if (currentFeature) {
+        const built = buildDistrictIllustration({
+          L,
+          map,
+          feature: currentFeature,
+          findings,
+          islands,
+          overlaps,
+          housePoints,
+          mrkOverlays,
+          pane: 'overlaps',
+          container: containerRef.current,
+        })
+        if (built) {
+          illustrationGroup = built.group
+          built.group.addTo(map)
+          illustrationLegendRef.current = built.legend
+        }
+      }
+
       // --- MRK overlays ---
       // MRK stays OFF by default (same as region-map): non-interactive so taps
       // on a district area always reach the school markers underneath.
@@ -354,18 +398,23 @@ export function DistrictDetailMapClient({
       // Layer control.
       // Standard layers: on by default (added to map above).
       // Expert-only layers: off by default — NOT added to map; analyst toggle only.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const overlayLayers: Record<string, any> = {
+        'Tento obvod': currentVoronoiGroup,
+        'Susedné obvody (kontext)': contextVoronoiGroup,
+        'Čísla ostrovov': islandLabelsGroup,
+        'MRK lokality': mrkGroup,
+        'Školy': schoolsGroup,
+        // Expert layers (off by default — analyst evidence, not for normal view)
+        '⚙ Expert: Domy z VZN (Google geokódovanie)': housePointsGroup,
+        '⚙ Expert: Ulice (Street geocodes)': streetPointsGroup,
+      }
+      if (illustrationGroup) {
+        overlayLayers['Nálezy § 44 (demo)'] = illustrationGroup
+      }
       const layersControl = L.control.layers(
         undefined,
-        {
-          'Tento obvod': currentVoronoiGroup,
-          'Susedné obvody (kontext)': contextVoronoiGroup,
-          'Čísla ostrovov': islandLabelsGroup,
-          'MRK lokality': mrkGroup,
-          'Školy': schoolsGroup,
-          // Expert layers (off by default — analyst evidence, not for normal view)
-          '⚙ Expert: Domy z VZN (Google geokódovanie)': housePointsGroup,
-          '⚙ Expert: Ulice (Street geocodes)': streetPointsGroup,
-        },
+        overlayLayers,
         { collapsed: layerControlCollapsed() }
       ).addTo(map)
       // Label the collapsed toggle so mobile users recognise it as "Vrstvy".
@@ -381,6 +430,10 @@ export function DistrictDetailMapClient({
     }).catch(console.error)
 
     return () => {
+      if (illustrationLegendRef.current) {
+        illustrationLegendRef.current.remove()
+        illustrationLegendRef.current = null
+      }
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null

@@ -8,6 +8,8 @@ import type {
   SoStreetGeocode,
   SoDistrictVoronoi,
   SoDistrictIsland,
+  SoFindingsPanelItem,
+  SoDistrictOverlap,
 } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -21,6 +23,8 @@ interface DistrictDetailMapProps {
   housePoints: SoHousePoint[]
   streetGeocodes: SoStreetGeocode[]
   islands: SoDistrictIsland[]
+  findings?: SoFindingsPanelItem[]
+  overlaps?: SoDistrictOverlap[]
   districtSummaries?: Record<string, DistrictPopupSummary>
 }
 

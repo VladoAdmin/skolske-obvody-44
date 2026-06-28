@@ -277,7 +277,7 @@ export default async function MapPage() {
                 cleanGeom={cleanGeom}
                 houseDots={houseDots}
                 districtSummaries={districtSummaries}
-                initialMode="sk"
+                initialMode="psk"
               />
             </Suspense>
           }
