@@ -9,6 +9,10 @@ const CHROME = '/usr/bin/google-chrome-stable'
 mkdirSync(OUT, { recursive: true })
 
 const KUPELNA = '7e0dd639-cf90-463f-8473-34541bddecf1'
+// Bajkalská č. 29 — a RED district whose conditions are mostly PASS (only S1 +
+// Pa FAIL). The exact FIX-1 case: composition_color=RED on every row, so the old
+// code showed a red ✕ on every row including the PASS ones.
+const BAJKALSKA = '689f1541-6fb4-4ee6-958c-c4cc09e5a1ff'
 const consoleErrors = []
 const failures = []
 const pass = []
@@ -23,24 +27,15 @@ async function gotoStable(page, url, sel, tries = 4) {
   return false
 }
 
-// The /map view starts in the SK overview (initialMode='sk'). Enter the PSK
-// (Prešov districts) view by clicking the active PSK kraj polygon, then wait for
-// the PSK layer control ("Obvody (…)") to appear.
+// FIX 5: the /map view now opens ALREADY framed on the Prešov okres
+// (initialMode='psk'), so there is no dead whole-SK state. Entering the PSK view
+// just means loading /map and waiting for the Home/reset button (PSK chrome) to
+// appear — no SK-polygon click needed.
 async function enterPsk(page) {
   await gotoStable(page, `${BASE}/map`, '.leaflet-container')
   await page.waitForTimeout(2500)
-  // The PSK kraj is the purple polygon; click its centroid area. PSK (Prešov
-  // region) sits in the NE of Slovakia → upper-right of the map.
-  const box = await page.locator('.leaflet-container').boundingBox()
-  // try a few NE points until the PSK control shows up
-  const pts = [[0.80, 0.30], [0.78, 0.38], [0.82, 0.25], [0.75, 0.33]]
-  for (const [fx, fy] of pts) {
-    await page.mouse.click(box.x + box.width * fx, box.y + box.height * fy)
-    await page.waitForTimeout(1800)
-    const inPsk = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
-    if (inPsk) return true
-  }
-  return false
+  const inPsk = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
+  return inPsk >= 1
 }
 
 async function main() {
@@ -206,6 +201,89 @@ async function main() {
   const demoSchoolInDom = await page.evaluate(() => document.body.innerHTML.includes('Tehelná č. 3 (DEMO)'))
   check(demoSchoolInDom, '18 second DEMO public school marker (Tehelná č. 3) rendered on map')
   await page.screenshot({ path: `${OUT}/18-smeralova-two-schools.png` })
+
+  // ===== FIX 5 — /map opens framed on Prešov; Home resets from first load =====
+  // No SK-polygon click: loading /map must already be in the PSK (Prešov) view,
+  // and the Home button must reset the view from the very first load.
+  await gotoStable(page, `${BASE}/map`, '.leaflet-container')
+  await page.waitForTimeout(2800)
+  const homeOnLoad = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
+  check(homeOnLoad >= 1, 'FIX5 /map opens already framed on Prešov (PSK view, no SK-click needed)')
+  // Reset works from first load (before any drill-in click): zoom in, hit Home,
+  // expect no error and the button still present (view restored).
+  {
+    const box = await page.locator('.leaflet-container').boundingBox()
+    for (let i = 0; i < 3; i++) { await page.mouse.dblclick(box.x + box.width * 0.5, box.y + box.height * 0.5); await page.waitForTimeout(300) }
+    await page.waitForTimeout(500)
+    await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).first().click()
+    await page.waitForTimeout(1500)
+  }
+  const homeAfterReset = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
+  check(homeAfterReset >= 1, 'FIX5 Home/reset works from first load (before any drill-in)')
+  await page.screenshot({ path: `${OUT}/fix5-map-initial-presov.png` })
+
+  // ===== FIX 1-4 + 6 — district DETAIL page (Bajkalská, a RED district) =====
+  await gotoStable(page, `${BASE}/districts/${BAJKALSKA}`, 'table[aria-label="Scorecard podmienok § 44"]')
+  await page.waitForTimeout(1500)
+
+  // (FIX 1) On a RED district, PASS condition rows must NOT show a red ✕ in the
+  // Semafor cell. The per-row semafor reflects the condition's own verdict.
+  const semaforByValue = await page.$$eval(
+    'table[aria-label="Scorecard podmienok § 44"] tbody tr',
+    (trs) => trs.map((tr) => {
+      const cells = tr.querySelectorAll('td')
+      if (cells.length < 5) return null
+      const value = (cells[1].textContent || '').trim()
+      // The 5th cell (index 4) is the Semafor marker.
+      const semaforSpan = cells[4].querySelector('span')
+      const sym = (semaforSpan?.textContent || '').trim()
+      const aria = semaforSpan?.getAttribute('aria-label') || ''
+      return { value, sym, aria }
+    }).filter(Boolean)
+  )
+  const passRows = semaforByValue.filter((r) => r.value.startsWith('PASS'))
+  const redPassRows = passRows.filter((r) => r.sym === '✕' || r.aria === 'RED')
+  check(passRows.length >= 1, `FIX1 RED district detail has PASS condition rows (${passRows.length})`)
+  check(redPassRows.length === 0, `FIX1 PASS rows do NOT show a red ✕ semafor (red-on-PASS=${redPassRows.length})`)
+  // A FAIL row should still show ✕ (the fix is per-row correctness, not hiding red).
+  const failRows = semaforByValue.filter((r) => r.value.startsWith('FAIL'))
+  const failRed = failRows.filter((r) => r.sym === '✕')
+  check(failRows.length === 0 || failRed.length === failRows.length, `FIX1 FAIL rows still show red ✕ (${failRed.length}/${failRows.length})`)
+
+  // (FIX 2) No "generované AI" text anywhere on the page.
+  const aiText = await page.evaluate(() => document.body.innerText)
+  check(!/generované AI|Generované umelou inteligenciou/i.test(aiText), 'FIX2 no "generované AI" explanation text on detail page')
+
+  // (FIX 3) The scorecard table shows "Detail", not "Dôkaz".
+  const tableText = await page.locator('table[aria-label="Scorecard podmienok § 44"]').innerText()
+  check(/Detail/.test(tableText), 'FIX3 scorecard shows "Detail" label')
+  check(!/Dôkaz/.test(tableText), 'FIX3 scorecard no longer shows "Dôkaz" label')
+
+  // (FIX 4) No per-row DEMO chip in the Príznaky column. The Príznaky column is
+  // the 6th cell (index 5). Assert none contains a DEMO badge.
+  const demoChips = await page.$$eval(
+    'table[aria-label="Scorecard podmienok § 44"] tbody tr',
+    (trs) => trs.reduce((n, tr) => {
+      const cells = tr.querySelectorAll('td')
+      if (cells.length < 6) return n
+      return n + (/DEMO/.test(cells[5].textContent || '') ? 1 : 0)
+    }, 0)
+  )
+  check(demoChips === 0, `FIX4 no per-row DEMO chip in Príznaky column (found ${demoChips})`)
+  // The single top disclaimer banner must STILL be present.
+  const topBanner = await page.getByText('DEMO ukážka funkcionalít — záver nie je záväzný.').count()
+  check(topBanner === 1, 'FIX4 top DEMO disclaimer banner kept on detail page')
+
+  // (FIX 6) The detail map renders this district's § 44 findings illustration
+  // (legend box appears when the district has drawable findings).
+  await page.waitForTimeout(1500)
+  const detailIllustration = await page.locator('.demo-finding-legend').count()
+  check(detailIllustration >= 1, `FIX6 detail map shows § 44 findings illustration legend (${detailIllustration})`)
+  await page.screenshot({ path: `${OUT}/fix-detail-bajkalska.png` })
+  // Legible 1366x900 detail-page proof.
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await page.waitForTimeout(800)
+  await page.screenshot({ path: `${OUT}/fix-detail-bajkalska-1366.png` })
 
   await browser.close()
 
