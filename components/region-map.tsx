@@ -1,6 +1,6 @@
 // SSR-safe wrapper: dynamically imports the Leaflet client component
 import dynamic from 'next/dynamic'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -8,6 +8,7 @@ interface RegionMapProps {
   features: DistrictMapFeature[]
   schools: SoSchoolMarker[]
   mrkOverlays: SoMrkOverlay[]
+  mrkLocalities?: SoMrkLocality[]
   findings: SoFindingsPanelItem[]
   overlaps?: SoDistrictOverlap[]
   islands?: SoDistrictIsland[]
@@ -29,6 +30,6 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, findings, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
-  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} findings={findings} overlaps={overlaps} islands={islands} municipalities={municipalities} streetGeocodes={streetGeocodes} housePoints={housePoints} voronoiGeom={voronoiGeom} cleanGeom={cleanGeom} houseDots={houseDots} districtSummaries={districtSummaries} initialMode={initialMode} />
+export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], findings, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
+  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} findings={findings} overlaps={overlaps} islands={islands} municipalities={municipalities} streetGeocodes={streetGeocodes} housePoints={housePoints} voronoiGeom={voronoiGeom} cleanGeom={cleanGeom} houseDots={houseDots} districtSummaries={districtSummaries} initialMode={initialMode} />
 }

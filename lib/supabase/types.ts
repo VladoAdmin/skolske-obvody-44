@@ -113,6 +113,15 @@ export interface SoMrkOverlay {
   geom_geojson: Record<string, unknown> | null
 }
 
+// Locality-level MRK points (mrk_buildings) inside Prešov city districts —
+// powers the "MRK lokality" map layer (item 14) instead of the whole-obec
+// mrk_atlas polygon. geom_geojson is a Point.
+export interface SoMrkLocality {
+  id: string
+  obec_name: string | null
+  geom_geojson: Record<string, unknown> | null
+}
+
 export interface SoFindingsPanelItem {
   finding_id: string
   district_id: string

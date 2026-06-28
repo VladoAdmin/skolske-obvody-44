@@ -3,7 +3,7 @@
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, COMPOSITION_COLOR_MAP, getDistrictHue } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import {
@@ -147,6 +147,7 @@ interface RegionMapClientProps {
   features: DistrictMapFeature[]
   schools: SoSchoolMarker[]
   mrkOverlays: SoMrkOverlay[]
+  mrkLocalities?: SoMrkLocality[]
   findings: SoFindingsPanelItem[]
   overlaps?: SoDistrictOverlap[]
   islands?: SoDistrictIsland[]
@@ -165,7 +166,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkOverlays, findings = [], overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkOverlays, mrkLocalities = [], findings = [], overlaps = [], islands = [], municipalities = [], housePoints = [], voronoiGeom = [], cleanGeom = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -191,6 +192,10 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
   // demo illustration that is built inside the (separate) mode effect closure.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const drawDemoRef = useRef<((feature: any) => void) | null>(null)
+  // Home / reset-view bridge (item 13): restores default center/zoom + default
+  // layer visibility. Populated by the PSK mode effect, called by the overlay
+  // Home button.
+  const homeResetRef = useRef<(() => void) | null>(null)
   // Bridge to clear the demo illustration + selection from outside the mode
   // effect (used by the Esc-to-dismiss keyboard handler).
   const clearDemoRef = useRef<(() => void) | null>(null)
@@ -855,6 +860,24 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
               group.addTo(map)
               demoIllustrationRef.current = group
 
+              // Item 12 — fly to the DRAWN EVIDENCE, not the district centroid.
+              // The S2 overlap strip / island / Pa line sits on a shared edge and
+              // is sub-pixel at the centroid fly target, so the user saw "nothing
+              // highlighted". Fit to the illustration group's bounds (with a min
+              // zoom so a tiny strip still fills the view) so the highlight is
+              // actually on screen. Run after the select handler's flyToBounds.
+              try {
+                const gb = group.getBounds()
+                if (gb.isValid()) {
+                  // Land after the competing centroid flyTo / district
+                  // flyToBounds animations (both ~1s) so the final view frames
+                  // the drawn evidence.
+                  setTimeout(() => {
+                    map.fitBounds(gb, { padding: [60, 60], maxZoom: 17, animate: true })
+                  }, 1100)
+                }
+              } catch { /* ignore — keep the district fly */ }
+
               // Legend box (bottom-left, above attribution) summarising the
               // demo findings drawn for this district. Pure DOM so it does not
               // disturb the Leaflet layer control on the right.
@@ -1072,27 +1095,33 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
 
           schoolsGroup.addTo(map)
 
-          // MRK overlays with hatch pattern
+          // MRK lokality — item 14. We render LOCALITY-LEVEL points from
+          // mrk_buildings (so_mrk_localities → mrkLocalities prop) that fall
+          // inside the Prešov city districts, NOT the whole-obec mrk_atlas
+          // polygon (which lit up the entire city). For Prešov this is a sparse
+          // set (~10 points); if empty, nothing is drawn — never the whole-city
+          // polygon. The obec-level mrkOverlays remain available only as the
+          // engine's P-e illustration context (drawDemoIllustration), not here.
           const mrkGroup = L.featureGroup()
 
-          mrkOverlays.forEach((mrk) => {
-            if (!mrk.geom_geojson) return
-            const geoJsonLayer = L.geoJSON(mrk.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
-              style: {
-                color: '#5b21b6',
-                weight: 1.5,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                fillColor: 'url(#mrkHatch)' as any,
-                fillOpacity: 1,
-                // Non-interactive so a tap on a district area that overlaps an
-                // MRK locality always reaches the district polygon underneath
-                // and opens the district summary popup (never an MRK popup).
-                interactive: false,
-              },
+          mrkLocalities.forEach((loc) => {
+            const geom = loc.geom_geojson as { type?: string; coordinates?: [number, number] } | null
+            if (!geom || geom.type !== 'Point' || !geom.coordinates) return
+            const [lon, lat] = geom.coordinates
+            L.circleMarker([lat, lon], {
+              radius: 5,
+              fillColor: '#7c3aed', // violet-600 — marginalised-community locality
+              color: '#4c1d95',     // violet-900 outline
+              weight: 1.5,
+              fillOpacity: 0.85,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'mrk' as any,
             })
-            geoJsonLayer.addTo(mrkGroup)
+              .bindTooltip(
+                'MRK lokalita (Atlas MRK) — budova/lokalita marginalizovanej rómskej komunity',
+                { sticky: true }
+              )
+              .addTo(mrkGroup)
           })
 
           // MRK stays OFF by default (declutter): the group is built and
@@ -1180,23 +1209,9 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
               layer.addTo(islandsGroup)
             })
 
-          // (G) Street geocode points layer
-          const streetPointsGroup = L.featureGroup()
-          streetGeocodes.forEach((sg) => {
-            if (sg.lat == null || sg.lon == null) return
-            const marker = L.circleMarker([sg.lat, sg.lon], {
-              radius: 3,
-              fillColor: '#10b981',
-              color: '#047857',
-              weight: 1,
-              fillOpacity: 0.7,
-            })
-            marker.bindTooltip(
-              `${sg.street}${sg.partial_match ? ' ⚠ partial' : ''}`,
-              { sticky: true }
-            )
-            marker.addTo(streetPointsGroup)
-          })
+          // (G) [removed item 15] The street-geocode points layer was built but
+          // never registered in the layer control (dead). It is gone now; the
+          // per-house "Adresné body" layer below is the single address layer.
 
           // (H) House points layer — per-house geocodes from VZN ranges
           // Build district_id → index map for HSL hue lookup
@@ -1215,11 +1230,11 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
             const strokeColor = `hsl(${hue}, 70%, 25%)`
 
             const marker = L.circleMarker([hp.lat, hp.lon], {
-              radius: 2.5,
+              radius: 4,
               fillColor,
               color: strokeColor,
-              weight: 0.7,
-              fillOpacity: 0.85,
+              weight: 1,
+              fillOpacity: 0.9,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'streetPoints' as any,
             })
@@ -1297,54 +1312,42 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
             layer.addTo(cleanGroup)
           })
 
-          // (M-2) Per-house dots — only visible when zoomed in past
-          // HOUSE_DOTS_MIN_ZOOM. We build the markers eagerly but gate the
-          // group's addTo/removeFrom on the map's zoom level.
-          const houseDotsGroup = L.featureGroup()
-          houseDots.forEach((hd) => {
-            if (hd.lat == null || hd.lon == null) return
-            const distIdx = districtIndexMap.get(hd.district_id) ?? 0
-            const hue = getDistrictHue(distIdx)
-            const marker = L.circleMarker([hd.lat, hd.lon], {
-              radius: 3,
-              fillColor: `hsl(${hue}, 70%, 45%)`,
-              color: `hsl(${hue}, 70%, 25%)`,
-              weight: 0.8,
-              fillOpacity: 0.9,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              pane: 'streetPoints' as any,
-            })
-            marker.bindTooltip(`${hd.street} ${hd.house_number}`, { sticky: true })
-            marker.addTo(houseDotsGroup)
-          })
-
-          // House dots are OFF by default. They only render once the user
-          // explicitly toggles the "Adresné bodky" layer on AND has zoomed in
-          // past HOUSE_DOTS_MIN_ZOOM. We track the toggle intent via the layer
-          // control's overlayadd/overlayremove events so the zoom listener
-          // never re-introduces the dots on its own.
-          let houseDotsEnabled = false
-          const updateHouseDotsVisibility = () => {
+          // (item 15) The duplicate per-house "Adresné bodky" layer (houseDots,
+          // so_house_dots) was REMOVED — it rendered the same per-house data as
+          // housePointsGroup (so_house_points). "Adresné body obvodov" below is
+          // now the single per-house address layer.
+          //
+          // Discoverability gating for that single layer: at the default
+          // whole-city extent ~460 dots overlap into mush, so when the user
+          // toggles "Adresné body" ON we auto-fly to a readable zoom, and we
+          // only actually render the dots once zoomed in past
+          // HOUSE_DOTS_MIN_ZOOM (so the toggle never paints an illegible blob).
+          let housePointsEnabled = false
+          const updateHousePointsVisibility = () => {
             const z = map.getZoom()
-            if (houseDotsEnabled && z >= HOUSE_DOTS_MIN_ZOOM) {
-              if (!map.hasLayer(houseDotsGroup)) map.addLayer(houseDotsGroup)
+            if (housePointsEnabled && z >= HOUSE_DOTS_MIN_ZOOM) {
+              if (!map.hasLayer(housePointsGroup)) map.addLayer(housePointsGroup)
             } else {
-              if (map.hasLayer(houseDotsGroup)) map.removeLayer(houseDotsGroup)
+              if (map.hasLayer(housePointsGroup)) map.removeLayer(housePointsGroup)
             }
           }
-          map.on('zoomend', updateHouseDotsVisibility)
+          map.on('zoomend', updateHousePointsVisibility)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           map.on('overlayadd', (e: any) => {
-            if (e.layer === houseDotsGroup) {
-              houseDotsEnabled = true
-              updateHouseDotsVisibility()
+            if (e.layer === housePointsGroup) {
+              housePointsEnabled = true
+              // Nudge the user to a zoom where the per-house dots are legible.
+              if (map.getZoom() < HOUSE_DOTS_MIN_ZOOM) {
+                map.setZoom(HOUSE_DOTS_MIN_ZOOM)
+              }
+              updateHousePointsVisibility()
             }
           })
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           map.on('overlayremove', (e: any) => {
-            if (e.layer === houseDotsGroup) {
-              houseDotsEnabled = false
-              updateHouseDotsVisibility()
+            if (e.layer === housePointsGroup) {
+              housePointsEnabled = false
+              updateHousePointsVisibility()
             }
           })
 
@@ -1370,11 +1373,17 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
           if (anomalyIslandsCount > 0) {
             overlays[`Anomálie / ostrovy (${anomalyIslandsCount})`] = islandsGroup
           }
-          overlays['MRK lokality (Atlas marginalizovaných rómskych komunít)'] = mrkGroup
-          // Expert layers (off by default — analyst evidence, not for normal view)
-          overlays['⚙ Expert: Domy z VZN (Google geokódovanie, 460 platných)'] = housePointsGroup
-          if (houseDots.length > 0) {
-            overlays[`Adresné bodky obvodov (auto-zobrazia sa pri priblížení ≥ ${HOUSE_DOTS_MIN_ZOOM})`] = houseDotsGroup
+          // MRK locality-level points (item 14). Only registered when there is
+          // something to show for Prešov — never the whole-obec polygon.
+          if (mrkLocalities.length > 0) {
+            overlays[`MRK lokality — body (${mrkLocalities.length}, Atlas MRK)`] = mrkGroup
+          }
+          // Single per-house address layer (item 15): Google-geocoded VZN house
+          // ranges, district-hued. Auto-zooms in on toggle; dots appear once
+          // zoomed past the legibility threshold.
+          const validHousePointsCount = housePoints.filter((hp) => hp.valid !== false).length
+          if (validHousePointsCount > 0) {
+            overlays[`Adresné body obvodov (${validHousePointsCount}, priblížte ≥ ${HOUSE_DOTS_MIN_ZOOM})`] = housePointsGroup
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const layersControl = L.control.layers(undefined, overlays as any, {
@@ -1399,16 +1408,39 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
           schoolsGroup.addTo(map)
 
           // Fit bounds to the authoritative districtsGroup (corrected geom).
-          try {
-            const bounds = districtsGroup.getBounds()
-            if (bounds.isValid()) {
-              map.fitBounds(bounds, { padding: [20, 20] })
-            }
-          } catch {
+          const fitToDistricts = () => {
+            try {
+              const bounds = districtsGroup.getBounds()
+              if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [20, 20] })
+                return
+              }
+            } catch { /* fall through */ }
             map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
           }
+          fitToDistricts()
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, streetPointsGroup, housePointsGroup, voronoiGroup, cleanGroup, houseDotsGroup, islandsGroup]
+          // Item 13 — Home / reset-view. Restores the DEFAULT extent and the
+          // DEFAULT layer visibility (only obvody + školy ON; every analytical
+          // overlay OFF), clears any selection / demo illustration and closes
+          // popups, and resets the per-house toggle gate. Reuses the same
+          // districtsGroup fit as the initial load (single source of the default
+          // extent).
+          const allOverlayGroups = [mrkGroup, overlapsGroup, housePointsGroup, voronoiGroup, cleanGroup, islandsGroup]
+          homeResetRef.current = () => {
+            // clearDemoRef wraps closePopup + resetSelectedDistrict +
+            // clearDemoIllustration (defined in the districts-setup closure).
+            if (clearDemoRef.current) clearDemoRef.current()
+            else { try { map.closePopup() } catch { /* ignore */ } }
+            // Drop every analytical overlay; keep only the default-ON layers.
+            allOverlayGroups.forEach((g) => { if (map.hasLayer(g)) map.removeLayer(g) })
+            housePointsEnabled = false
+            if (!map.hasLayer(districtsGroup)) districtsGroup.addTo(map)
+            if (!map.hasLayer(schoolsGroup)) schoolsGroup.addTo(map)
+            fitToDistricts()
+          }
+
+          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, overlapsGroup, housePointsGroup, voronoiGroup, cleanGroup, islandsGroup]
         } else {
           const [districtsGroup, schoolsGroup] = layersRef.current.psk
           // Re-add ONLY the default-ON layers (corrected obvody + školy); every
@@ -1437,13 +1469,28 @@ export function RegionMapClient({ features, schools, mrkOverlays, findings = [],
   return (
     <div className="relative w-full h-full">
       {mode === 'psk' && (
-        <button
-          onClick={() => setMode('sk')}
-          className="absolute top-2 left-2 z-[1000] rounded bg-white border border-border px-3 py-1.5 text-xs font-medium shadow hover:bg-accent transition-colors"
-          aria-label="Späť na prehľad Slovenska"
-        >
-          ← Späť na Slovensko
-        </button>
+        <div className="absolute top-2 left-2 z-[1000] flex items-center gap-2">
+          <button
+            onClick={() => setMode('sk')}
+            className="rounded-sm bg-white border border-gov-border px-3 py-1.5 text-xs font-medium shadow-gov hover:bg-gov-blue50 transition-colors"
+            aria-label="Späť na prehľad Slovenska"
+          >
+            ← Späť na Slovensko
+          </button>
+          {/* Item 13 — Home / reset view: restores default center/zoom + default
+              layer visibility. */}
+          <button
+            onClick={() => homeResetRef.current?.()}
+            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-sm bg-white border border-gov-border shadow-gov hover:bg-gov-blue50 transition-colors"
+            aria-label="Obnoviť pôvodné zobrazenie mapy"
+            title="Obnoviť pôvodné zobrazenie"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0055A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 10.5 12 3l9 7.5" />
+              <path d="M5 9.5V21h14V9.5" />
+            </svg>
+          </button>
+        </div>
       )}
       <div
         ref={containerRef}

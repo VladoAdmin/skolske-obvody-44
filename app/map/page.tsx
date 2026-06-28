@@ -6,7 +6,7 @@ import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot, DistrictScorecardRow } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot, DistrictScorecardRow } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries, buildMultiPartByDistrict } from '@/lib/compliance/school-popup'
@@ -45,6 +45,17 @@ async function fetchMrkOverlays(): Promise<SoMrkOverlay[]> {
     const { data, error } = await sb.from('so_mrk_overlays').select('*')
     if (error) throw error
     return (data ?? []) as SoMrkOverlay[]
+  } catch {
+    return []
+  }
+}
+
+async function fetchMrkLocalities(): Promise<SoMrkLocality[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_mrk_localities').select('*')
+    if (error) throw error
+    return (data ?? []) as SoMrkLocality[]
   } catch {
     return []
   }
@@ -177,10 +188,11 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots, scorecardRows] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, overlaps, islands, municipalities, streetGeocodes, housePoints, voronoiGeom, cleanGeom, houseDots, scorecardRows] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
+    fetchMrkLocalities(),
     fetchFindings(),
     fetchOverlaps(),
     fetchIslands(),
@@ -254,6 +266,7 @@ export default async function MapPage() {
                 features={features}
                 schools={schools}
                 mrkOverlays={mrkOverlays}
+                mrkLocalities={mrkLocalities}
                 findings={findings}
                 overlaps={overlaps}
                 islands={islands}
@@ -277,7 +290,7 @@ export default async function MapPage() {
         <p className="text-xs text-muted-foreground mt-2">
           Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: 'hsl(40,65%,60%)', opacity: 0.5 }}></span> Obvod (kategorická farba)</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3" style={{ background: 'repeating-linear-gradient(45deg, #7c3aed, #7c3aed 2px, transparent 2px, transparent 5px)' }}></span> MRK lokalita</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#7c3aed' }}></span> MRK lokalita — bod (Atlas MRK, budova/lokalita)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#2563eb' }}></span> Škola verejná (mesto Prešov)</span>
           <span className="mx-2">·</span>
@@ -285,9 +298,7 @@ export default async function MapPage() {
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm" style={{ background: '#dc2626', opacity: 0.25 }}></span> Prekryv obvodov: svetlejšie = 1, tmavšie = viac</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-dashed" style={{ borderColor: '#10b981', background: 'transparent' }}></span> Google hull (Sprint G)</span>
-          <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body (Google)</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body obvodov (Google geokód, priblížte sa)</span>
         </p>
       </div>
 
