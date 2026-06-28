@@ -60,3 +60,31 @@ export function getColorSymbol(color: string | null | undefined): string {
 export function getColorLabel(color: string | null | undefined): string {
   return COLOR_LABEL[(color as CompositionColor) ?? 'NONE'] ?? 'Nezhodnotené'
 }
+
+// Per-CONDITION verdict → semafor colour. Unlike composition_color (which is the
+// district-wide roll-up), this maps a single condition's own `value` so each
+// scorecard row shows ITS verdict, not the district's. PASS→GREEN, FAIL→RED,
+// RISK→ORANGE, INCOMPLETE/INSUFFICIENT_DATA→NONE (the "?" not-yet-known marker).
+// Values OUTSIDE the legal traffic light (SIGNAL, NOT_EVALUATED) are handled by
+// isOutsideSemafor() below and must NOT be coloured red — see verdict-row.tsx.
+export function valueToColor(value: string | null | undefined): CompositionColor {
+  switch (value) {
+    case 'PASS':
+      return 'GREEN'
+    case 'FAIL':
+      return 'RED'
+    case 'RISK':
+      return 'ORANGE'
+    default:
+      // INCOMPLETE, INSUFFICIENT_DATA and anything unknown → not-yet-known.
+      return 'NONE'
+  }
+}
+
+// Values / conditions that sit OUTSIDE the § 44 legal traffic light and must
+// never render a red ✕: soft SIGNAL indicators (sociálny kontext, demografia),
+// NOT_EVALUATED, and the JAZYK condition ("podnet nad rámec § 44"). These get a
+// neutral "mimo semaforu" dash instead of a colour symbol.
+export function isOutsideSemafor(value: string | null | undefined): boolean {
+  return value === 'SIGNAL' || value === 'NOT_EVALUATED'
+}

@@ -14,7 +14,8 @@ import type {
   SoDistrictVoronoi,
   SoDistrictIsland,
   SoDistrictAddressStats,
-  SoFindingExplanation,
+  SoFindingsPanelItem,
+  SoDistrictOverlap,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -43,7 +44,8 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawAllScorecard },
     { data: rawFindings },
     { data: rawAddressStats },
-    { data: rawExplanations },
+    { data: rawDistrictFindings },
+    { data: rawOverlaps },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -56,9 +58,11 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
-    // AI explanations keyed by (condition_code, value) so each one MATCHES the
-    // district's actual verdict value (a PASS never reads like a problem).
-    sb.from('so_finding_explanations').select('condition_code,value,explanation_sk'),
+    // This district's full findings + overlaps drive the detail-map § 44
+    // illustrations (same builder the PSK region map uses), so the user sees
+    // WHERE each failing condition is, not just a table row.
+    sb.from('so_findings_panel').select('*').eq('district_id', id),
+    sb.from('so_district_overlaps').select('*').or(`district_a_id.eq.${id},district_b_id.eq.${id}`),
   ])
 
   if (scorecardError) throw scorecardError
@@ -72,20 +76,8 @@ export default async function DistrictPage({ params }: Props) {
   const streetGeocodes = (rawStreetGeocodes ?? []) as SoStreetGeocode[]
   const islands = (rawIslands ?? []) as SoDistrictIsland[]
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
-
-  // Precomputed AI explanations keyed by (condition_code, value). We look up the
-  // explanation for the district's ACTUAL verdict value so the text always
-  // matches the verdict (a PASS row never shows problem-toned text). Empty until
-  // the generator has run.
-  const explanationByValue: Record<string, string> = {}
-  for (const e of (rawExplanations ?? []) as SoFindingExplanation[]) {
-    explanationByValue[`${e.condition_code}|${e.value}`] = e.explanation_sk
-  }
-  const explanationByCode: Record<string, string> = {}
-  for (const r of rows) {
-    const key = `${r.condition_code}|${r.value}`
-    if (explanationByValue[key]) explanationByCode[r.condition_code] = explanationByValue[key]
-  }
+  const districtFindings = (rawDistrictFindings ?? []) as SoFindingsPanelItem[]
+  const overlaps = (rawOverlaps ?? []) as SoDistrictOverlap[]
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
   const allScorecard = (rawAllScorecard ?? []) as DistrictScorecardRow[]
@@ -208,6 +200,8 @@ export default async function DistrictPage({ params }: Props) {
         housePoints={housePoints}
         streetGeocodes={streetGeocodes}
         islands={islands}
+        findings={districtFindings}
+        overlaps={overlaps}
         districtSummaries={districtSummaries}
       />
 
@@ -248,7 +242,7 @@ export default async function DistrictPage({ params }: Props) {
               )}
             </div>
           )}
-          <DistrictScorecard rows={sorted} explanationByCode={explanationByCode} />
+          <DistrictScorecard rows={sorted} />
         </section>
       ) : (
         <Alert>

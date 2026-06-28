@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react'
 import type { DistrictScorecardRow } from '@/lib/supabase/types'
-import { getColorClass, getColorSymbol } from '@/lib/compliance/colors'
+import { getColorClass, getColorSymbol, valueToColor, isOutsideSemafor } from '@/lib/compliance/colors'
 import { getConditionDescription } from '@/lib/compliance/labels'
 import { ProvenanceLink } from './provenance-link'
 import { Badge } from '@/components/ui/badge'
@@ -10,24 +10,6 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 
 interface VerdictRowProps {
   row: DistrictScorecardRow
-  // Precomputed AI-generated plain-Slovak explanation for this condition.
-  // Optional — absent until the explanations have been generated.
-  aiExplanation?: string
-}
-
-function AiExplanation({ text }: { text: string }) {
-  return (
-    <div className="mt-2 rounded border border-violet-200 bg-violet-50 px-2 py-1.5">
-      <p className="flex items-center gap-1 text-[11px] font-semibold text-violet-800">
-        <span aria-hidden>✦</span> Vysvetlenie (generované AI)
-      </p>
-      <p className="mt-0.5 text-xs leading-relaxed text-violet-900">{text}</p>
-      <p className="mt-1 text-[10px] italic text-violet-700">
-        Generované umelou inteligenciou ako pomôcka pre čitateľa — nemení právny
-        verdikt podmienky.
-      </p>
-    </div>
-  )
 }
 
 const VALUE_DESCRIPTIONS: Record<string, string> = {
@@ -98,15 +80,22 @@ function ProgressBar({ value, label }: { value: number | null | undefined; label
   )
 }
 
-export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
-  const colorSymbol = getColorSymbol(row.composition_color)
-  const colorClass = getColorClass(row.composition_color)
+export function VerdictRow({ row }: VerdictRowProps) {
+  // The per-row semafor reflects THIS condition's own verdict (row.value), not
+  // the district-wide composition_color — so on a RED district a PASS row shows
+  // a green ✓, not a red ✕. Conditions/values outside the § 44 traffic light
+  // (SIGNAL, NOT_EVALUATED, and the JAZYK "podnet nad rámec § 44") get a neutral
+  // "mimo semaforu" dash instead of a colour symbol.
+  const outsideSemafor = isOutsideSemafor(row.value) || row.condition_code === 'JAZYK'
+  const rowColor = valueToColor(row.value)
+  const colorSymbol = getColorSymbol(rowColor)
+  const colorClass = getColorClass(rowColor)
   const detailId = useId()
   const [open, setOpen] = useState(false)
 
-  // The row carries detail only when there is evidence or an AI explanation to
-  // show; otherwise it stays static (nothing to expand).
-  const hasDetail = Boolean(row.evidence_public_text) || Boolean(aiExplanation)
+  // The row carries detail only when there is evidence text to show; otherwise
+  // it stays static (nothing to expand).
+  const hasDetail = Boolean(row.evidence_public_text)
 
   function toggle() {
     if (hasDetail) setOpen((v) => !v)
@@ -152,7 +141,7 @@ export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
           </div>
         </td>
 
-        {/* Value (REAL verdict); a DEMO badge appears under Príznaky when is_mock */}
+        {/* Value (REAL verdict) */}
         <td className="px-3 py-2 align-top">
           <div className="flex flex-col">
             <ValueBadge value={row.value} />
@@ -169,15 +158,27 @@ export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
           <ProgressBar value={row.data_completeness} label="Úplnosť dát" />
         </td>
 
-        {/* Semafor */}
+        {/* Semafor — reflects THIS condition's own verdict (row.value). Language
+            and SIGNAL/NOT_EVALUATED conditions are outside the § 44 traffic
+            light, so they show a neutral "mimo semaforu" dash, never a red ✕. */}
         <td className="px-3 py-2 align-top">
-          <span
-            className={`inline-flex h-6 w-6 items-center justify-center rounded border text-xs font-bold ${colorClass}`}
-            aria-label={row.composition_color ?? 'NONE'}
-            title={row.composition_color ?? 'NONE'}
-          >
-            {colorSymbol}
-          </span>
+          {outsideSemafor ? (
+            <span
+              className="inline-flex h-6 w-6 items-center justify-center rounded border border-gray-300 bg-gray-50 text-xs font-bold text-gray-400"
+              aria-label="mimo semaforu"
+              title="Mimo semaforu § 44 — nevstupuje do zákonného verdiktu"
+            >
+              —
+            </span>
+          ) : (
+            <span
+              className={`inline-flex h-6 w-6 items-center justify-center rounded border text-xs font-bold ${colorClass}`}
+              aria-label={rowColor}
+              title={rowColor}
+            >
+              {colorSymbol}
+            </span>
+          )}
         </td>
 
         {/* Flags */}
@@ -189,14 +190,6 @@ export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
             {row.is_proxy && (
               <Badge variant="outline" className="text-xs py-0">PROXY</Badge>
             )}
-            {row.is_mock && (
-              <Tooltip>
-                <TooltipTrigger onClick={(e) => e.stopPropagation()}>
-                  <Badge variant="outline" className="text-xs py-0 border-fuchsia-300 bg-fuchsia-100 text-fuchsia-800">DEMO</Badge>
-                </TooltipTrigger>
-                <TooltipContent>Ukážkové dáta — ilustrácia funkcionality, nevstupuje do zákonného verdiktu</TooltipContent>
-              </Tooltip>
-            )}
           </div>
         </td>
 
@@ -206,7 +199,7 @@ export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
           {hasDetail ? (
             <span className="inline-flex items-center gap-1 text-xs text-primary">
               <span aria-hidden className={`transition-transform ${open ? 'rotate-90' : ''}`}>▸</span>
-              {row.evidence_public_text ? 'Dôkaz' : 'Vysvetlenie'}
+              Detail
             </span>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
@@ -228,7 +221,6 @@ export function VerdictRow({ row, aiExplanation }: VerdictRowProps) {
                 <ProvenanceLink url={row.provenance_source} />
               </div>
             )}
-            {aiExplanation && <AiExplanation text={aiExplanation} />}
           </td>
         </tr>
       )}

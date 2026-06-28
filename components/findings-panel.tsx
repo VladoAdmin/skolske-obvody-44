@@ -184,14 +184,6 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
                     >
                       {SEVERITY_LABELS[item.severity as SeverityFilter] ?? item.severity}
                     </span>
-                    {item.is_demo && (
-                      <span
-                        className="mt-0.5 flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-600 text-white"
-                        title="Ukážková chyba — demonštrácia toho, čo engine vie detegovať"
-                      >
-                        DEMO
-                      </span>
-                    )}
                     <div className="min-w-0">
                       <p className="font-medium text-foreground truncate">{item.district_name}</p>
                       <p className="text-muted-foreground truncate">{item.condition_label_sk}</p>

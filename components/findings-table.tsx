@@ -22,17 +22,6 @@ const STATUS_LABELS: Record<string, string> = {
   wont_fix: 'Neopravovať',
 }
 
-function DemoBadge() {
-  return (
-    <span
-      className="inline-flex items-center rounded border border-fuchsia-300 bg-fuchsia-100 px-1 py-0.5 text-[10px] font-bold uppercase tracking-wide text-fuchsia-800"
-      title="Ukážkové dáta — ilustrácia funkcionality, nevstupuje do zákonného verdiktu"
-    >
-      DEMO
-    </span>
-  )
-}
-
 export function FindingsTable({ findings, totalCount, page, pageSize }: FindingsTableProps) {
   const [openId, setOpenId] = useState<string | null>(null)
 
@@ -94,7 +83,6 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
               </div>
               <div className="flex items-center gap-2">
                 <code className="font-mono text-xs">{finding.condition_code}</code>
-                {finding.is_demo && <DemoBadge />}
                 <p className="text-xs text-muted-foreground">
                   {getConditionLabel(finding.condition_code)}
                 </p>
@@ -163,7 +151,6 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
                     <TableCell className="text-xs">
                       <div className="flex items-center gap-1.5">
                         <code className="font-mono text-xs">{finding.condition_code}</code>
-                        {finding.is_demo && <DemoBadge />}
                       </div>
                       <span className="block text-muted-foreground text-xs">
                         {getConditionLabel(finding.condition_code)}

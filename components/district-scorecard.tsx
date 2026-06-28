@@ -4,16 +4,13 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 
 interface DistrictScorecardProps {
   rows: DistrictScorecardRow[]
-  // condition_code → AI-generated plain-Slovak explanation (precomputed,
-  // optional; empty when explanations have not been generated yet).
-  explanationByCode?: Record<string, string>
 }
 
-export function DistrictScorecard({ rows, explanationByCode = {} }: DistrictScorecardProps) {
+export function DistrictScorecard({ rows }: DistrictScorecardProps) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <p className="px-3 py-1.5 text-xs text-muted-foreground border-b border-border bg-muted/30">
-        Kliknite na riadok a rozbalíte jeho dôkaz a vysvetlenie.
+        Kliknite na riadok a rozbalíte jeho detail.
       </p>
       <table className="w-full text-sm" aria-label="Scorecard podmienok § 44">
         <thead>
@@ -63,11 +60,7 @@ export function DistrictScorecard({ rows, explanationByCode = {} }: DistrictScor
         </thead>
         <tbody>
           {rows.map((row) => (
-            <VerdictRow
-              key={row.condition_code}
-              row={row}
-              aiExplanation={explanationByCode[row.condition_code]}
-            />
+            <VerdictRow key={row.condition_code} row={row} />
           ))}
         </tbody>
       </table>
