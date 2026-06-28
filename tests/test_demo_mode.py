@@ -120,6 +120,32 @@ def test_pd_demo_no_barrier_pass():
         _decisive(c.check_pd(_D), V.PASS)
 
 
+# ------------------------------------------------------------------------- JAZYK
+def test_jazyk_demo_minority_signal():
+    """A minority teaching language is a decisive SIGNAL (podnet mimo § 44)."""
+    import engine.c_lang as c
+    with mock.patch.object(c, "get_demo_input", return_value={"jazyk_language": "HU"}):
+        v = c.check_lang(_D)
+    _decisive(v, V.SIGNAL)
+    assert "menšin" in v.evidence_text.lower()
+
+
+def test_jazyk_demo_slovak_is_evaluated_never_not_evaluated():
+    """
+    Item 4 (owner explicit): in demo mode JAZYK for a Slovak-teaching school must
+    be a DECISIVE evaluated state (NO_SIGNAL — "bez jazykového podnetu"), NEVER
+    the literal NOT_EVALUATED. Stays is_mock + outside the semafor.
+    """
+    import engine.c_lang as c
+    with mock.patch.object(c, "get_demo_input", return_value={"jazyk_language": None}):
+        v = c.check_lang(_D)
+    assert v.value == V.NO_SIGNAL, f"expected NO_SIGNAL, got {v.value}"
+    assert v.value != V.NOT_EVALUATED
+    assert v.confidence >= HIGH and v.data_completeness >= HIGH
+    assert v.is_mock is True
+    assert "slovenčin" in v.evidence_text.lower()
+
+
 # --------------------------------------------------------------------------- Pe
 def test_pe_demo_signal():
     import engine.c_pe as c
@@ -169,3 +195,23 @@ def test_legal_fail_is_red_regardless_of_indicators():
         "Pd": Verdict(_D["id"], "Pd", V.PASS, 0.95, 0.95, {}, {}),
     }
     assert compose_color(verdicts)["color"] == Color.RED
+
+
+# ----------------------------------------------------------------- demo-tag strip
+def test_evidence_strips_inline_demo_tags():
+    """
+    Item 7: the stored (UI-facing) evidence_text must NOT carry inline
+    [DEMO]/Ukážkové-dáta notices — the single top banner is the only demo notice.
+    The is_mock flag still carries the demo status internally.
+    """
+    from engine.verdict import strip_demo_tags
+    v = Verdict(_D["id"], "S1", V.FAIL, 0.95, 0.95, {}, {},
+                evidence_text="FAIL [DEMO]: 14 adries v zlom obvode. Ukážkové dáta.",
+                is_mock=True)
+    rec = v.to_db_record()
+    assert "[DEMO" not in rec["evidence_text"]
+    assert "Ukážkov" not in rec["evidence_text"]
+    assert rec["evidence_text"].startswith("FAIL:")
+    assert rec["is_mock"] is True
+    # helper is idempotent
+    assert strip_demo_tags(rec["evidence_text"]) == rec["evidence_text"]

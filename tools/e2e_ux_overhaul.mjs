@@ -34,7 +34,7 @@ async function gotoStable(page, url, sel, tries = 4) {
 async function enterPsk(page) {
   await gotoStable(page, `${BASE}/map`, '.leaflet-container')
   await page.waitForTimeout(2500)
-  const inPsk = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
+  const inPsk = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy (Prešov)' }).count()
   return inPsk >= 1
 }
 
@@ -140,7 +140,7 @@ async function main() {
   await page.screenshot({ path: `${OUT}/14-mrk-points.png` })
 
   // ===== ITEM 13 — Home button resets view =====
-  const homeBtn = page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' })
+  const homeBtn = page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy (Prešov)' })
   check(await homeBtn.count() >= 1, '13 Home (reset) button present')
   const zoomBefore = await page.evaluate(() => {
     // grab the leaflet map zoom from any container that has it
@@ -207,7 +207,7 @@ async function main() {
   // and the Home button must reset the view from the very first load.
   await gotoStable(page, `${BASE}/map`, '.leaflet-container')
   await page.waitForTimeout(2800)
-  const homeOnLoad = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
+  const homeOnLoad = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy (Prešov)' }).count()
   check(homeOnLoad >= 1, 'FIX5 /map opens already framed on Prešov (PSK view, no SK-click needed)')
   // Reset works from first load (before any drill-in click): zoom in, hit Home,
   // expect no error and the button still present (view restored).
@@ -215,10 +215,10 @@ async function main() {
     const box = await page.locator('.leaflet-container').boundingBox()
     for (let i = 0; i < 3; i++) { await page.mouse.dblclick(box.x + box.width * 0.5, box.y + box.height * 0.5); await page.waitForTimeout(300) }
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).first().click()
+    await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy (Prešov)' }).first().click()
     await page.waitForTimeout(1500)
   }
-  const homeAfterReset = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy' }).count()
+  const homeAfterReset = await page.getByRole('button', { name: 'Obnoviť pôvodné zobrazenie mapy (Prešov)' }).count()
   check(homeAfterReset >= 1, 'FIX5 Home/reset works from first load (before any drill-in)')
   await page.screenshot({ path: `${OUT}/fix5-map-initial-presov.png` })
 
@@ -284,6 +284,63 @@ async function main() {
   await page.setViewportSize({ width: 1366, height: 900 })
   await page.waitForTimeout(800)
   await page.screenshot({ path: `${OUT}/fix-detail-bajkalska-1366.png` })
+
+  // ===== BATCH-4 — clean demo: no garbage anywhere, JAZYK evaluated =====
+  const VAZECKA = '61724cfb-2093-4f19-a47e-92b0b7e12429' // GREEN, JAZYK=HU → SIGNAL
+  const MAJOVE = 'd15e65c7-7a0b-4e9d-bb6f-3b5f9667a8b5'  // GREEN, JAZYK=SK → evaluated
+
+  // (B4-1) Full clean map: 12 solid districts, framed on Prešov. Legible 1366x900.
+  await page.setViewportSize({ width: 1366, height: 900 })
+  await gotoStable(page, `${BASE}/map`, '.leaflet-container')
+  await page.waitForTimeout(2800)
+  // Districts render into a custom leaflet-districts-pane as interactive paths
+  // (one fill path per district). Count interactive district polygons.
+  const districtPaths = await page.evaluate(() =>
+    document.querySelectorAll('path.leaflet-interactive').length)
+  check(districtPaths >= 12, `B4-2 map renders >=12 district polygons (${districtPaths})`)
+  await page.screenshot({ path: `${OUT}/b4-clean-map-12-districts.png` })
+
+  // (B4-3) No garbage verdict text ANYWHERE on the map page.
+  const mapText = await page.evaluate(() => document.body.innerText)
+  check(!/NOT_EVALUATED|INSUFFICIENT|NEVYHODNOTENÉ.*JAZYK/i.test(mapText),
+    'B4-3 no NOT_EVALUATED/INSUFFICIENT garbage text on /map')
+
+  // (B4-4) Důkaz: scan several detail pages — every scorecard cell is decisive,
+  // no INSUFFICIENT_DATA / NOT_EVALUATED / INCOMPLETE leaks, JAZYK reads evaluated.
+  for (const [id, label] of [[VAZECKA, 'Važecká (JAZYK=HU)'], [MAJOVE, 'Májové (JAZYK=SK)'], [BAJKALSKA, 'Bajkalská (RED)']]) {
+    await gotoStable(page, `${BASE}/districts/${id}`, 'table[aria-label="Scorecard podmienok § 44"]')
+    await page.waitForTimeout(1200)
+    const t = await page.locator('table[aria-label="Scorecard podmienok § 44"]').innerText()
+    check(!/INSUFFICIENT_DATA|INCOMPLETE/.test(t), `B4-4 ${label}: no INSUFFICIENT_DATA/INCOMPLETE in scorecard`)
+    // The raw enum NOT_EVALUATED must never appear (it is rendered as a friendly label).
+    check(!/NOT_EVALUATED/.test(t), `B4-4 ${label}: no raw NOT_EVALUATED enum in scorecard`)
+    // JAZYK row exists and is decisively evaluated (SIGNÁL for HU, Bez podnetu for SK).
+    const jazykRow = await page.$$eval('table[aria-label="Scorecard podmienok § 44"] tbody tr',
+      (trs) => trs.map((tr) => tr.innerText).find((x) => /JAZYK|jazyk/i.test(x)) || '')
+    check(/SIGNÁL|Bez podnetu/.test(jazykRow) && !/NOT_EVALUATED|Nevyhodnotené/.test(jazykRow),
+      `B4-5 ${label}: JAZYK reads as evaluated ("${jazykRow.replace(/\s+/g, ' ').slice(0, 60)}")`)
+  }
+
+  // (B4-6) Fully-populated decisive scorecard proof on a GREEN district (Važecká),
+  // including JAZYK evaluated. 1366x900.
+  await gotoStable(page, `${BASE}/districts/${VAZECKA}`, 'table[aria-label="Scorecard podmienok § 44"]')
+  await page.waitForTimeout(1200)
+  await page.screenshot({ path: `${OUT}/b4-scorecard-vazecka-jazyk.png` })
+
+  // (B4-7) No empty island block on a detail page that previously fragmented
+  // (Šmeralova): a single clean obvod must not render a spurious "ostrovy" section.
+  const SMERALOVA = 'cddfee4e-fb1d-48c1-bbb5-2626ae415f87'
+  await gotoStable(page, `${BASE}/districts/${SMERALOVA}`, 'table[aria-label="Scorecard podmienok § 44"]')
+  await page.waitForTimeout(1200)
+  const islandsHeading = await page.locator('#islands-heading').count()
+  check(islandsHeading === 0, `B4-7 Šmeralova: no spurious "ostrovy" section on a clean single-polygon obvod (${islandsHeading})`)
+
+  // (B4-8) MRK / segregation illustration proof (Šrobárova — Pe SIGNAL on real
+  // MRK locality points). Capture for docs/proof.
+  const SROBAROVA = '9f1e3d72-5246-4414-9340-bccc2d6036d0'
+  await gotoStable(page, `${BASE}/districts/${SROBAROVA}`, 'table[aria-label="Scorecard podmienok § 44"]')
+  await page.waitForTimeout(2000)
+  await page.screenshot({ path: `${OUT}/b4-segregation-mrk-srobarova.png` })
 
   await browser.close()
 
