@@ -82,9 +82,44 @@ export function valueToColor(value: string | null | undefined): CompositionColor
 }
 
 // Values / conditions that sit OUTSIDE the § 44 legal traffic light and must
-// never render a red ✕: soft SIGNAL indicators (sociálny kontext, demografia),
-// NOT_EVALUATED, and the JAZYK condition ("podnet nad rámec § 44"). These get a
-// neutral "mimo semaforu" dash instead of a colour symbol.
+// never render a red ✕: soft SIGNAL/NO_SIGNAL indicators (sociálny kontext,
+// demografia, jazyk) and NOT_EVALUATED. These get a neutral "mimo semaforu" dash
+// instead of a colour symbol. Whether a whole CONDITION is outside the semafor
+// (JAZYK / Pe / Pf) is decided by isSemaforApplicable() — a data-driven flag —
+// not by hardcoding the condition code in the component.
 export function isOutsideSemafor(value: string | null | undefined): boolean {
-  return value === 'SIGNAL' || value === 'NOT_EVALUATED'
+  return value === 'SIGNAL' || value === 'NO_SIGNAL' || value === 'NOT_EVALUATED'
+}
+
+// Condition-group membership: which §44 conditions feed the legal traffic light.
+// S1–S3 (legal) and Pa–Pd (risk indicators) are IN the semafor; Pe/Pf (analytical
+// signals) and JAZYK (podnet nad rámec § 44) are OUTSIDE it. This replaces the
+// previous `condition_code === 'JAZYK'` hardcode in verdict-row.tsx (item 8a):
+// outside-semafor status now comes from the condition-group contract, mirrored
+// from the engine's LEGAL/INDICATOR/SIGNAL grouping in engine/compose.py.
+const SEMAFOR_CONDITIONS = new Set(['S1', 'S2', 'S3', 'Pa', 'Pb', 'Pc', 'Pd'])
+
+export function isSemaforApplicable(conditionCode: string | null | undefined): boolean {
+  return conditionCode != null && SEMAFOR_CONDITIONS.has(conditionCode)
+}
+
+// Friendly SK label for a raw verdict value in the scorecard badge, so JAZYK /
+// signal rows never expose the raw enum (e.g. "NO_SIGNAL", "NOT_EVALUATED") to a
+// lay reader. PASS/FAIL/RISK keep their familiar enum (they map to the semafor).
+export const VALUE_LABEL_SK: Record<string, string> = {
+  PASS: 'PASS',
+  FAIL: 'FAIL',
+  RISK: 'RISK',
+  INCOMPLETE: 'NEÚPLNÉ',
+  INSUFFICIENT_DATA: 'MÁLO DÁT',
+  SIGNAL: 'SIGNÁL',
+  NO_SIGNAL: 'Bez podnetu',
+  NOT_EVALUATED: 'Nevyhodnotené',
+  ILUSTR_NO_DATA: 'Ilustračné — bez dát',
+  ILUSTRATIVE_AVAILABLE: 'Ilustračné — dostupné',
+}
+
+export function getValueLabel(value: string | null | undefined): string {
+  if (!value) return '—'
+  return VALUE_LABEL_SK[value] ?? value
 }

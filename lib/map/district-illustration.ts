@@ -138,11 +138,15 @@ export interface DistrictIllustration {
   legend: HTMLDivElement | null
 }
 
-// Build the § 44 illustration group + legend for ONE district from its engine
-// findings. Returns null when the district has no drawable findings (so the
-// caller draws nothing rather than an empty group/legend). The caller owns
-// adding `group`/`legend` to the map and removing them on cleanup.
-export function buildDistrictIllustration({
+// Build the DEMO § 44 finding illustration group + legend for ONE district.
+//
+// Honest scope (item 8b): every shape this draws is a DEMO/illustrative layer —
+// the seeded overlap, the seeded island, the Pa long-distance line, the Pe MRK
+// exclusion and the Pf overcrowding ring. It NEVER alters an engine verdict and
+// only fires for districts carrying the corresponding demo finding. Returns null
+// when the district has no drawable demo finding (caller draws nothing). The
+// caller owns adding `group`/`legend` to the map and removing them on cleanup.
+export function buildDemoFindingIllustration({
   L,
   map,
   feature,

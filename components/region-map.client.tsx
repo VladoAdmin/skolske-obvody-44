@@ -1468,8 +1468,13 @@ export function RegionMapClient({ features, schools, mrkOverlays, mrkLocalities 
 
   return (
     <div className="relative w-full h-full">
-      {mode === 'psk' && (
-        <div className="absolute top-2 left-2 z-[1000] flex items-center gap-2">
+      {/* Map controls. "← Späť na Slovensko" only makes sense in PSK detail mode.
+          The Home button is ALWAYS visible and ALWAYS returns framed to Prešov
+          from ANY state (item 8c): in SK overview it switches back to PSK mode
+          (which re-frames on the districts); in PSK mode it runs the full reset
+          (default extent + default layers + cleared selection). */}
+      <div className="absolute top-2 left-2 z-[1000] flex items-center gap-2">
+        {mode === 'psk' && (
           <button
             onClick={() => setMode('sk')}
             className="rounded-sm bg-white border border-gov-border px-3 py-1.5 text-xs font-medium shadow-gov hover:bg-gov-blue50 transition-colors"
@@ -1477,27 +1482,33 @@ export function RegionMapClient({ features, schools, mrkOverlays, mrkLocalities 
           >
             ← Späť na Slovensko
           </button>
-          {/* Item 13 — Home / reset view: restores default center/zoom + default
-              layer visibility. */}
-          <button
-            onClick={() => {
-              if (homeResetRef.current) homeResetRef.current()
-              // Fallback: the PSK-mode effect assigns homeResetRef async; if the
-              // user clicks before it runs, still reset the view directly so the
-              // button never silently no-ops.
-              else if (mapRef.current) mapRef.current.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
-            }}
-            className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-sm bg-white border border-gov-border shadow-gov hover:bg-gov-blue50 transition-colors"
-            aria-label="Obnoviť pôvodné zobrazenie mapy"
-            title="Obnoviť pôvodné zobrazenie"
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0055A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M3 10.5 12 3l9 7.5" />
-              <path d="M5 9.5V21h14V9.5" />
-            </svg>
-          </button>
-        </div>
-      )}
+        )}
+        {/* Item 8c / item 13 — Home / reset view: always frames Prešov. */}
+        <button
+          onClick={() => {
+            if (mode !== 'psk') {
+              // From SK overview: switch to PSK detail; the mode effect re-frames
+              // on the districts (reliable open-on-Prešov).
+              setMode('psk')
+              if (mapRef.current) mapRef.current.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
+              return
+            }
+            if (homeResetRef.current) homeResetRef.current()
+            // Fallback: the PSK-mode effect assigns homeResetRef async; if the
+            // user clicks before it runs, still reset the view directly so the
+            // button never silently no-ops.
+            else if (mapRef.current) mapRef.current.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
+          }}
+          className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-sm bg-white border border-gov-border shadow-gov hover:bg-gov-blue50 transition-colors"
+          aria-label="Obnoviť pôvodné zobrazenie mapy (Prešov)"
+          title="Obnoviť pôvodné zobrazenie (Prešov)"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#0055A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M3 10.5 12 3l9 7.5" />
+            <path d="M5 9.5V21h14V9.5" />
+          </svg>
+        </button>
+      </div>
       <div
         ref={containerRef}
         className="w-full h-full"

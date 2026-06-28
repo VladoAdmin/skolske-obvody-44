@@ -2,7 +2,7 @@
 
 import { useId, useState } from 'react'
 import type { DistrictScorecardRow } from '@/lib/supabase/types'
-import { getColorClass, getColorSymbol, valueToColor, isOutsideSemafor } from '@/lib/compliance/colors'
+import { getColorClass, getColorSymbol, valueToColor, isOutsideSemafor, isSemaforApplicable, getValueLabel } from '@/lib/compliance/colors'
 import { getConditionDescription } from '@/lib/compliance/labels'
 import { ProvenanceLink } from './provenance-link'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +22,10 @@ const VALUE_DESCRIPTIONS: Record<string, string> = {
   // numerates as hard conditions (sociálny kontext / MRK = P-e, demografia = P-f).
   // It flags a risk worth a closer look; it is explicitly NOT a PASS/FAIL verdict
   // and never drives the legal semafor.
-  SIGNAL:            'Upozornenie, nie verdikt. Ukazuje na možné riziko v oblasti, ktorú zákon § 44 priamo nehodnotí (sociálny kontext, demografia). Nie je to PASS ani FAIL — len podnet na bližšie preskúmanie.',
+  SIGNAL:            'Upozornenie, nie verdikt. Ukazuje na možné riziko v oblasti, ktorú zákon § 44 priamo nehodnotí (sociálny kontext, demografia, jazyk). Nie je to PASS ani FAIL — len podnet na bližšie preskúmanie.',
+  // NO_SIGNAL = evaluated, no issue found in a non-§44 (mimo semaforu) oblasti.
+  NO_SIGNAL:         'Vyhodnotené — bez podnetu. V tejto oblasti mimo § 44 (sociálny kontext, demografia, jazyk) sa nenašiel žiadny problém. Nevstupuje do zákonného semaforu.',
+  NOT_EVALUATED:     'Údaj sa zatiaľ nedal vyhodnotiť. Oblasť je mimo zákonného semaforu § 44.',
 }
 
 function ValueBadge({ value }: { value: string }) {
@@ -35,16 +38,20 @@ function ValueBadge({ value }: { value: string }) {
     // Violet = soft "signal" indicator, visually distinct from the
     // green/red/orange PASS-FAIL-RISK family so it never reads as a verdict.
     SIGNAL:            'bg-violet-100 text-violet-800 border-violet-300',
+    // Evaluated "no issue" (mimo semaforu) and not-evaluated read as neutral
+    // slate — clearly decisive but visibly outside the traffic light.
+    NO_SIGNAL:         'bg-slate-100 text-slate-700 border-slate-300',
+    NOT_EVALUATED:     'bg-slate-100 text-slate-600 border-slate-300',
   }
   const cls = classMap[value] ?? 'bg-gray-100 text-gray-700 border-gray-300'
   const description = VALUE_DESCRIPTIONS[value]
   // SIGNAL is non-obvious to a lay reader, so render a small "signál" hint next
-  // to the raw value to nudge them to the explanatory tooltip.
+  // to the friendly value to nudge them to the explanatory tooltip.
   const isSignal = value === 'SIGNAL'
   const badge = (
     <span className="inline-flex items-center gap-1">
-      <span className={`inline-flex items-center rounded border px-1.5 py-0.5 font-mono text-xs font-medium ${cls}`}>
-        {value}
+      <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${cls}`}>
+        {getValueLabel(value)}
       </span>
       {isSignal && (
         <span className="text-[10px] font-medium text-violet-700">(signál, nie verdikt)</span>
@@ -83,10 +90,11 @@ function ProgressBar({ value, label }: { value: number | null | undefined; label
 export function VerdictRow({ row }: VerdictRowProps) {
   // The per-row semafor reflects THIS condition's own verdict (row.value), not
   // the district-wide composition_color — so on a RED district a PASS row shows
-  // a green ✓, not a red ✕. Conditions/values outside the § 44 traffic light
-  // (SIGNAL, NOT_EVALUATED, and the JAZYK "podnet nad rámec § 44") get a neutral
-  // "mimo semaforu" dash instead of a colour symbol.
-  const outsideSemafor = isOutsideSemafor(row.value) || row.condition_code === 'JAZYK'
+  // a green ✓, not a red ✕. A row is "mimo semaforu" when EITHER its condition is
+  // outside the § 44 traffic light by group (JAZYK / Pe / Pf — item 8a, data-driven
+  // via isSemaforApplicable, no JAZYK hardcode) OR its value is a non-verdict
+  // (SIGNAL / NO_SIGNAL / NOT_EVALUATED). Those get a neutral "—" dash.
+  const outsideSemafor = !isSemaforApplicable(row.condition_code) || isOutsideSemafor(row.value)
   const rowColor = valueToColor(row.value)
   const colorSymbol = getColorSymbol(rowColor)
   const colorClass = getColorClass(rowColor)

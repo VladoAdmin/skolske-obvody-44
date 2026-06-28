@@ -20,7 +20,7 @@ import {
   PSK_DEFAULT_ZOOM,
 } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
-import { buildDistrictIllustration } from '@/lib/map/district-illustration'
+import { buildDemoFindingIllustration } from '@/lib/map/district-illustration'
 
 // On mobile (≤767px) the layer control starts collapsed so the legend
 // does not obscure the map; it expands into the full checkbox list on tap.
@@ -308,7 +308,7 @@ export function DistrictDetailMapClient({
       let illustrationGroup: any = null
       const currentFeature = features.find((f) => f.id === currentDistrictId)
       if (currentFeature) {
-        const built = buildDistrictIllustration({
+        const built = buildDemoFindingIllustration({
           L,
           map,
           feature: currentFeature,
