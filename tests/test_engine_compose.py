@@ -152,6 +152,26 @@ class TestGatekeepingInvariants:
             "Pe must appear in signal_status, not affect color"
         )
 
+    def test_jazyk_signal_with_all_legal_green_is_green(self):
+        """JAZYK=SIGNAL (podnet nad rámec § 44) plus all legal conditions green
+        must compose to GREEN — JAZYK never enters the semafor. This encodes WHY:
+        teaching-language concerns are outside § 44's structural test, so a
+        language signal must not colour a structurally-compliant district."""
+        from tests.fixtures.fixture_data import _v, _base_verdicts
+        verdicts = {
+            **_base_verdicts(),
+            "JAZYK": _v("JAZYK", V.SIGNAL, is_mock=True),
+        }
+        result = compose_color(verdicts)
+        assert result["color"] == Color.GREEN, (
+            f"JAZYK=SIGNAL + all legal green must be GREEN, got {result['color']} "
+            f"— reason: {result['reason']}"
+        )
+        # JAZYK must not appear in any semafor group (legal/indicator/signal).
+        assert "JAZYK" not in result["legal_status"], "JAZYK must not be a legal condition"
+        assert "JAZYK" not in result["indicator_status"], "JAZYK must not be an indicator"
+        assert "JAZYK" not in result["signal_status"], "JAZYK must not be a §44 signal"
+
     def test_s1_s2_s3_pass_with_all_indicators_insufficient(self):
         """All S=PASS + all P indicators = INSUFFICIENT_DATA → ORANGE (not RED, not GREEN)."""
         from tests.fixtures.fixture_data import _v

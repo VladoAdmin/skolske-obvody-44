@@ -19,10 +19,17 @@ from engine.constants import ENGINE_VERSION, METHODOLOGY_VERSION, DATASET_VERSIO
 # Inline demo notices the UI must NOT show (the single top page banner is the
 # only demo notice — item 7). The is_mock flag still carries the demo status
 # internally; only the human-facing inline tags are stripped from evidence_text.
+#
+# IMPORTANT: enumerate the EXACT demo phrases that actually occur in checker
+# evidence_text (grep engine/c_*.py). A broad `Ukážková?\s+[^.]*\.?` pattern is
+# unsafe: against "Ukážková topologická vrstva — reálna geometria Prešova
+# prekryvy nemá." it eats the whole legitimate sentence up to the first period.
+# Match only the known fixed notices, longest-first so the S2 phrase wins before
+# the generic "Ukážkové dáta." alternative.
 _DEMO_TAG_RE = re.compile(
-    r"\s*\[DEMO[^\]]*\]"                      # [DEMO], [DEMO adresa], [DEMO dáta], ...
-    r"|\s*Ukážková?\s+[^.]*\.?"               # "Ukážkové dáta.", "Ukážková vrstva..."
-    r"|\s*Ukážkové\s+dáta\.?",
+    r"\s*\[DEMO[^\]]*\]"                                           # [DEMO], [DEMO adresa], [DEMO inklúzia], [DEMO dáta], ...
+    r"|\s*Ukážková topologická vrstva — reálna geometria Prešova prekryvy nemá\.?"  # c_s2 FAIL
+    r"|\s*Ukážkové dáta\.?",                                       # the common trailing notice
     re.IGNORECASE,
 )
 

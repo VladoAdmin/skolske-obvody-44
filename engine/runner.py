@@ -40,6 +40,44 @@ from ingest.supabase_client import exec_sql, query_sql
 MUNICIPALITY_ID = PRESOV_MUN_ID
 
 
+class RedOnlyStructuralError(AssertionError):
+    """A district composed to RED for a reason other than an Š1/Š2/Š3 FAIL."""
+
+
+def _assert_red_only_structural(
+    district_name: str, color: str, verdicts: dict
+) -> None:
+    """
+    Hard runtime guard: a RED district MUST be driven by a FAIL in a structural
+    legal condition (Š1/Š2/Š3) and nothing else. Mock/indicator/signal conditions
+    (Pa–Pf, JAZYK) can never produce a RED district. Fails loudly so a future
+    mock or indicator change can never silently colour a district red.
+    """
+    if color != "RED":
+        return
+    red_drivers = [
+        code for code, v in verdicts.items()
+        if code in LEGAL_CONDITIONS and v.value == "FAIL"
+    ]
+    if not red_drivers:
+        raise RedOnlyStructuralError(
+            f"{district_name}: RED with no Š1/Š2/Š3 FAIL — a non-structural "
+            f"condition drove RED. Verdicts: "
+            f"{ {c: v.value for c, v in verdicts.items()} }"
+        )
+    non_structural_fail_red = [
+        code for code, v in verdicts.items()
+        if code not in LEGAL_CONDITIONS and v.value == "FAIL"
+        and code not in INDICATOR_CONDITIONS  # indicators FAIL → ORANGE, never RED
+        and code not in SIGNAL_CONDITIONS     # signals never enter the semafor
+    ]
+    if non_structural_fail_red:
+        raise RedOnlyStructuralError(
+            f"{district_name}: RED influenced by non-structural FAIL in "
+            f"{non_structural_fail_red} — only Š1/Š2/Š3 may drive RED."
+        )
+
+
 def _fetch_districts(municipality_id: str) -> list[dict]:
     rows = query_sql(f"""
         SELECT
@@ -376,6 +414,10 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
         # Compose semafor (JAZYK is not in any semafor group, so it is ignored)
         composition = compose_color(district_verdicts)
         color = composition["color"]
+
+        # Hard guard: RED may only come from an Š1/Š2/Š3 FAIL. Errors loudly if a
+        # mock/indicator/signal condition ever drives a district red.
+        _assert_red_only_structural(district_name, color, district_verdicts)
 
         print(f"  Semafor: {color}")
         print(f"  S1={v_s1.value} S2={v_s2.value} S3={v_s3.value} "
