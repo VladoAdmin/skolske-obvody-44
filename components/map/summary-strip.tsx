@@ -1,5 +1,6 @@
 import type { DistrictMapFeature, SoFindingsPanelItem } from '@/lib/supabase/types'
 import type { CompositionColor } from '@/lib/compliance/colors'
+import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
 interface SummaryStripProps {
   features: DistrictMapFeature[]
@@ -17,12 +18,37 @@ const SEMAFOR: { color: CompositionColor; emoji: string; label: string }[] = [
  * High-level pilot summary, rendered first on /map. Counts are derived from the
  * already-fetched features (composition_color) and findings — no extra queries.
  * Designed to fit above the fold on a 375×812 phone.
+ *
+ * Step 1 (streets pivot): the compliance semafor breakdown is NOT surfaced — all
+ * compliance analysis lives in step 2. The strip shows only the obvod count.
+ * Verdicts stay computed internally (engine SSOT); gated by SHOW_COMPLIANCE.
  */
 export function SummaryStrip({ features, findings }: SummaryStripProps) {
   const counts: Record<CompositionColor, number> = { RED: 0, ORANGE: 0, GREEN: 0, NONE: 0 }
   for (const f of features) {
     const c = (f.composition_color as CompositionColor) ?? 'NONE'
     counts[c in counts ? c : 'NONE'] += 1
+  }
+
+  // Step 1: neutral strip — obvod count only, no compliance state.
+  if (!SHOW_COMPLIANCE) {
+    return (
+      <section
+        aria-label="Súhrnný prehľad pilotu"
+        className="rounded-lg border border-border bg-card p-3"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <span className="text-base font-semibold tabular-nums leading-tight">
+              {features.length} školských obvodov
+            </span>
+            <span className="text-[11px] text-muted-foreground leading-tight">
+              Mesto Prešov — každý obvod má vlastnú farbu podľa školy
+            </span>
+          </div>
+        </div>
+      </section>
+    )
   }
 
   return (

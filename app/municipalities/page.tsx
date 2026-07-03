@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/server'
 import type { MunicipalitySummary } from '@/lib/supabase/types'
+import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
 export const revalidate = 60
 export const metadata = { title: 'Zriaďovatelia — Kontrola § 44' }
@@ -24,7 +25,9 @@ export default async function MunicipalitiesPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Zriaďovatelia</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Súhrnný scorecard per obec / zriaďovateľ. Pilot: Prešov.
+          {SHOW_COMPLIANCE
+            ? 'Súhrnný scorecard per obec / zriaďovateľ. Pilot: Prešov.'
+            : 'Prehľad obcí / zriaďovateľov. Pilot: Prešov.'}
         </p>
       </div>
 
@@ -40,10 +43,14 @@ export default async function MunicipalitiesPage() {
                 <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground" scope="col">Obec</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground" scope="col">Obvody</th>
                 <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground" scope="col">Školy</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground text-red-700" scope="col">🔴</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground text-orange-700" scope="col">🟠</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground text-green-700" scope="col">🟢</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground" scope="col">Nálezy</th>
+                {SHOW_COMPLIANCE && (
+                  <>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground text-red-700" scope="col">🔴</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground text-orange-700" scope="col">🟠</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground text-green-700" scope="col">🟢</th>
+                    <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground" scope="col">Nálezy</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -56,10 +63,14 @@ export default async function MunicipalitiesPage() {
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{s.districts_count}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{s.schools_count}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{s.red_districts_count}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{s.orange_districts_count}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{s.green_districts_count}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{s.open_findings_count}</td>
+                  {SHOW_COMPLIANCE && (
+                    <>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.red_districts_count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.orange_districts_count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.green_districts_count}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{s.open_findings_count}</td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

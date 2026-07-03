@@ -15,6 +15,7 @@ import type {
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
+import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
 export const revalidate = 60
 
@@ -124,13 +125,17 @@ export default async function DistrictPage({ params }: Props) {
       <div className="space-y-1">
         <div className="flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight">{header.district_name}</h1>
-          <span
-            className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-bold ${colorClass}`}
-            aria-label={colorLabel}
-            title={colorLabel}
-          >
-            {colorSymbol} {colorLabel}
-          </span>
+          {/* Step 1: NO compliance verdict badge — districts carry no compliance
+              state until step 2. Gated by SHOW_COMPLIANCE. */}
+          {SHOW_COMPLIANCE && (
+            <span
+              className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-bold ${colorClass}`}
+              aria-label={colorLabel}
+              title={colorLabel}
+            >
+              {colorSymbol} {colorLabel}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
@@ -162,8 +167,32 @@ export default async function DistrictPage({ params }: Props) {
         districtSummaries={districtSummaries}
       />
 
-      {/* Scorecard or empty state */}
-      {sorted.length > 0 ? (
+      {/* Step 1: NO § 44 compliance scorecard — all compliance analysis lives in
+          step 2. The detail page shows the obvod's streets + the data-trust
+          register stats only. Verdicts stay computed internally (engine SSOT).
+          Gated by SHOW_COMPLIANCE. */}
+      {!SHOW_COMPLIANCE ? (
+        <section aria-labelledby="datatrust-heading">
+          <h2 id="datatrust-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+            Dáta obvodu
+          </h2>
+          {addressStats && (
+            <div className="mb-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              <p>
+                <span className="font-medium text-foreground">Autoritatívny register adries:</span>{' '}
+                {addressStats.clean_habitable_addresses.toLocaleString('sk-SK')} obývateľných adries,{' '}
+                {addressStats.clean_distinct_streets.toLocaleString('sk-SK')} ulíc{' '}
+                (pokrytie ulíc z VZN {Math.round(addressStats.clean_street_coverage * 100)} %).{' '}
+                Zdroj: vyčistený autoritatívny register adries a stavieb mesta Prešov.
+              </p>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Mapa zobrazuje ulice tohto obvodu vo vlastnej farbe podľa školy.
+            Vyhodnotenie podmienok § 44 bude doplnené v ďalšom kroku.
+          </p>
+        </section>
+      ) : sorted.length > 0 ? (
         <section aria-labelledby="scorecard-heading">
           <h2 id="scorecard-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
             Scorecard podmienok § 44

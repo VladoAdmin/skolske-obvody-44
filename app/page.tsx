@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { KpiCard } from '@/components/kpi-card'
 import { createPublicClient } from '@/lib/supabase/server'
 import type { EngineMetadata, MunicipalitySummary } from '@/lib/supabase/types'
+import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
 export const revalidate = 300
 
@@ -36,44 +37,65 @@ export default async function Home() {
             školské obvody pre základné školy. Obvod presne vymedzuje, ktoré ulice a adresy patria
             ku konkrétnej škole — žiak má právo nastúpiť do školy v obvode svojho trvalého pobytu.
           </p>
-          <p>
-            Tento portál vám ukáže, ako <strong>12 školských obvodov mesta Prešov</strong> obstojí
-            v 9 merateľných podmienkach: tri zákonné požiadavky (Š1–Š3) a šesť analytických
-            indikátorov dostupnosti (P-a až P-f). Dáta máme zatiaľ len pre Prešov. Výsledky sú
-            informatívne — nie záväzný právny výklad.
-          </p>
-          <p>
-            Každý obvod dostane farbu:{' '}
-            <strong>🔴 červená</strong> = zákonné podmienky nesplnené,{' '}
-            <strong>🟠 oranžová</strong> = dáta chýbajú alebo sú rizikové indikátory,{' '}
-            <strong>🟢 zelená</strong> = všetko v poriadku,{' '}
-            <strong>⚪ sivá</strong> = obvod sme ešte nehodnotili.
-          </p>
+          {SHOW_COMPLIANCE ? (
+            <>
+              <p>
+                Tento portál vám ukáže, ako <strong>12 školských obvodov mesta Prešov</strong> obstojí
+                v 9 merateľných podmienkach: tri zákonné požiadavky (Š1–Š3) a šesť analytických
+                indikátorov dostupnosti (P-a až P-f). Dáta máme zatiaľ len pre Prešov. Výsledky sú
+                informatívne — nie záväzný právny výklad.
+              </p>
+              <p>
+                Každý obvod dostane farbu:{' '}
+                <strong>🔴 červená</strong> = zákonné podmienky nesplnené,{' '}
+                <strong>🟠 oranžová</strong> = dáta chýbajú alebo sú rizikové indikátory,{' '}
+                <strong>🟢 zelená</strong> = všetko v poriadku,{' '}
+                <strong>⚪ sivá</strong> = obvod sme ešte nehodnotili.
+              </p>
+            </>
+          ) : (
+            <p>
+              Tento portál zobrazuje <strong>12 školských obvodov mesta Prešov</strong> na mape —
+              každý obvod je vykreslený ako sústava jeho ulíc vo vlastnej farbe podľa školy.
+              Dáta máme zatiaľ len pre Prešov. Výsledky sú informatívne — nie záväzný právny výklad.
+            </p>
+          )}
         </div>
       </section>
 
-      {/* KPI cards */}
+      {/* KPI cards. Step 1: only the neutral obvod count — no verdict/finding
+          KPIs (compliance lives in step 2). Gated by SHOW_COMPLIANCE. */}
       <section aria-labelledby="kpi-heading">
         <h2 id="kpi-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">
           Stav dát
         </h2>
-        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <KpiCard
-            label="Posúdených obvodov"
-            value={summary?.districts_count ?? meta?.districts_count ?? '—'}
-            description="Mesto Prešov, pilotné pokrytie"
-          />
-          <KpiCard
-            label="Spracovaných verdiktov"
-            value={meta?.verdicts_count ?? '—'}
-            description="12 obvodov × 9 podmienok"
-          />
-          <KpiCard
-            label="Otvorených nálezov"
-            value={summary?.open_findings_count ?? meta?.open_findings_count ?? '—'}
-            description="Stav po poslednom výpočte"
-          />
-        </dl>
+        {SHOW_COMPLIANCE ? (
+          <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <KpiCard
+              label="Posúdených obvodov"
+              value={summary?.districts_count ?? meta?.districts_count ?? '—'}
+              description="Mesto Prešov, pilotné pokrytie"
+            />
+            <KpiCard
+              label="Spracovaných verdiktov"
+              value={meta?.verdicts_count ?? '—'}
+              description="12 obvodov × 9 podmienok"
+            />
+            <KpiCard
+              label="Otvorených nálezov"
+              value={summary?.open_findings_count ?? meta?.open_findings_count ?? '—'}
+              description="Stav po poslednom výpočte"
+            />
+          </dl>
+        ) : (
+          <dl className="grid grid-cols-1 gap-4">
+            <KpiCard
+              label="Školských obvodov"
+              value={summary?.districts_count ?? meta?.districts_count ?? '—'}
+              description="Mesto Prešov, pilotné pokrytie"
+            />
+          </dl>
+        )}
       </section>
 
       {/* Portal section cards */}

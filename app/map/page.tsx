@@ -10,6 +10,8 @@ import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, S
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
+import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
+import { getDistrictHue } from '@/lib/config/region'
 
 export const revalidate = 60
 
@@ -268,33 +270,43 @@ export default async function MapPage() {
         </h2>
         {isEmpty ? (
           <p className="text-xs text-muted-foreground px-4 pb-4">
-            Žiadne obvody — engine ešte nezhodnotil.
+            Žiadne obvody.
           </p>
         ) : (
           <ul
             className="list-none m-0 p-0 border-t border-gov-border"
-            aria-label="Zoznam obvodov so semaforom"
+            aria-label={SHOW_COMPLIANCE ? 'Zoznam obvodov so semaforom' : 'Zoznam obvodov'}
           >
-            {features.map((f) => (
+            {features.map((f, index) => (
               <li
                 key={f.id}
-                className={`border-b border-gov-border last:border-b-0 border-l-4 ${getRowTint(
-                  f.composition_color
-                )}`}
+                className={`border-b border-gov-border last:border-b-0 border-l-4 ${
+                  SHOW_COMPLIANCE ? getRowTint(f.composition_color) : 'border-l-transparent'
+                }`}
               >
                 <Link
                   href={`/districts/${f.id}`}
                   className="flex items-center gap-3 min-h-[44px] px-4 py-3 hover:bg-gov-blue50 transition-colors"
                 >
-                  <span
-                    className={`inline-flex shrink-0 items-center gap-1 font-semibold text-sm ${getRowText(
-                      f.composition_color
-                    )}`}
-                    aria-label={getColorLabel(f.composition_color)}
-                  >
-                    <span aria-hidden="true">{getColorSymbol(f.composition_color)}</span>
-                    {getColorLabel(f.composition_color)}
-                  </span>
+                  {SHOW_COMPLIANCE ? (
+                    <span
+                      className={`inline-flex shrink-0 items-center gap-1 font-semibold text-sm ${getRowText(
+                        f.composition_color
+                      )}`}
+                      aria-label={getColorLabel(f.composition_color)}
+                    >
+                      <span aria-hidden="true">{getColorSymbol(f.composition_color)}</span>
+                      {getColorLabel(f.composition_color)}
+                    </span>
+                  ) : (
+                    // Step 1: identify the obvod ONLY by its per-school street
+                    // colour — no compliance state.
+                    <span
+                      className="inline-block shrink-0 w-3.5 h-3.5 rounded-full border border-black/10"
+                      style={{ background: `hsl(${getDistrictHue(index)}, 65%, 45%)` }}
+                      aria-hidden="true"
+                    />
+                  )}
                   <span className="text-gov-blue text-sm truncate">{f.name}</span>
                   <span className="ml-auto text-gov-muted" aria-hidden="true">
                     ›

@@ -18,11 +18,22 @@ METHODOLOGY §Š2:
 
 Source of address→district assignment: skolske_obvody.house_geocodes (one row per
 VZN-derived house address, district_id = the district the VZN assigns it to).
+
+DEMO/LIVE SEPARATION (Step 2 Sprint 1):
+  house_geocodes rows can carry is_demo=TRUE (an explicit demo address, e.g. the
+  "same full address in 2 districts" demo scenario — see
+  scripts/sql/0041_demo_s2_address_overlap.sql). Those rows must NEVER affect a
+  live/prod Š2 verdict just by existing in the table. This checker EXCLUDES
+  is_demo=TRUE rows from the overlap query unless demo_mode_enabled() is TRUE —
+  by construction, not by convention, so turning demo mode off makes Š2 blind to
+  demo addresses regardless of what is seeded. When a demo row IS the cause of an
+  overlap, the resulting Verdict is flagged is_mock=True.
 """
 
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, demo_mode_enabled
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -63,13 +74,20 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
         else "AND d2.teaching_language IS NULL"
     )
 
+    # Demo addresses (house_geocodes.is_demo=TRUE) only enter this query when
+    # demo mode is on — otherwise a demo row can NEVER produce a live/prod Š2
+    # FAIL, by construction (see module docstring).
+    demo_on = demo_mode_enabled()
+    demo_exclusion = "" if demo_on else "AND h1.is_demo IS NOT TRUE AND h2.is_demo IS NOT TRUE"
+
     # Same full address (normalised street + house number) assigned to THIS
     # district AND to another district of the same school_type + teaching_language.
     overlap_rows = query_sql(f"""
         SELECT
             d2.id   AS partner_id,
             d2.name AS partner_name,
-            count(DISTINCT lower(trim(h1.street)) || '|' || trim(h1.house_number)) AS shared_addresses
+            count(DISTINCT lower(trim(h1.street)) || '|' || trim(h1.house_number)) AS shared_addresses,
+            bool_or(h1.is_demo OR h2.is_demo) AS any_demo
         FROM skolske_obvody.house_geocodes h1
         JOIN skolske_obvody.house_geocodes h2
           ON h1.id <> h2.id
@@ -77,6 +95,7 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
          AND lower(trim(h1.street)) = lower(trim(h2.street))
          AND trim(h1.house_number)  = trim(h2.house_number)
          AND h1.house_number IS NOT NULL
+         {demo_exclusion}
         JOIN skolske_obvody.districts d2
           ON d2.id = h2.district_id
          AND d2.school_type = '{school_type}'
@@ -85,6 +104,8 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
         WHERE h1.district_id = '{district_id}'
         GROUP BY d2.id, d2.name
     """)
+
+    is_mock = bool(overlap_rows) and any(r.get("any_demo") for r in overlap_rows)
 
     if not overlap_rows:
         return Verdict(
@@ -108,12 +129,13 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
 
     partners = sorted({r["partner_name"] for r in overlap_rows if r["partner_name"]})
     total_shared = sum(int(r["shared_addresses"] or 0) for r in overlap_rows)
+    demo_suffix = " Ukážkové dáta." if is_mock else ""
     return Verdict(
         district_id=district_id,
         condition_code="S2",
         value=V.FAIL,
-        confidence=0.7,
-        data_completeness=0.7,
+        confidence=DEMO_CONFIDENCE if is_mock else 0.7,
+        data_completeness=DEMO_COMPLETENESS if is_mock else 0.7,
         provenance={
             "source": "house_geocodes (address→district assignment)",
             "school_type": school_type,
@@ -121,11 +143,13 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             "overlap_partners": partners,
             "shared_addresses": total_shared,
             "method": "same-full-address-in-2+-districts",
+            "demo": is_mock,
         },
         methodology=_METHODOLOGY,
         evidence_text=(
             f"FAIL: {total_shared} adries (ulica + číslo) nárokujú dva obvody "
             f"rovnakého typu naraz — s {', '.join(partners)} (§ 44 ods. 1 a 7). "
-            "Jedna adresa musí patriť práve jednému obvodu."
+            f"Jedna adresa musí patriť práve jednému obvodu.{demo_suffix}"
         ),
+        is_mock=is_mock,
     )
