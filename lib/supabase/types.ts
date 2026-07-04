@@ -204,6 +204,7 @@ export interface SoHouseDot {
   house_number: string
   lat: number
   lon: number
+  is_demo: boolean
 }
 
 export interface SoStreetGeocode {
@@ -258,6 +259,7 @@ export interface SoHousePoint {
   point_geojson: Record<string, unknown> | null
   valid: boolean | null
   validation_reason: string | null
+  is_demo: boolean
 }
 
 export interface SoDistrictIsland {

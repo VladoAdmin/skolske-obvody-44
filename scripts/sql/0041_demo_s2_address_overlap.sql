@@ -37,41 +37,37 @@
 -- Apply:  python3 scripts/apply_sql.py scripts/sql/0041_demo_s2_address_overlap.sql
 -- Then:   python3 -m engine.runner   (with demo_mode_flag enabled — see docs)
 
--- PRE-INSERT VALIDATION (Sprint 1 review fix):
---   Fail loudly if the two target districts don't exist, or don't both carry
---   school_type='ZS' AND teaching_language='SK' — a silent no-op/partial insert
---   would leave a misleading half-seeded demo (e.g. one address with no overlap
---   partner) instead of a clear error.
+-- PRE-INSERT VALIDATION (Sprint 2 review fix):
+--   Validate PER EXPECTED NAME, not just a total count over both names —
+--   a total count(*) over the two-name IN-list passes as "2" even when one
+--   name has zero matching rows and the other has two (e.g. a duplicate),
+--   which would silently seed a half-formed overlap (both demo addresses in
+--   the same district, or missing a partner) instead of failing loudly.
+--   Require EXACTLY ONE school_type=ZS/teaching_language=SK district row per
+--   expected name.
 DO $$
 DECLARE
-    v_count integer;
-    v_mismatched integer;
+    v_bad text;
 BEGIN
-    SELECT count(*) INTO v_count
-    FROM skolske_obvody.districts
-    WHERE name IN (
-        'Základná škola, Kúpeľná č. 2',
-        'Základná škola, Sibírska č. 42'
-    );
+    SELECT string_agg(format('%s (found %s)', v.name, coalesce(m.c, 0)), '; ')
+      INTO v_bad
+    FROM (VALUES
+        ('Základná škola, Kúpeľná č. 2'),
+        ('Základná škola, Sibírska č. 42')
+    ) AS v(name)
+    LEFT JOIN LATERAL (
+        SELECT count(*) AS c
+        FROM skolske_obvody.districts d
+        WHERE d.name = v.name
+          AND d.school_type = 'ZS'
+          AND d.teaching_language = 'SK'
+    ) m ON TRUE
+    WHERE coalesce(m.c, 0) <> 1;
 
-    IF v_count <> 2 THEN
+    IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION
-            '0041 demo seed aborted: expected exactly 2 target districts (Kúpeľná č. 2, Sibírska č. 42), found %',
-            v_count;
-    END IF;
-
-    SELECT count(*) INTO v_mismatched
-    FROM skolske_obvody.districts
-    WHERE name IN (
-        'Základná škola, Kúpeľná č. 2',
-        'Základná škola, Sibírska č. 42'
-    )
-    AND (school_type IS DISTINCT FROM 'ZS' OR teaching_language IS DISTINCT FROM 'SK');
-
-    IF v_mismatched > 0 THEN
-        RAISE EXCEPTION
-            '0041 demo seed aborted: % target district(s) are not school_type=ZS/teaching_language=SK — the address-overlap demo requires a same-type pair',
-            v_mismatched;
+            '0041 demo seed aborted: expected exactly ONE school_type=ZS/teaching_language=SK district per name; mismatch for: %',
+            v_bad;
     END IF;
 END $$;
 
