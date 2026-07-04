@@ -2,7 +2,7 @@
 
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, getDistrictHue } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import {
@@ -15,6 +15,7 @@ import {
   type ToggleDistrictDetail,
   type DrawRouteDetail,
 } from '@/lib/map-events'
+import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
 
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
@@ -37,6 +38,10 @@ interface RegionMapClientProps {
   streetLines?: SoDistrictStreetLine[]
   housePoints?: SoHousePoint[]
   houseDots?: SoHouseDot[]
+  // Engine findings (§ 44 demo scenarios included) — drives the per-district
+  // evidence legend shown on selection. Never used to derive colour/severity
+  // client-side; severity/text come straight from the engine output row.
+  findings?: SoFindingsPanelItem[]
   districtSummaries?: Record<string, DistrictPopupSummary>
   initialMode?: 'sk' | 'psk'
 }
@@ -46,7 +51,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
@@ -424,6 +429,41 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               linesByDistrict.set(sl.district_id, arr)
             }
 
+            // Per-district § 44 evidence legend — built ONLY from engine findings
+            // rows (condition_label_sk, severity, evidence_public_text, is_demo).
+            // No client-side verdict/colour logic: severity class + label come
+            // straight from lib/format/severity, the same helper the findings
+            // register uses, so the map never invents a red/orange state.
+            const clearEvidenceLegend = () => {
+              if (demoLegendRef.current) {
+                demoLegendRef.current.remove()
+                demoLegendRef.current = null
+              }
+            }
+            const showEvidenceLegend = (id: string) => {
+              clearEvidenceLegend()
+              const districtFindings = findings.filter((f) => f.district_id === id)
+              if (districtFindings.length === 0 || !containerRef.current) return
+              const rows = districtFindings
+                .map((f) => {
+                  const cls = getSeverityClass(f.severity)
+                  const label = getSeverityLabel(f.severity)
+                  const demoTag = f.is_demo
+                    ? '<span style="font-weight:600;color:#b45309">DEMO</span> · '
+                    : ''
+                  return `<div style="margin-bottom:5px"><span class="${cls}" style="display:inline-block;border-radius:4px;border-width:1px;border-style:solid;padding:0 5px;font-size:10px;font-weight:600;margin-right:5px">${label}</span>${demoTag}<strong>${f.condition_label_sk}</strong>${f.evidence_public_text ? `<div style="color:#4b5563;font-size:11px;margin-top:1px">${f.evidence_public_text}</div>` : ''}</div>`
+                })
+                .join('')
+              const legend = document.createElement('div')
+              legend.className = 'district-evidence-legend'
+              legend.style.cssText =
+                'position:absolute;left:8px;bottom:24px;z-index:1000;background:rgba(255,255,255,.97);border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;line-height:1.5;box-shadow:0 1px 4px rgba(0,0,0,.2);max-width:260px;max-height:220px;overflow:auto'
+              legend.innerHTML =
+                `<div style="font-weight:700;margin-bottom:5px">Nálezy § 44 obvodu</div>${rows}`
+              containerRef.current.appendChild(legend)
+              demoLegendRef.current = legend
+            }
+
             // Highlight one district's streets (full weight/opacity) and dim all
             // others. Brings the selected group to front.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -439,6 +479,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 }
               })
               selectedDistrictIdRef.current = id
+              showEvidenceLegend(id)
             }
 
             // Clear selection: restore every district's streets to default.
@@ -449,6 +490,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 grp.setStyle({ weight: STREET_WEIGHT_DEFAULT, opacity: 0.9, color: `hsl(${hue}, 65%, 42%)` })
               })
               selectedDistrictIdRef.current = null
+              clearEvidenceLegend()
             }
 
             // Expose clear to the Esc handler / Home reset bridges.
@@ -631,17 +673,32 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             if (hp.valid === false) return
             const distIdx = districtIndexMap.get(hp.district_id) ?? 0
             const hue = getDistrictHue(distIdx)
-            const marker = L.circleMarker([hp.lat, hp.lon], {
-              radius: 4,
-              fillColor: `hsl(${hue}, 70%, 45%)`,
-              color: `hsl(${hue}, 70%, 25%)`,
-              weight: 1,
-              fillOpacity: 0.9,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              pane: 'streetPoints' as any,
-            })
+            // Demo evidence points (is_demo, from the Checkpoint-1 view flag)
+            // get a distinct amber ring so seeded § 44 scenario addresses read
+            // as illustration, not real geocode data — data-driven, not a
+            // client-side finding.
+            const marker = L.circleMarker([hp.lat, hp.lon], hp.is_demo
+              ? {
+                  radius: 6,
+                  fillColor: `hsl(${hue}, 70%, 45%)`,
+                  color: '#b45309',
+                  weight: 2.5,
+                  dashArray: '3,2',
+                  fillOpacity: 0.95,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  pane: 'streetPoints' as any,
+                }
+              : {
+                  radius: 4,
+                  fillColor: `hsl(${hue}, 70%, 45%)`,
+                  color: `hsl(${hue}, 70%, 25%)`,
+                  weight: 1,
+                  fillOpacity: 0.9,
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  pane: 'streetPoints' as any,
+                })
             marker.bindTooltip(
-              `${hp.street} ${hp.house_number}${hp.formatted_address ? `<br/>${hp.formatted_address}` : ''}${hp.partial_match ? ' ⚠ partial match' : ''}`,
+              `${hp.street} ${hp.house_number}${hp.formatted_address ? `<br/>${hp.formatted_address}` : ''}${hp.partial_match ? ' ⚠ partial match' : ''}${hp.is_demo ? '<br/><strong>Ukážkové (DEMO) dáta</strong> — ilustrácia scenára, nevstupuje do zákonného verdiktu.' : ''}`,
               { sticky: true }
             )
             marker.addTo(housePointsGroup)

@@ -228,6 +228,7 @@ export default async function MapPage() {
                 streetLines={streetLines}
                 housePoints={housePoints}
                 houseDots={houseDots}
+                findings={findings}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
               />
