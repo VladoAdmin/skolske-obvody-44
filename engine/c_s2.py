@@ -68,6 +68,12 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             evidence_text="NEÚPLNÉ: chýba atribút school_type — test neprebehol.",
         )
 
+    # TRUST BOUNDARY (Sprint 1 review): school_type/teaching_language are
+    # f-string interpolated directly into the SQL below, not parameterised.
+    # This is internal-trusted-only — both values originate from the
+    # `districts` table (ingested from WFS/VZN, never end-user input), not
+    # from any HTTP/user-facing input path. Not refactored this sprint per
+    # the review's explicit scope (documentation only, no behaviour change).
     lang_filter = (
         f"AND d2.teaching_language = '{teaching_language}'"
         if teaching_language

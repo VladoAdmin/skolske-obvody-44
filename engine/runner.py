@@ -187,27 +187,28 @@ def _write_finding(
     tag: Optional[str] = None,
 ) -> bool:
     """Write a finding for non-PASS / non-green verdicts. Returns True if written."""
-    # Severity mapping
-    severity_map = {
-        "FAIL": "critical",
-        "INCOMPLETE": "medium",
-        "RISK": "high",
-        "INSUFFICIENT_DATA": "low",
-        "SIGNAL": "medium",
-        "NO_SIGNAL": "info",
-        "NOT_EVALUATED": "info",
-        "ILUSTR_NO_DATA": "info",
-        "ILUSTRATIVE_AVAILABLE": "info",
-        "PASS": "info",
-    }
+    # Severity mapping — condition-group aware, so the register mirrors the same
+    # discipline as the semafor: a legal FAIL (S1/S2/S3) outranks an indicator
+    # FAIL/RISK (Pa-Pd), which in turn outranks an analytical SIGNAL (Pe/Pf) or
+    # the non-§44 JAZYK podnet. Without this split every FAIL value (legal or
+    # not) mapped to "critical", making an indicator finding look as severe as
+    # a structural violation in the findings register.
+    if condition_code in LEGAL_CONDITIONS:
+        severity_map = {"FAIL": "critical", "INCOMPLETE": "medium"}
+    elif condition_code in INDICATOR_CONDITIONS:
+        severity_map = {"FAIL": "high", "RISK": "high", "INSUFFICIENT_DATA": "low"}
+    elif condition_code in SIGNAL_CONDITIONS:
+        severity_map = {"SIGNAL": "medium"}
+    elif condition_code == "JAZYK":
+        severity_map = {"SIGNAL": "low"}
+    else:
+        severity_map = {}
     severity = severity_map.get(value, "info")
     # Skip writing findings for clean / no-issue decisive states. The register
     # surfaces problems (FAIL/RISK/SIGNAL/…); PASS and NO_SIGNAL are "all good"
     # and must not clutter it.
     if value in ("PASS", "NO_SIGNAL"):
         return False
-    if value in ("NOT_EVALUATED", "ILUSTRATIVE_AVAILABLE") and condition_code in ("Pf", "Pc"):
-        severity = "info"
 
     finding_id = str(uuid.uuid4())
     evid_tag = f"$_fevid_{finding_id[:8]}$"
@@ -353,8 +354,8 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
     Returns list of per-district result dicts (for report generation).
     """
     validate_config()
-    from engine.demo_inputs import reset_cache
-    reset_cache()
+    from engine.demo_inputs import refresh_demo_mode
+    refresh_demo_mode()
     # Findings reference verdicts via FK; purge findings first then verdicts.
     _purge_other_versions(municipality_id, ENGINE_VERSION)
     print(f"\n{'='*70}")

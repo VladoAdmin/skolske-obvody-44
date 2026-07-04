@@ -97,6 +97,13 @@ SCENARIO_FIELDS: dict[str, dict] = {
 }
 
 
+# ONE-SHOT ASSUMPTION: these caches are process-lifetime (maxsize=1, never
+# time-expired). That is safe ONLY because engine/runner.py is a one-shot CLI
+# process (`python3 -m engine.runner`) that calls refresh_demo_mode() exactly
+# once, at the very start of run(), before any checker reads the flag. If the
+# engine is ever run as a long-lived process (server/worker) that must observe
+# a demo_mode_flag toggle mid-run, these caches would silently serve a stale
+# value — refresh_demo_mode() must be called again before each unit of work.
 @lru_cache(maxsize=1)
 def _demo_mode_enabled() -> bool:
     try:
@@ -134,7 +141,13 @@ def get_demo_input(district_id: str) -> Optional[DistrictDemoInput]:
     return _all_demo_inputs().get(str(district_id))
 
 
-def reset_cache() -> None:
-    """Clear caches (used by tests / a fresh engine run)."""
+def refresh_demo_mode() -> None:
+    """Clear the demo-mode caches so the next read re-hits the DB.
+
+    Must be called at the start of every engine run (see engine/runner.py
+    run()) so a demo_mode_flag toggle made between runs is picked up. Within
+    a single one-shot run this is called exactly once — see the one-shot
+    assumption documented above _demo_mode_enabled().
+    """
     _demo_mode_enabled.cache_clear()
     _all_demo_inputs.cache_clear()

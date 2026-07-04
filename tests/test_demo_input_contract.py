@@ -66,7 +66,7 @@ def test_get_demo_input_returns_none_when_demo_mode_disabled():
     district, get_demo_input() must return None while demo mode is off — the
     checkers must never see it."""
     import engine.demo_inputs as di
-    di.reset_cache()
+    di.refresh_demo_mode()
     calls = {"n": 0}
 
     def fake_query_sql(sql: str):
@@ -86,12 +86,12 @@ def test_get_demo_input_returns_none_when_demo_mode_disabled():
         "get_demo_input queried district_demo_inputs while demo mode was "
         "disabled — mock data could leak into a live verdict."
     )
-    di.reset_cache()
+    di.refresh_demo_mode()
 
 
 def test_get_demo_input_returns_row_when_demo_mode_enabled():
     import engine.demo_inputs as di
-    di.reset_cache()
+    di.refresh_demo_mode()
 
     def fake_query_sql(sql: str):
         if "demo_mode_flag" in sql:
@@ -103,7 +103,7 @@ def test_get_demo_input_returns_row_when_demo_mode_enabled():
 
     assert result is not None
     assert result["s1_total_addresses"] == 500
-    di.reset_cache()
+    di.refresh_demo_mode()
 
 
 def test_demo_mode_enabled_public_wrapper_matches_internal_gate():
@@ -111,13 +111,13 @@ def test_demo_mode_enabled_public_wrapper_matches_internal_gate():
     the same flag as get_demo_input()'s internal gate — no second code path
     that could drift out of sync."""
     import engine.demo_inputs as di
-    di.reset_cache()
+    di.refresh_demo_mode()
     with mock.patch.object(di, "query_sql", return_value=[{"on": True}]):
         assert di.demo_mode_enabled() is True
-    di.reset_cache()
+    di.refresh_demo_mode()
     with mock.patch.object(di, "query_sql", return_value=[{"on": False}]):
         assert di.demo_mode_enabled() is False
-    di.reset_cache()
+    di.refresh_demo_mode()
 
 
 # --------------------------------------------------------- JAZYK non-§44 lock
