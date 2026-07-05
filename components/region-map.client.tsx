@@ -506,6 +506,13 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             // Tapping empty map clears any selection.
             map.on('click', () => { clearSelection() })
 
+            // Render stats for the E2E street-coverage gate (sprint 5 — the
+            // PostgREST 1000-row cap silently truncated the street fetch):
+            // count every drawn street layer and remember each street's colour.
+            // Testing/diagnostics only — never read by app logic.
+            let renderedSegments = 0
+            const renderedStreetColors: Record<string, string> = {}
+
             features.forEach((feature, index) => {
               const hue = getDistrictHue(index)
               const lineColor = `hsl(${hue}, 65%, 42%)`
@@ -533,6 +540,8 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                     })
                       .bindTooltip(`${sl.street} (bez OSM línie)`, { sticky: true })
                       .addTo(districtGroup)
+                    renderedSegments++
+                    renderedStreetColors[sl.street] = lineColor
                   }
                   return
                 }
@@ -547,6 +556,8 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 })
                 layer.bindTooltip(`${feature.name}<br/>${sl.street}`, { sticky: true })
                 layer.addTo(districtGroup)
+                renderedSegments++
+                renderedStreetColors[sl.street] = lineColor
               })
 
               // Selecting/tapping a district's streets highlights them + opens the
@@ -575,6 +586,12 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             })
 
             districtLayersRef.current = newDistrictLayersMap
+
+            // E2E hooks (tests/e2e/street-coverage.e2e.mjs): segment count on
+            // the map container, per-street colour on window.
+            containerRef.current?.setAttribute('data-street-segments', String(renderedSegments))
+            ;(window as unknown as { __soStreetColors?: Record<string, string> }).__soStreetColors =
+              renderedStreetColors
           }
 
           // (B) School markers as divIcon SVG (founder-coloured pins).
