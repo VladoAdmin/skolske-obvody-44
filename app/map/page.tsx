@@ -138,7 +138,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
     const sb = createPublicClient()
     const { data, error } = await sb
       .from('so_house_points')
-      .select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason')
+      .select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason,is_demo')
     if (error) throw error
     return (data ?? []) as SoHousePoint[]
   } catch {

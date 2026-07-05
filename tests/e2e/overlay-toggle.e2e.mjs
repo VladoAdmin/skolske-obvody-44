@@ -1,13 +1,16 @@
-// Sprint-4 regression spec for docs/ISSUES.md #1 (real Chrome).
+// Sprint-4 regression spec for docs/ISSUES.md #1 and #2 (real Chrome).
 //   #1 Toggling "Adresné body obvodov" from the initial city zoom (< 16) must
 //      auto-zoom to 16 and RENDER the dots — before the fix, the programmatic
 //      removeLayer inside updateHousePointsVisibility fired overlayremove,
 //      which reset housePointsEnabled and the dots never appeared.
+//   #2 Demo evidence addresses must carry the amber dashed ring (#b45309) —
+//      before the fix fetchHousePoints() omitted is_demo from its select.
 // The toggle-from-low-zoom ORDER is the whole point of this spec; the proof
 // pack intentionally zooms first, so it can never regress on #1.
 import { BASE, launch, makeErrorTracker, dismissDemoModal, assert } from './helpers.mjs'
 
 const HOUSE_DOTS = '.leaflet-streetPoints-pane path'
+const DEMO_RING = '.leaflet-streetPoints-pane path[stroke="#b45309"]'
 
 async function main() {
   const { browser, ctx } = await launch()
@@ -54,10 +57,15 @@ async function main() {
     'address dots stay rendered after the zoom animation settles'
   )
 
+  // ISSUES.md #2: demo evidence points carry the amber dashed ring.
+  const demoRings = await page.locator(DEMO_RING).count()
+  assert(demoRings > 0, 'demo evidence points render the amber ring (#b45309)')
+  assert(demoRings < dots, 'amber ring marks only the demo subset, not every dot')
+
   await page.close()
   await browser.close()
 
-  console.log(`OK overlay toggle from city zoom: ${dots} dot(s)`)
+  console.log(`OK overlay toggle from city zoom: ${dots} dot(s), ${demoRings} amber demo ring(s)`)
   const total = tracker.report()
   if (total > 0) {
     console.error(`FAIL: ${total} console error(s) — §44 gate requires zero`)

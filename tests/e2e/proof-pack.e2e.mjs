@@ -93,11 +93,10 @@ async function main() {
   assert(legendText.includes('DEMO'), 'legend flags demo provenance')
 
   // Frame the Kúpeľná demo evidence point FIRST via the app's own flyto
-  // bridge, THEN enable the "Adresné body obvodov" overlay. Order matters:
-  // toggling the overlay from zoom < 16 auto-zooms but the layer's own
-  // visibility check races the animation and self-disables (overlayremove
-  // resets housePointsEnabled) — dots never appear. Recorded in docs/ISSUES.md;
-  // zoom-first is also the flow the label suggests ("priblížte ≥ 16").
+  // bridge, THEN enable the "Adresné body obvodov" overlay — the screenshot
+  // must be centered on the demo address. (The toggle-from-low-zoom order is
+  // covered by tests/e2e/overlay-toggle.e2e.mjs, the sprint-4 regression spec
+  // for docs/ISSUES.md #1.)
   await page.evaluate((pt) => {
     window.dispatchEvent(
       new CustomEvent('so:flyto', { detail: { lat: pt.lat, lon: pt.lon, zoom: 17 } })
@@ -117,14 +116,10 @@ async function main() {
   // evidence address is centered in frame.
   const housePointPaths = await page.locator('.leaflet-streetPoints-pane path').count()
   assert(housePointPaths > 0, 'address-dots overlay renders house points at zoom ≥ 16')
-  // Amber dashed ring (#b45309) = demo evidence point marker. Currently absent:
-  // fetchHousePoints() (app/map/page.tsx) omits is_demo from its select, so the
-  // amber branch never triggers — recorded in docs/ISSUES.md, app fix is out of
-  // scope for this proof sprint.
+  // Amber dashed ring (#b45309) = demo evidence point marker (Checkpoint 2,
+  // fixed in sprint 4 — docs/ISSUES.md #2).
   const demoMarkers = await page.locator('.leaflet-container path[stroke="#b45309"]').count()
-  if (demoMarkers === 0) {
-    console.log('KNOWN ISSUE (docs/ISSUES.md): amber demo ring absent — fetchHousePoints omits is_demo')
-  }
+  assert(demoMarkers > 0, 'demo evidence points render the amber ring (#b45309)')
   assert(await legend.isVisible(), 'legend still visible after overlay + flyto')
 
   await page.screenshot({ path: `${OUT}/cp5-map-legend-demo-points.png` })
