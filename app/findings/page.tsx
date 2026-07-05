@@ -4,6 +4,7 @@ import { FindingsFilters } from '@/components/findings-filters'
 import { createPublicClient } from '@/lib/supabase/server'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import type { FindingPublic } from '@/lib/supabase/types'
+import { getScenarioConditions } from './scenarios'
 
 export const revalidate = 60
 
@@ -18,6 +19,7 @@ interface Props {
     severity?: string
     status?: string
     condition?: string
+    scenario?: string
     page?: string
   }
 }
@@ -46,6 +48,14 @@ async function fetchFindings(searchParams: Props['searchParams']) {
     if (searchParams.condition) {
       query = query.eq('condition_code', searchParams.condition)
     }
+    if (searchParams.scenario) {
+      // Scenario type → engine condition codes (SCENARIO_TYPES_SK mirrors
+      // engine/demo_inputs.py). Unknown values are ignored, not errored.
+      const conditions = getScenarioConditions(searchParams.scenario)
+      if (conditions) {
+        query = query.in('condition_code', conditions)
+      }
+    }
 
     const { data, count, error } = await query
     if (error) throw error
@@ -58,7 +68,18 @@ async function fetchFindings(searchParams: Props['searchParams']) {
 
 export default async function FindingsPage({ searchParams }: Props) {
   const { findings, totalCount, page, error } = await fetchFindings(searchParams)
-  const hasFilters = !!(searchParams.severity || searchParams.status || searchParams.condition)
+  const hasFilters = !!(
+    searchParams.severity ||
+    searchParams.status ||
+    searchParams.condition ||
+    searchParams.scenario
+  )
+
+  // Active filters as a query string so pagination links keep them.
+  const filterParams = new URLSearchParams()
+  for (const key of ['severity', 'status', 'condition', 'scenario'] as const) {
+    if (searchParams[key]) filterParams.set(key, searchParams[key]!)
+  }
 
   return (
     <div className="space-y-4">
@@ -92,6 +113,7 @@ export default async function FindingsPage({ searchParams }: Props) {
               totalCount={totalCount}
               page={page}
               pageSize={PAGE_SIZE}
+              filterQuery={filterParams.toString()}
             />
           )}
         </>

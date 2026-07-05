@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
+import { SCENARIO_TYPES_SK } from '@/app/findings/scenarios'
 
 const ALL = '__all__'
 
@@ -45,11 +46,13 @@ export function FindingsFilters() {
   const severity = searchParams.get('severity') ?? ALL
   const status = searchParams.get('status') ?? ALL
   const condition = searchParams.get('condition') ?? ALL
+  const scenario = searchParams.get('scenario') ?? ALL
 
   // Derive the SK label to show in the trigger (fallback to placeholder when ALL).
   const severityLabel = severity !== ALL ? (SEVERITY_SK[severity] ?? severity) : undefined
   const statusLabel = status !== ALL ? (STATUS_SK[status] ?? status) : undefined
   const conditionLabel = condition !== ALL ? (CONDITION_LABELS_SK[condition]?.label ?? condition) : undefined
+  const scenarioLabel = scenario !== ALL ? (SCENARIO_TYPES_SK[scenario]?.label ?? scenario) : undefined
 
   return (
     <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3" role="search" aria-label="Filtre nálezov">
@@ -88,6 +91,28 @@ export function FindingsFilters() {
             <SelectItem value="acknowledged">Zaznamenaný</SelectItem>
             <SelectItem value="resolved">Vyriešený</SelectItem>
             <SelectItem value="wont_fix">Neopravovať</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Scenario-type filter — six engine scenario families (SCENARIO_TYPES_SK
+          mirrors engine/demo_inputs.py); narrows on the condition codes the
+          engine emits for the scenario. */}
+      <div className="sm:w-auto w-full">
+        <label htmlFor="filter-scenario" className="text-xs text-muted-foreground block mb-1">Typ scenára</label>
+        <Select value={scenario !== ALL ? scenario : undefined} onValueChange={(v: string | null) => updateParam('scenario', v ?? ALL)}>
+          <SelectTrigger id="filter-scenario" className="w-full sm:w-52 h-8 text-xs">
+            <SelectValue placeholder="Všetky typy scenárov">
+              {scenarioLabel}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Všetky typy scenárov</SelectItem>
+            {Object.entries(SCENARIO_TYPES_SK)
+              .sort((a, b) => a[1].order - b[1].order)
+              .map(([key, { label }]) => (
+                <SelectItem key={key} value={key}>{label}</SelectItem>
+              ))}
           </SelectContent>
         </Select>
       </div>
