@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/server'
 import { DistrictScorecard } from '@/components/district-scorecard'
+import { DistrictFindings } from '@/components/district-findings'
 import { DistrictDetailMap } from '@/components/district-detail-map'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import type {
@@ -11,6 +12,7 @@ import type {
   SoHousePoint,
   SoDistrictAddressStats,
   SoDistrictStreetLine,
+  SoFindingsPanelItem,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -37,6 +39,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawAllScorecard },
     { data: rawFindings },
     { data: rawAddressStats },
+    { data: rawDistrictFindings },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -47,6 +50,12 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
+    sb
+      .from('so_findings_panel')
+      .select(
+        'finding_id,district_id,condition_code,condition_label_sk,severity,severity_rank,status,evidence_public_text,provenance_source,is_demo'
+      )
+      .eq('district_id', id),
   ])
 
   if (scorecardError) throw scorecardError
@@ -57,6 +66,7 @@ export default async function DistrictPage({ params }: Props) {
   const housePoints = (rawHousePoints ?? []) as SoHousePoint[]
   const streetLines = (rawStreetLines ?? []) as SoDistrictStreetLine[]
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
+  const districtFindings = (rawDistrictFindings ?? []) as SoFindingsPanelItem[]
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
   // Step 1: findings are wiped, so open-findings is empty.
@@ -230,7 +240,13 @@ export default async function DistrictPage({ params }: Props) {
           )}
           <DistrictScorecard rows={sorted} />
         </section>
-      ) : (
+      ) : null}
+
+      {SHOW_COMPLIANCE && districtFindings.length > 0 && (
+        <DistrictFindings findings={districtFindings} />
+      )}
+
+      {SHOW_COMPLIANCE && sorted.length === 0 && (
         <Alert>
           <AlertTitle>Bez verdiktov</AlertTitle>
           <AlertDescription>
