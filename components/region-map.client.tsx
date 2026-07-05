@@ -705,18 +705,30 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           })
 
           let housePointsEnabled = false
+          // Programmatic add/removeLayer below re-fires the layers-control
+          // overlayadd/overlayremove synchronously; without this guard,
+          // toggling from zoom < 16 removed the layer while the auto-zoom was
+          // still in flight, whose overlayremove reset housePointsEnabled and
+          // the dots never appeared (docs/ISSUES.md #1). Only USER toggles may
+          // flip housePointsEnabled.
+          let syncingHousePoints = false
           const updateHousePointsVisibility = () => {
             const z = map.getZoom()
-            if (housePointsEnabled && z >= HOUSE_DOTS_MIN_ZOOM) {
-              if (!map.hasLayer(housePointsGroup)) map.addLayer(housePointsGroup)
-            } else {
-              if (map.hasLayer(housePointsGroup)) map.removeLayer(housePointsGroup)
+            syncingHousePoints = true
+            try {
+              if (housePointsEnabled && z >= HOUSE_DOTS_MIN_ZOOM) {
+                if (!map.hasLayer(housePointsGroup)) map.addLayer(housePointsGroup)
+              } else {
+                if (map.hasLayer(housePointsGroup)) map.removeLayer(housePointsGroup)
+              }
+            } finally {
+              syncingHousePoints = false
             }
           }
           map.on('zoomend', updateHousePointsVisibility)
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           map.on('overlayadd', (e: any) => {
-            if (e.layer === housePointsGroup) {
+            if (e.layer === housePointsGroup && !syncingHousePoints) {
               housePointsEnabled = true
               if (map.getZoom() < HOUSE_DOTS_MIN_ZOOM) map.setZoom(HOUSE_DOTS_MIN_ZOOM)
               updateHousePointsVisibility()
@@ -724,7 +736,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           })
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           map.on('overlayremove', (e: any) => {
-            if (e.layer === housePointsGroup) {
+            if (e.layer === housePointsGroup && !syncingHousePoints) {
               housePointsEnabled = false
               updateHousePointsVisibility()
             }
