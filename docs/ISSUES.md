@@ -1,9 +1,14 @@
 # Known issues
 
-Bugs found during real-browser E2E (Sprint 3, Checkpoint 5). App fixes are
-out of scope for the proof sprint — each needs its own fix sprint.
+Bugs found during real-browser E2E (Sprint 3, Checkpoint 5). Both fixed in
+Sprint 4; kept for the record.
 
-## 1. "Adresné body obvodov" overlay never shows dots when toggled from zoom < 16
+## 1. [FIXED] "Adresné body obvodov" overlay never shows dots when toggled from zoom < 16
+
+**Fixed in `db89707`** (Sprint 4): programmatic add/removeLayer in
+`updateHousePointsVisibility` is guarded by a `syncingHousePoints` flag, so
+the re-fired `overlayremove` can no longer reset `housePointsEnabled` — only
+user toggles flip it. Regression spec: `tests/e2e/overlay-toggle.e2e.mjs`.
 
 - **Page:** `/map`
 - **Action:** at the initial city zoom (12), enable the layers-control overlay
@@ -21,7 +26,11 @@ out of scope for the proof sprint — each needs its own fix sprint.
   (441 paths). The E2E proof pack uses this order
   (`tests/e2e/proof-pack.e2e.mjs`).
 
-## 2. Amber demo ring never renders on `/map` address dots
+## 2. [FIXED] Amber demo ring never renders on `/map` address dots
+
+**Fixed in `4f97af2`** (Sprint 4): `fetchHousePoints()` selects `is_demo`;
+the proof-pack spec now hard-asserts the amber ring, and
+`tests/e2e/overlay-toggle.e2e.mjs` asserts it marks only the demo subset.
 
 - **Page:** `/map`, "Adresné body obvodov" overlay at zoom ≥ 16 framed on a
   demo evidence address (e.g. Kúpeľná S2 seed, 48.973544, 21.221561).
