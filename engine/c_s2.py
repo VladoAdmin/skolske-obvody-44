@@ -1,108 +1,60 @@
 """
-Š2 — Neprekrývanie (Non-overlap): districts for the same school_type + teaching_language
-must not overlap.
+Š2 — Neprekrývanie (Non-overlap): the SAME full address (ulica + súpisné/orientačné
+číslo) must not be assigned to two districts of the same school_type +
+teaching_language.
+
+ADDRESS-BASED (streets-pivot, 2026-06-28):
+  The previous polygon ST_Intersects(d1.geom, d2.geom) test is retired. With the
+  map rendering districts as their STREETS (not polygons), a street shared by two
+  districts (crossing/boundary street) is normal and NOT a violation. The only
+  structural overlap that can ever be a § 44 finding is the SAME FULL ADDRESS
+  (street + house number) claimed by two districts of the same type — one address
+  must belong to exactly one obvod.
 
 METHODOLOGY §Š2:
-  PASS = 0 overlap pairs (within tolerance).
-  FAIL = any overlap pair (with area > tolerance).
-  INCOMPLETE = missing geometry or missing school_type/teaching_language attribute.
+  PASS = no full address (street + house number) appears in 2+ same-type districts.
+  FAIL = at least one full address assigned to 2+ same-type/same-language districts.
+  INCOMPLETE = missing school_type/teaching_language attribute.
 
-Per VZN reality: boundary streets shared between districts → boundary lines
-are analytically ambiguous. We use a 1 m² tolerance to ignore pure boundary
-artefacts (ST_Touches patterns).
+Source of address→district assignment: skolske_obvody.house_geocodes (one row per
+VZN-derived house address, district_id = the district the VZN assigns it to).
 
-Evidence: record overlap area and partner district for each FAIL.
+DEMO/LIVE SEPARATION (Step 2 Sprint 1):
+  house_geocodes rows can carry is_demo=TRUE (an explicit demo address, e.g. the
+  "same full address in 2 districts" demo scenario — see
+  scripts/sql/0041_demo_s2_address_overlap.sql). Those rows must NEVER affect a
+  live/prod Š2 verdict just by existing in the table. This checker EXCLUDES
+  is_demo=TRUE rows from the overlap query unless demo_mode_enabled() is TRUE —
+  by construction, not by convention, so turning demo mode off makes Š2 blind to
+  demo addresses regardless of what is seeded. When a demo row IS the cause of an
+  overlap, the resulting Verdict is flagged is_mock=True.
 """
 
 from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
-from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
+from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, demo_mode_enabled
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
-# 1 m² tolerance for boundary artefacts (CoordSys: EPSG:32634)
-OVERLAP_TOLERANCE_M2 = 1.0
-
 _METHODOLOGY = {
-    "rule": "Š2-overlap",
+    "rule": "Š2-address-overlap",
     "version": METHODOLOGY_VERSION,
-    "threshold_m2": OVERLAP_TOLERANCE_M2,
     "description": (
-        "Spatial intersection test between district pairs with matching "
-        "school_type AND teaching_language. Boundary artefacts < 1 m² ignored. "
-        "VZN boundary streets are ambiguous by construction — overlap > tolerance "
-        "logged as analytical finding but marked FAIL."
+        "Address-level non-overlap test: the same full address (street + house "
+        "number) must not be assigned to two districts of the same school_type "
+        "AND teaching_language. Shared/boundary STREETS are NOT a violation — only "
+        "a duplicated full address is."
     ),
     "law_ref": "§44 ods. 1 a 7",
-    "never_claims": "a small topological overlap = intentional administrative decision",
+    "never_claims": "a shared boundary street = an administrative overlap",
 }
-
-
-def _check_s2_demo(district: dict, demo: dict, municipality_id: str) -> Verdict:
-    """DEMO Š2: overlap flag drives a decisive PASS/FAIL with a named partner."""
-    district_id = district["id"]
-    has_overlap = bool(demo.get("s2_overlap"))
-    if not has_overlap:
-        return Verdict(
-            district_id=district_id,
-            condition_code="S2",
-            value=V.PASS,
-            confidence=DEMO_CONFIDENCE,
-            data_completeness=DEMO_COMPLETENESS,
-            provenance={"source": "DEMO — topológia (ukážkové dáta)", "demo": True,
-                        "overlap": False},
-            methodology={**_METHODOLOGY, "rule": "Š2-overlap-demo"},
-            evidence_text=(
-                "PASS [DEMO]: obvod pokrýva svoje územie bez prekryvu s inými obvodmi "
-                "rovnakého typu. Ukážkové dáta."
-            ),
-            is_mock=True,
-        )
-    # Find the demo overlap partner (district_overlaps.is_demo).
-    rows = query_sql(f"""
-        SELECT o.overlap_area_m2,
-            CASE WHEN o.district_a_id = '{district_id}' THEN db.name ELSE da.name END AS partner_name
-        FROM skolske_obvody.district_overlaps o
-        LEFT JOIN skolske_obvody.districts da ON da.id = o.district_a_id
-        LEFT JOIN skolske_obvody.districts db ON db.id = o.district_b_id
-        WHERE o.is_demo = TRUE
-          AND ('{district_id}' = o.district_a_id::text OR '{district_id}' = o.district_b_id::text)
-    """)
-    area = sum(float(r["overlap_area_m2"] or 0) for r in rows)
-    partners = sorted({r["partner_name"] for r in rows if r["partner_name"]}) or ["susedný obvod"]
-    evidence = (
-        f"FAIL [DEMO]: obvod sa prekrýva s {', '.join(partners)} "
-        f"({round(area)} m² dvojitého pokrytia). Tie isté ulice patria dvom obvodom "
-        "rovnakého typu (§ 44 ods. 1 a 7). Ukážková topologická vrstva — reálna "
-        "geometria Prešova prekryvy nemá."
-    )
-    return Verdict(
-        district_id=district_id,
-        condition_code="S2",
-        value=V.FAIL,
-        confidence=DEMO_CONFIDENCE,
-        data_completeness=DEMO_COMPLETENESS,
-        provenance={"source": "DEMO — topológia (ukážková vrstva prekryvu)", "demo": True,
-                    "overlap": True, "overlap_partners": partners,
-                    "overlap_area_m2": round(area, 1)},
-        methodology={**_METHODOLOGY, "rule": "Š2-overlap-demo"},
-        evidence_text=evidence,
-        is_mock=True,
-    )
 
 
 def check_s2(district: dict, all_districts: list[dict], municipality_id: str) -> Verdict:
     district_id = district["id"]
     school_type = district.get("school_type")
     teaching_language = district.get("teaching_language")
-
-    # DEMO MODE: topology input → decisive PASS/FAIL, flagged DEMO. The real
-    # geometry is unchanged (no overlap); the demo overlap layer makes the
-    # double-coverage violation type demonstrable.
-    demo = get_demo_input(district_id)
-    if demo is not None and demo.get("s2_overlap") is not None:
-        return _check_s2_demo(district, demo, municipality_id)
 
     if not school_type:
         return Verdict(
@@ -116,45 +68,52 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             evidence_text="NEÚPLNÉ: chýba atribút school_type — test neprebehol.",
         )
 
+    # TRUST BOUNDARY (Sprint 1 review): school_type/teaching_language are
+    # f-string interpolated directly into the SQL below, not parameterised.
+    # This is internal-trusted-only — both values originate from the
+    # `districts` table (ingested from WFS/VZN, never end-user input), not
+    # from any HTTP/user-facing input path. Not refactored this sprint per
+    # the review's explicit scope (documentation only, no behaviour change).
     lang_filter = (
         f"AND d2.teaching_language = '{teaching_language}'"
         if teaching_language
         else "AND d2.teaching_language IS NULL"
     )
 
+    # Demo addresses (house_geocodes.is_demo=TRUE) only enter this query when
+    # demo mode is on — otherwise a demo row can NEVER produce a live/prod Š2
+    # FAIL, by construction (see module docstring).
+    demo_on = demo_mode_enabled()
+    demo_exclusion = "" if demo_on else "AND h1.is_demo IS NOT TRUE AND h2.is_demo IS NOT TRUE"
+
+    # Same full address (normalised street + house number) assigned to THIS
+    # district AND to another district of the same school_type + teaching_language.
     overlap_rows = query_sql(f"""
         SELECT
-            d2.id AS partner_id,
+            d2.id   AS partner_id,
             d2.name AS partner_name,
-            public.ST_Area(public.ST_Transform(
-                public.ST_Intersection(d1.geom, d2.geom),
-                32634
-            )) AS overlap_m2
-        FROM skolske_obvody.districts d1
+            count(DISTINCT lower(trim(h1.street)) || '|' || trim(h1.house_number)) AS shared_addresses,
+            bool_or(h1.is_demo OR h2.is_demo) AS any_demo
+        FROM skolske_obvody.house_geocodes h1
+        JOIN skolske_obvody.house_geocodes h2
+          ON h1.id <> h2.id
+         AND h1.district_id <> h2.district_id
+         AND lower(trim(h1.street)) = lower(trim(h2.street))
+         AND trim(h1.house_number)  = trim(h2.house_number)
+         AND h1.house_number IS NOT NULL
+         {demo_exclusion}
         JOIN skolske_obvody.districts d2
-          ON d1.id != d2.id
+          ON d2.id = h2.district_id
          AND d2.school_type = '{school_type}'
          {lang_filter}
          AND d2.municipality_id = '{municipality_id}'
-         AND public.ST_Intersects(d1.geom, d2.geom)
-        WHERE d1.id = '{district_id}'
-          AND public.ST_Area(public.ST_Transform(
-                public.ST_Intersection(d1.geom, d2.geom),
-                32634
-              )) > {OVERLAP_TOLERANCE_M2}
+        WHERE h1.district_id = '{district_id}'
+        GROUP BY d2.id, d2.name
     """)
 
-    n_overlaps = len(overlap_rows)
-    overlap_details = [
-        {
-            "partner_id": r["partner_id"],
-            "partner_name": r["partner_name"],
-            "overlap_m2": round(float(r["overlap_m2"]), 1),
-        }
-        for r in overlap_rows
-    ]
+    is_mock = bool(overlap_rows) and any(r.get("any_demo") for r in overlap_rows)
 
-    if n_overlaps == 0:
+    if not overlap_rows:
         return Verdict(
             district_id=district_id,
             condition_code="S2",
@@ -162,44 +121,41 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             confidence=0.7,
             data_completeness=0.7,
             provenance={
-                "source": "district geometries (q6)",
+                "source": "house_geocodes (address→district assignment)",
                 "school_type": school_type,
                 "teaching_language": teaching_language,
-                "overlap_pairs_checked": True,
-                "tolerance_m2": OVERLAP_TOLERANCE_M2,
+                "method": "same-full-address-in-2+-districts",
             },
             methodology=_METHODOLOGY,
             evidence_text=(
-                f"0 prekryvov s inými obvodmi typu {school_type}/{teaching_language} "
-                f"nad toleranciou {OVERLAP_TOLERANCE_M2} m²."
+                f"0 adries (ulica + číslo) zdieľaných s iným obvodom typu "
+                f"{school_type}/{teaching_language}. Zdieľané hraničné ulice nie sú nález."
             ),
         )
-    else:
-        total_overlap = sum(d["overlap_m2"] for d in overlap_details)
-        # Methodology demote (PRD §16, METHODOLOGY Š2): when geometry confidence is not 'high',
-        # overlaps are a method artefact (concave-hull street sharing), not a VZN policy
-        # violation. Report as INCOMPLETE with evidence rather than FAIL.
-        geom_conf = (district.get('geometry_confidence') or '').lower()
-        verdict_value = V.INCOMPLETE if geom_conf in ('low', 'medium') else V.FAIL
-        verdict_conf = 0.3 if geom_conf in ('low', 'medium') else 0.7
-        return Verdict(
-            district_id=district_id,
-            condition_code="S2",
-            value=verdict_value,
-            confidence=verdict_conf,
-            data_completeness=0.7,
-            provenance={
-                "source": "district geometries (q6)",
-                "school_type": school_type,
-                "teaching_language": teaching_language,
-                "overlap_pairs": overlap_details,
-                "total_overlap_m2": round(total_overlap, 1),
-                "tolerance_m2": OVERLAP_TOLERANCE_M2,
-            },
-            methodology=_METHODOLOGY,
-            evidence_text=(
-                f'{("INCOMPLETE" if geom_conf in ("low","medium") else "FAIL")}: {n_overlaps} prekryv(ov) s obvodmi rovnakého typu {school_type}/{teaching_language}. '
-                f"Celková plocha prekryvu: {round(total_overlap, 1)} m². "
-                "Hraničné ulice medzi obvodmi môžu spôsobovať analytické dvojité pokrytie."
-            ),
-        )
+
+    partners = sorted({r["partner_name"] for r in overlap_rows if r["partner_name"]})
+    total_shared = sum(int(r["shared_addresses"] or 0) for r in overlap_rows)
+    demo_suffix = " Ukážkové dáta." if is_mock else ""
+    return Verdict(
+        district_id=district_id,
+        condition_code="S2",
+        value=V.FAIL,
+        confidence=DEMO_CONFIDENCE if is_mock else 0.7,
+        data_completeness=DEMO_COMPLETENESS if is_mock else 0.7,
+        provenance={
+            "source": "house_geocodes (address→district assignment)",
+            "school_type": school_type,
+            "teaching_language": teaching_language,
+            "overlap_partners": partners,
+            "shared_addresses": total_shared,
+            "method": "same-full-address-in-2+-districts",
+            "demo": is_mock,
+        },
+        methodology=_METHODOLOGY,
+        evidence_text=(
+            f"FAIL: {total_shared} adries (ulica + číslo) nárokujú dva obvody "
+            f"rovnakého typu naraz — s {', '.join(partners)} (§ 44 ods. 1 a 7). "
+            f"Jedna adresa musí patriť práve jednému obvodu.{demo_suffix}"
+        ),
+        is_mock=is_mock,
+    )

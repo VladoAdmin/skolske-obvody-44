@@ -13,6 +13,21 @@ interface FindingsTableProps {
   totalCount: number
   page: number
   pageSize: number
+  /** Active filter params (severity/status/condition/scenario) so pagination keeps them. */
+  filterQuery?: string
+}
+
+// Same DEMO provenance tag as district detail (components/district-findings.tsx)
+// — demo scenarios must never read as live findings.
+function DemoBadge() {
+  return (
+    <span
+      className="inline-flex items-center rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800"
+      title="Ukážkové (DEMO) dáta — ilustrácia scenára, nevstupuje do zákonného verdiktu"
+    >
+      DEMO
+    </span>
+  )
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -22,8 +37,14 @@ const STATUS_LABELS: Record<string, string> = {
   wont_fix: 'Neopravovať',
 }
 
-export function FindingsTable({ findings, totalCount, page, pageSize }: FindingsTableProps) {
+export function FindingsTable({ findings, totalCount, page, pageSize, filterQuery }: FindingsTableProps) {
   const [openId, setOpenId] = useState<string | null>(null)
+
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams(filterQuery)
+    params.set('page', String(p))
+    return `/findings?${params.toString()}`
+  }
 
   if (findings.length === 0) {
     return (
@@ -60,10 +81,13 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
               aria-label={`Nález pre obvod ${finding.district_name}`}
             >
               <div className="flex items-start justify-between gap-2">
-                <span
-                  className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
-                >
-                  {getSeverityLabel(finding.severity)}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
+                  >
+                    {getSeverityLabel(finding.severity)}
+                  </span>
+                  {finding.is_demo && <DemoBadge />}
                 </span>
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
                   {STATUS_LABELS[finding.status] ?? finding.status}
@@ -132,10 +156,13 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
                     aria-label={`Nález pre obvod ${finding.district_name}`}
                   >
                     <TableCell className="sticky left-0 bg-background z-10">
-                      <span
-                        className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
-                      >
-                        {getSeverityLabel(finding.severity)}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          className={`inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-medium ${getSeverityClass(finding.severity)}`}
+                        >
+                          {getSeverityLabel(finding.severity)}
+                        </span>
+                        {finding.is_demo && <DemoBadge />}
                       </span>
                     </TableCell>
                     <TableCell className="text-xs">{finding.municipality_name ?? '—'}</TableCell>
@@ -180,8 +207,8 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
                           {finding.evidence_public_text}
                         </p>
                         {finding.is_demo && (
-                          <p className="mt-2 text-xs text-fuchsia-700">
-                            Ukážkové (DEMO) dáta — ilustrácia funkcionality, nevstupuje do zákonného verdiktu.
+                          <p className="mt-2 text-xs text-amber-800">
+                            Ukážkové (DEMO) dáta — ilustrácia scenára, nevstupuje do zákonného verdiktu.
                           </p>
                         )}
                         <Link
@@ -207,7 +234,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize }: Findings
           {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((p) => (
             <Link
               key={p}
-              href={`/findings?page=${p}`}
+              href={pageHref(p)}
               className={`rounded px-2 py-1 border ${p === page ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-muted'}`}
               aria-current={p === page ? 'page' : undefined}
             >

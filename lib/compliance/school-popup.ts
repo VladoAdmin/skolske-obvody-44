@@ -10,6 +10,7 @@
 
 import type { DistrictScorecardRow } from '@/lib/supabase/types'
 import { getColorSymbol, getColorLabel } from './colors'
+import { SHOW_COMPLIANCE } from './step1'
 
 // Compact per-district summary derived server-side from so_district_scorecard
 // + so_findings_panel and passed to the client map keyed by district_id.
@@ -202,6 +203,18 @@ export function buildDistrictSchoolPopup(
 ): string {
   const color = summary?.composition_color ?? compositionColorFallback
 
+  // Step 1: NO compliance semafor / counts / per-condition list in the popup —
+  // just the school name + a link to the obvod detail. Gated by SHOW_COMPLIANCE.
+  if (!SHOW_COMPLIANCE) {
+    return (
+      `<div style="min-width:180px;max-width:260px;font-size:12px;line-height:1.4">` +
+      `<div style="font-weight:700">${escapeHtml(schoolName)}</div>` +
+      `<div style="margin-top:4px;font-size:11px;color:#6b7280">Školský obvod mesta Prešov</div>` +
+      detailLinkHtml(districtId) +
+      `</div>`
+    )
+  }
+
   return (
     `<div style="min-width:200px;max-width:260px;font-size:12px;line-height:1.4">` +
     `<div style="font-weight:700">${escapeHtml(schoolName)}</div>` +
@@ -226,6 +239,18 @@ export function buildDistrictSummaryPopup(
   compositionColorFallback: string | null
 ): string {
   const color = summary?.composition_color ?? compositionColorFallback
+
+  // Step 1: NO compliance semafor / counts / per-condition list — just the
+  // obvod name + detail link. Gated by SHOW_COMPLIANCE.
+  if (!SHOW_COMPLIANCE) {
+    return (
+      `<div style="min-width:180px;max-width:260px;font-size:12px;line-height:1.4">` +
+      `<div style="font-weight:700">${escapeHtml(districtName)}</div>` +
+      `<div style="margin-top:4px;font-size:11px;color:#6b7280">Školský obvod mesta Prešov</div>` +
+      detailLinkHtml(districtId) +
+      `</div>`
+    )
+  }
 
   return (
     `<div style="min-width:200px;max-width:260px;font-size:12px;line-height:1.4">` +

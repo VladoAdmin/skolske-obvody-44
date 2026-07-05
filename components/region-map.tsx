@@ -1,6 +1,6 @@
 // SSR-safe wrapper: dynamically imports the Leaflet client component
 import dynamic from 'next/dynamic'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoDistrictOverlap, SoDistrictIsland, SoPskMunicipality, SoStreetGeocode, SoHousePoint, SoDistrictVoronoi, SoDistrictCleanGeom, SoHouseDot } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -9,15 +9,11 @@ interface RegionMapProps {
   schools: SoSchoolMarker[]
   mrkOverlays: SoMrkOverlay[]
   mrkLocalities?: SoMrkLocality[]
-  findings: SoFindingsPanelItem[]
-  overlaps?: SoDistrictOverlap[]
-  islands?: SoDistrictIsland[]
   municipalities?: SoPskMunicipality[]
-  streetGeocodes?: SoStreetGeocode[]
+  streetLines?: SoDistrictStreetLine[]
   housePoints?: SoHousePoint[]
-  voronoiGeom?: SoDistrictVoronoi[]
-  cleanGeom?: SoDistrictCleanGeom[]
   houseDots?: SoHouseDot[]
+  findings?: SoFindingsPanelItem[]
   districtSummaries?: Record<string, DistrictPopupSummary>
   initialMode?: 'sk' | 'psk'
 }
@@ -30,6 +26,6 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], findings, overlaps = [], islands = [], municipalities = [], streetGeocodes = [], housePoints = [], voronoiGeom = [], cleanGeom = [], houseDots = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
-  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} findings={findings} overlaps={overlaps} islands={islands} municipalities={municipalities} streetGeocodes={streetGeocodes} housePoints={housePoints} voronoiGeom={voronoiGeom} cleanGeom={cleanGeom} houseDots={houseDots} districtSummaries={districtSummaries} initialMode={initialMode} />
+export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
+  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} municipalities={municipalities} streetLines={streetLines} housePoints={housePoints} houseDots={houseDots} findings={findings} districtSummaries={districtSummaries} initialMode={initialMode} />
 }

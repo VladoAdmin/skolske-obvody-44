@@ -3,13 +3,8 @@ import dynamic from 'next/dynamic'
 import type {
   DistrictMapFeature,
   SoSchoolMarker,
-  SoMrkOverlay,
   SoHousePoint,
-  SoStreetGeocode,
-  SoDistrictVoronoi,
-  SoDistrictIsland,
-  SoFindingsPanelItem,
-  SoDistrictOverlap,
+  SoDistrictStreetLine,
 } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,14 +12,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 interface DistrictDetailMapProps {
   currentDistrictId: string
   features: DistrictMapFeature[]
-  voronoiFeatures: SoDistrictVoronoi[]
   schools: SoSchoolMarker[]
-  mrkOverlays: SoMrkOverlay[]
   housePoints: SoHousePoint[]
-  streetGeocodes: SoStreetGeocode[]
-  islands: SoDistrictIsland[]
-  findings?: SoFindingsPanelItem[]
-  overlaps?: SoDistrictOverlap[]
+  streetLines: SoDistrictStreetLine[]
   districtSummaries?: Record<string, DistrictPopupSummary>
 }
 
