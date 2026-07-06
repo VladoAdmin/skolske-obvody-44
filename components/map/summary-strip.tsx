@@ -1,10 +1,37 @@
-import type { DistrictMapFeature, SoFindingsPanelItem } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoFindingsPanelItem, SoStreetCoverageGap } from '@/lib/supabase/types'
 import type { CompositionColor } from '@/lib/compliance/colors'
 import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
 interface SummaryStripProps {
   features: DistrictMapFeature[]
   findings: SoFindingsPanelItem[]
+  // VLA-14: engine-classified uncovered streets (vzn_gap / data_gap)
+  coverageGaps?: SoStreetCoverageGap[]
+}
+
+// VLA-14 coverage-gap counters. Shown in BOTH display modes: the owner mandate
+// is that map "holes" are always explained, and the data_gap state is not a
+// compliance verdict (it is explicitly "neurčené"), so the step-1 gate does
+// not apply to it. Counts come straight from engine rows — never derived here.
+function CoverageGapCounts({ coverageGaps }: { coverageGaps: SoStreetCoverageGap[] }) {
+  const vznGaps = coverageGaps.filter((g) => g.category === 'vzn_gap').length
+  const dataGaps = coverageGaps.filter((g) => g.category === 'data_gap').length
+  return (
+    <dl className="flex items-center justify-around gap-3 sm:gap-4 list-none m-0 px-1">
+      <div className="flex flex-col items-center" data-testid="summary-vzn-gaps">
+        <dt className="text-[10px] text-muted-foreground leading-tight order-2">VZN medzera</dt>
+        <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-red-700">
+          {vznGaps}
+        </dd>
+      </div>
+      <div className="flex flex-col items-center" data-testid="summary-data-gaps">
+        <dt className="text-[10px] text-muted-foreground leading-tight order-2">Nedostatočné dáta</dt>
+        <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-gray-600">
+          {dataGaps}
+        </dd>
+      </div>
+    </dl>
+  )
 }
 
 const SEMAFOR: { color: CompositionColor; emoji: string; label: string }[] = [
@@ -23,7 +50,7 @@ const SEMAFOR: { color: CompositionColor; emoji: string; label: string }[] = [
  * compliance analysis lives in step 2. The strip shows only the obvod count.
  * Verdicts stay computed internally (engine SSOT); gated by SHOW_COMPLIANCE.
  */
-export function SummaryStrip({ features, findings }: SummaryStripProps) {
+export function SummaryStrip({ features, findings, coverageGaps = [] }: SummaryStripProps) {
   const counts: Record<CompositionColor, number> = { RED: 0, ORANGE: 0, GREEN: 0, NONE: 0 }
   for (const f of features) {
     const c = (f.composition_color as CompositionColor) ?? 'NONE'
@@ -37,7 +64,7 @@ export function SummaryStrip({ features, findings }: SummaryStripProps) {
         aria-label="Súhrnný prehľad pilotu"
         className="rounded-lg border border-border bg-card p-3"
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col">
             <span className="text-base font-semibold tabular-nums leading-tight">
               {features.length} školských obvodov
@@ -46,6 +73,7 @@ export function SummaryStrip({ features, findings }: SummaryStripProps) {
               Mesto Prešov — každý obvod má vlastnú farbu podľa školy
             </span>
           </div>
+          {coverageGaps.length > 0 && <CoverageGapCounts coverageGaps={coverageGaps} />}
         </div>
       </section>
     )
@@ -92,6 +120,13 @@ export function SummaryStrip({ features, findings }: SummaryStripProps) {
             </dd>
           </div>
         </dl>
+
+        {coverageGaps.length > 0 && (
+          <>
+            <div className="hidden sm:block w-px bg-border" aria-hidden="true" />
+            <CoverageGapCounts coverageGaps={coverageGaps} />
+          </>
+        )}
       </div>
     </section>
   )
