@@ -47,6 +47,20 @@ CITATION_RE = re.compile(
     r"§\s*44\s+ods\.\s*\d+(?:\s+a\s+\d+)?(?:\s+písm\.\s*[a-f]\))?"
 )
 
+# A bare "§ 44" next to a number-with-unit is how an invented limit sneaks
+# past the allowlist ("Podľa § 44 je limit 2 km" names no odsek, so
+# CITATION_RE never sees it). § 44 sets NO numeric limits, so any such
+# pairing must carry the demo-parameter labelling this branch established.
+LIMIT_RE = re.compile(r"\d[\d\s.,]*(?:km|min\w*|metrov|m|žiak\w*|%)(?!\w)")
+DEMO_MARKER_RE = re.compile(
+    r"metodick\w+\s+parame"        # metodický parameter / metodické parametre
+    r"|parametr?\w*\s+dema"        # parameter dema / parametre dema
+    r"|limit\w*\s+neurčuje"        # zákon limit(y) neurčuje
+    r"|neurčuje\s+(?:\w+\s+){0,3}limit"  # zákon (pri nich) neurčuje ... limity
+    r"|bez\s+číselného\s+limitu",
+    re.IGNORECASE,
+)
+
 
 def _norm(citation: str) -> str:
     return re.sub(r"\s+", " ", citation).strip()
@@ -85,6 +99,52 @@ def test_every_specific_citation_is_in_the_audited_allowlist():
         "unaudited § 44 citation(s) — add ONLY if literally supported by "
         "docs/legal/zakon-321-2025-par-44.md and record them in "
         "docs/legal-audit-44.md:\n" + "\n".join(violations)
+    )
+
+
+def _strip_dev_comments(path: str, source: str) -> str:
+    """This gate targets user-facing strings. Whole-line dev comments
+    (//, --, #) and Python module docstrings discuss thresholds vs. the law
+    freely (often in English), and are never shown to users — drop them."""
+    if path.endswith(".py"):
+        parts = source.split('"""', 2)
+        if len(parts) == 3:
+            source = parts[2]
+        marker = "#"
+    elif path.endswith(".sql"):
+        marker = "--"
+    else:
+        marker = "//"
+    return "\n".join(
+        line for line in source.splitlines()
+        if not line.lstrip().startswith(marker)
+    )
+
+
+def test_bare_44_next_to_a_numeric_limit_carries_the_demo_marker():
+    """§ 44 prescribes no numeric limits (docs/legal/zakon-321-2025-par-44.md).
+
+    Any user-facing text that puts "§ 44" within reach of a number-with-unit
+    (m/km/min/%/žiakov) is presenting an invented legal limit unless it also
+    carries the demo-parameter labelling ("metodický parameter" /
+    "parameter dema" / "zákon limit neurčuje") in the same neighbourhood.
+    """
+    violations = []
+    for path in _user_facing_files():
+        with open(path, encoding="utf-8") as fh:
+            source = _strip_dev_comments(path, fh.read())
+        source = re.sub(r"\s+", " ", source)
+        for match in re.finditer(r"§\s*44", source):
+            window = source[max(0, match.start() - 250) : match.end() + 250]
+            if LIMIT_RE.search(window) and not DEMO_MARKER_RE.search(window):
+                violations.append(
+                    f"{os.path.relpath(path, ROOT)}: …{window.strip()}…"
+                )
+    assert not violations, (
+        "§ 44 appears next to a numeric limit without demo-parameter "
+        "labelling — § 44 sets no numeric limits; label the threshold as a "
+        "metodický parameter dema or drop the citation:\n"
+        + "\n\n".join(violations)
     )
 
 

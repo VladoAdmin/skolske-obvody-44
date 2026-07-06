@@ -92,9 +92,11 @@ export default function OMetodikePage() {
       <section id="analyticke-indikatory" className="scroll-mt-20">
         <h2 className="text-lg font-semibold mb-1 not-prose">Analytické indikátory (P-a až P-f)</h2>
         <p className="text-sm text-muted-foreground mb-4 not-prose">
-          Šesť indikátorov nadväzujúcich na hľadiská § 44 ods. 8 (zákon pri nich neurčuje žiadne
-          číselné limity — uvedené prahy sú metodické parametre dema). Zlý indikátor posiela obvod
-          do oranžovej, nie do červenej — sú to varovné signály, nie rozsudky.
+          Indikátory P-a až P-c nadväzujú na hľadiská § 44 ods. 8, P-d je metodický indikátor
+          bez priamej opory v § 44 a P-e s P-f sú analytické signály mimo semaforu. Zákon pri
+          žiadnom z nich neurčuje číselné limity — uvedené prahy sú metodické parametre dema.
+          Zlý indikátor posiela obvod najviac do oranžovej, nikdy do červenej — sú to varovné
+          signály, nie rozsudky.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 not-prose">
           <ConditionCard
