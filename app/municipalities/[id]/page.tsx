@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import type { DistrictMapFeature, MunicipalitySummary, SoDistrictStreetLine } from '@/lib/supabase/types'
 import { RegionMap } from '@/components/region-map'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -16,10 +17,15 @@ export default async function MunicipalityDetailPage({ params }: Props) {
   const { id } = params
   const sb = createPublicClient()
 
-  const [summaryRes, featuresRes, streetLinesRes] = await Promise.all([
+  const [summaryRes, featuresRes, streetLines] = await Promise.all([
     sb.from('so_municipalities_summary').select('*').eq('municipality_id', id).maybeSingle(),
     sb.from('so_district_map_features').select('*'),
-    sb.from('so_district_street_linestrings').select('district_id,school_id,street,is_fallback_point,linestring_geojson'),
+    // Paged (>1000 rows, PostgREST cap) — see lib/supabase/fetch-all.ts.
+    fetchAllRows<SoDistrictStreetLine>(
+      sb,
+      'so_district_street_linestrings',
+      'district_id,school_id,street,is_fallback_point,linestring_geojson'
+    ).catch(() => [] as SoDistrictStreetLine[]),
   ])
 
   const summary = summaryRes.data as MunicipalitySummary | null
@@ -27,7 +33,6 @@ export default async function MunicipalityDetailPage({ params }: Props) {
   if (!summary) notFound()
 
   const features = (featuresRes.data ?? []) as DistrictMapFeature[]
-  const streetLines = (streetLinesRes.data ?? []) as SoDistrictStreetLine[]
 
   return (
     <div className="max-w-4xl space-y-6">

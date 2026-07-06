@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createPublicClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { DistrictScorecard } from '@/components/district-scorecard'
 import { DistrictFindings } from '@/components/district-findings'
 import { DistrictDetailMap } from '@/components/district-detail-map'
@@ -35,7 +36,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: allFeatures },
     { data: rawSchools },
     { data: rawHousePoints },
-    { data: rawStreetLines },
+    rawStreetLines,
     { data: rawAllScorecard },
     { data: rawFindings },
     { data: rawAddressStats },
@@ -46,7 +47,12 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_school_markers').select('*'),
     sb.from('so_house_points').select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason'),
     // Streets pivot: the detail map uses the SAME street source as the main map.
-    sb.from('so_district_street_linestrings').select('district_id,school_id,street,is_fallback_point,linestring_geojson'),
+    // Paged (>1000 rows, PostgREST cap) — see lib/supabase/fetch-all.ts.
+    fetchAllRows<SoDistrictStreetLine>(
+      sb,
+      'so_district_street_linestrings',
+      'district_id,school_id,street,is_fallback_point,linestring_geojson'
+    ).catch(() => [] as SoDistrictStreetLine[]),
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
@@ -64,7 +70,7 @@ export default async function DistrictPage({ params }: Props) {
   const features = (allFeatures ?? []) as DistrictMapFeature[]
   const schools = (rawSchools ?? []) as SoSchoolMarker[]
   const housePoints = (rawHousePoints ?? []) as SoHousePoint[]
-  const streetLines = (rawStreetLines ?? []) as SoDistrictStreetLine[]
+  const streetLines = rawStreetLines
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
   const districtFindings = (rawDistrictFindings ?? []) as SoFindingsPanelItem[]
 

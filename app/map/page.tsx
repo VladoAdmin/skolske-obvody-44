@@ -4,6 +4,7 @@ import { FindingsPanel } from '@/components/findings-panel'
 import { MapWithPanel } from '@/components/map/map-with-panel'
 import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine } from '@/lib/supabase/types'
@@ -80,14 +81,16 @@ async function fetchFindings(): Promise<SoFindingsPanelItem[]> {
 // STREETS PIVOT: districts render as their VZN-assigned streets, coloured per
 // school. One row per drawn segment (LineString, or a Point for fallback streets
 // with no OSM line). Single SSOT used by the main map and the detail page.
+// The view has ~3000 rows — above the PostgREST 1000-row cap — so it must be
+// paged via fetchAllRows or whole neighbourhoods go missing from the map.
 async function fetchStreetLines(): Promise<SoDistrictStreetLine[]> {
   try {
     const sb = createPublicClient()
-    const { data, error } = await sb
-      .from('so_district_street_linestrings')
-      .select('district_id,school_id,street,is_fallback_point,linestring_geojson')
-    if (error) throw error
-    return (data ?? []) as SoDistrictStreetLine[]
+    return await fetchAllRows<SoDistrictStreetLine>(
+      sb,
+      'so_district_street_linestrings',
+      'district_id,school_id,street,is_fallback_point,linestring_geojson'
+    )
   } catch {
     return []
   }

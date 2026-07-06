@@ -43,3 +43,23 @@ the proof-pack spec now hard-asserts the amber ring, and
   The view itself exposes `is_demo` (verified via REST) — the fix is adding
   the column to the select.
 - **Console errors:** none.
+
+## 3. [BACKLOG] Sprint 5 GPT-5.5 review findings (non-blocking hardening)
+
+Deferred to backlog per owner's standing decision (same as the two Sprint 3/4
+review findings). None blocks the pagination fix — the E2E gate proves 2974
+segments fetched and rendered.
+
+- `lib/supabase/fetch-all.ts:17` — paging via `.range()` has no deterministic
+  `.order()`; a view could in theory return duplicates/gaps across pages. Add
+  a stable unique ordering parameter.
+- `app/map/page.tsx` / `app/districts/[id]/page.tsx` /
+  `app/municipalities/[id]/page.tsx` — `catch → []` silently hides fetch
+  errors and renders the map without streets (pre-existing pattern). Log or
+  surface an error state.
+- `components/region-map.client.tsx:543` — `renderedStreetColors` keyed by
+  street name collides when the same street name exists in multiple
+  districts (E2E diagnostics only). Key by `district_id + street`.
+- `components/region-map.client.tsx:592` — test global
+  `window.__soStreetColors` is written in production runtime; gate it to
+  test/dev builds.
