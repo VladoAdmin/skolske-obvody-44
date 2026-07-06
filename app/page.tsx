@@ -33,7 +33,7 @@ export default async function Home() {
         </h1>
         <div className="prose prose-sm text-muted-foreground space-y-3 max-w-none">
           <p>
-            Každá obec na Slovensku má zo zákona (§ 44 zák. č. 596/2003 Z. z.) povinnosť určiť
+            Každá obec na Slovensku má zo zákona (§ 44 zák. č. 321/2025 Z. z.) povinnosť určiť
             školské obvody pre základné školy. Obvod presne vymedzuje, ktoré ulice a adresy patria
             ku konkrétnej škole — žiak má právo nastúpiť do školy v obvode svojho trvalého pobytu.
           </p>

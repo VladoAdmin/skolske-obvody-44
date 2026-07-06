@@ -35,7 +35,7 @@ export const SCENARIO_TYPES_SK: Record<string, ScenarioType> = {
     order: 4,
   },
   language_minority: {
-    label: 'Vyučovací jazyk (mimo § 44)',
+    label: 'Vyučovací jazyk (mimo semaforu)',
     conditions: ['JAZYK'],
     order: 5,
   },

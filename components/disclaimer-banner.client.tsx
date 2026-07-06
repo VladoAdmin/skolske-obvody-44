@@ -80,7 +80,7 @@ export function DisclaimerBannerClient({ methodologyVersion, engineVersion }: Pr
               Tento portál zobrazuje analytické výstupy nad verejne dostupnými dátami pre 12
               školských obvodov mesta Prešov.{' '}
               <strong>
-                Nie je oficiálnym výkladom súladu so § 44 zákona č. 596/2003 — záver nie je
+                Nie je oficiálnym výkladom súladu so § 44 zákona č. 321/2025 — záver nie je
                 záväzný.
               </strong>
             </p>

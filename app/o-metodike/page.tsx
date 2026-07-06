@@ -33,7 +33,7 @@ export default function OMetodikePage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight mb-2 not-prose">Metodika kontroly § 44</h1>
         <p className="text-muted-foreground leading-relaxed not-prose">
-          Zákon č. 596/2003 Z. z. (§ 44) zaväzuje každú obec určiť školské obvody pre základné školy.
+          Zákon č. 321/2025 Z. z. (§ 44) zaväzuje každú obec určiť školské obvody pre základné školy.
           Táto metodika popisuje, ako portál tieto obvody kontroluje — aké podmienky sa overujú,
           odkiaľ pochádzajú dáta a kde sú aktuálne medzery.
         </p>
@@ -64,20 +64,20 @@ export default function OMetodikePage() {
       <section id="zakonne-podmienky" className="scroll-mt-20">
         <h2 className="text-lg font-semibold mb-1 not-prose">Zákonné podmienky (Š)</h2>
         <p className="text-sm text-muted-foreground mb-4 not-prose">
-          Tri podmienky priamo zo zákona č. 596/2003 § 44. Ich nesplnenie znamená porušenie zákona
+          Tri podmienky priamo zo zákona č. 321/2025 § 44. Ich nesplnenie znamená porušenie zákona
           — preto majú priamy vplyv na semafor.
         </p>
         <div className="grid gap-3 sm:grid-cols-3 not-prose">
           <ConditionCard
             code="Š1"
             title="Adresy žiakov a obvod"
-            body="Mapa adries všetkých žiakov musí spadať do správneho obvodu. Bez Registra adries to overiť nevieme — preto Š1 zatiaľ ostáva NEÚPLNÉ."
+            body="Každá adresa má byť pokrytá práve jedným obvodom podľa uličného zoznamu VZN (§ 44 ods. 1). Meriame prekryvy priradenia a medzery v pokrytí."
             type="law"
           />
           <ConditionCard
             code="Š2"
-            title="Topologické pokrytie"
-            body="Plocha obce musí byť pokrytá obvodmi bez medzier a bez prekryvov. Overujeme cez OSM geometriu."
+            title="Neprekrývanie obvodov"
+            body="Tá istá adresa (ulica + číslo) nesmie byť priradená dvom obvodom rovnakého druhu školy — obvody sa nesmú prekrývať (§ 44 ods. 1 a 7)."
             type="law"
           />
           <ConditionCard
@@ -92,29 +92,30 @@ export default function OMetodikePage() {
       <section id="analyticke-indikatory" className="scroll-mt-20">
         <h2 className="text-lg font-semibold mb-1 not-prose">Analytické indikátory (P-a až P-f)</h2>
         <p className="text-sm text-muted-foreground mb-4 not-prose">
-          Šesť indikátorov, ktoré zákon explicitne nevymenúva, ale signalizujú rizikové situácie.
-          Zlý indikátor posiela obvod do oranžovej, nie do červenej — sú to varovné signály, nie rozsudky.
+          Šesť indikátorov nadväzujúcich na hľadiská § 44 ods. 8 (zákon pri nich neurčuje žiadne
+          číselné limity — uvedené prahy sú metodické parametre dema). Zlý indikátor posiela obvod
+          do oranžovej, nie do červenej — sú to varovné signály, nie rozsudky.
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 not-prose">
           <ConditionCard
             code="P-a"
-            title="Vzdialenosť ZŠ ≤ 2 km"
-            body="Žiak 1. stupňa nemá mať školu vzdialenú viac než 2 km vzdušnou čiarou."
+            title="Vzdialenosť (vzdušná čiara)"
+            body="Vzdialenosť adresy k škole vzdušnou čiarou — hľadisko podľa § 44 ods. 8 písm. b), zákon limit neurčuje. Prah 2 km je metodický parameter dema."
           />
           <ConditionCard
             code="P-b"
-            title="Pešia trasa ≤ 30 min"
-            body="Reálna pešia trasa nemá presahovať 30 minút (cca 2,5 km mestskou cestou)."
+            title="Pešia trasa"
+            body="Reálna pešia trasa do školy. Prah 30 minút je metodický parameter dema — zákon limit neurčuje (§ 44 ods. 8 písm. b))."
           />
           <ConditionCard
             code="P-c"
-            title="MHD bez prestupu"
-            body="Ak chodí žiak MHD-kou, prestup nesmie byť potrebný viac než raz. Ilustratívny indikátor — nezáväzný."
+            title="MHD dostupnosť"
+            body="Dopravná infraštruktúra obce je hľadisko podľa § 44 ods. 8 písm. c). Prah „viac ako jeden prestup“ je metodický parameter dema."
           />
           <ConditionCard
             code="P-d"
-            title="Bezpečná trasa"
-            body="Trasa z domu do školy neprekračuje rušnú cestu bez priechodu ani železnicu bez podchodu."
+            title="Bariéry na trase"
+            body="Metodický indikátor bezpečnosti trasy (rušná cesta bez priechodu, železnica bez podchodu) — bez priamej opory v § 44, nikdy nie porušenie zákona."
           />
           <ConditionCard
             code="P-e"
