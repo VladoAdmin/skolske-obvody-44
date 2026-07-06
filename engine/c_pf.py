@@ -18,7 +18,9 @@ METHODOLOGY §P-f (labels.ts canonical = "Demografia detí"):
     NO_SIGNAL     = student_count <= capacity (kapacita postačuje).
     NOT_EVALUATED = capacity or demand unavailable.
 
-  law_ref: §44 ods. 8 písm. f) — kapacita školy vs počet detí v obvode.
+  LEGAL ANCHOR (docs/legal-audit-44.md): § 44 ods. 8 písm. a) — „kapacita budov
+  zriaďovateľa alebo školy…“. NEVER cite písm. f) here: that provision is the
+  principle of inclusive education, not capacity.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ _METHODOLOGY = {
     "demand_source": "schools.student_count (EDUZBER/WFS)",
     "capacity_source": "schools.capacity (EDUZBER)",
     "gap": "per-obvodové počty detí (REGOB) nie sú dostupné; používa sa zápis školy",
-    "law_ref": "§44 ods. 8 písm. f)",
+    "law_ref": "§ 44 ods. 8 písm. a)",
     "never_claims": "kapacita/preťaženie ako zákonný verdikt — analytický signál",
     "panel": "analytické signály — NIKDY v zákonnom semafore",
     "gatekeeping": "Pf nikdy nezhoršuje zákonný semafor",

@@ -7,7 +7,7 @@ METHODOLOGY §Š3:
   INCOMPLETE = school_id FK missing on district.
 
 Only public schools (is_public=TRUE) of matching school_type are counted.
-Private/church schools (§44 covers only public MŠ/ZŠ) are excluded.
+Private/church schools (§ 44 covers only public MŠ/ZŠ) are excluded.
 
 Note: the district.school_id FK is the VZN-assigned school; we ALSO spatially
 count public schools whose Point is within the district boundary. Discrepancy
@@ -28,7 +28,7 @@ _METHODOLOGY = {
         "Count public schools (is_public=TRUE) of matching school_type whose "
         "ST_Within(school.geom, district.geom). PASS = exactly 1."
     ),
-    "law_ref": "§44 ods. 1",
+    "law_ref": "§ 44 ods. 1",
     "never_claims": (
         "status of private/church schools; "
         "only public MŠ/ZŠ enter the count"
@@ -123,7 +123,7 @@ def check_s3(district: dict) -> Verdict:
         "fk_school_id": school_id,
         "fk_school_inside_geom": fk_inside,
         "spatial_count_public_schools": spatial_count,
-        "note": "Only public schools (is_public=TRUE) counted per §44.",
+        "note": "Only public schools (is_public=TRUE) counted per § 44.",
     }
 
     if spatial_count == 1:

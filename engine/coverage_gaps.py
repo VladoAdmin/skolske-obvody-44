@@ -15,9 +15,10 @@ METHODOLOGY §coverage-gaps:
   geometry build about what matched.
 
   vzn_gap  — street IS in the register but NO VZN row assigns it to any
-             district. Addresses there have no spádový obvod: a structural
-             Š1-family finding (§ 44 ods. 1 — every address belongs to exactly
-             one district). Real-data evidence; may be presented as a finding.
+             district. Addresses there have no spádový obvod: a coverage gap,
+             a structural Š1-family finding (§ 44 ods. 1 — the municipality
+             determines a district for every school by VZN). Real-data
+             evidence; may be presented as a finding.
   data_gap — the name exists only in OSM map data inside the city boundary and
              cannot be anchored to the register (spelling variants, passages,
              courtyards, transit roads, non-address spaces). We CANNOT decide,
@@ -62,8 +63,8 @@ NORM = lambda col: f"""
 REASON_VZN_GAP_SK = (
     "Ulica „%s“ je v Registri adries mesta Prešov (%s obývateľných adries), "
     "ale žiadne VZN ju nepriraďuje k školskému obvodu. Adresy na nej nemajú "
-    "určený spádový obvod — štrukturálny nález Š1 (§ 44 ods. 1: každá adresa "
-    "musí patriť práve jednému obvodu)."
+    "určený spádový obvod — medzera v pokrytí, štrukturálny nález Š1 "
+    "(§ 44 ods. 1: obec určuje VZN školský obvod pre každú školu)."
 )
 REASON_DATA_GAP_SK = (
     "Neurčené — dátová medzera. Názov „%s“ existuje v mapových podkladoch "

@@ -45,7 +45,7 @@ _METHODOLOGY = {
     "data_source": "Atlas rómskych komunít 2019: mrk_atlas (kategória obce) + mrk_buildings (lokalita)",
     "data_age": "Atlas 2019 — 6-ročné dáta; výsledok je analytický signál, nie verdikt",
     "building_signal_min": MRK_BUILDING_SIGNAL_MIN,
-    "law_ref": "§44 ods. 8 písm. e)",
+    "law_ref": "§ 44 ods. 8 písm. e)",
     "never_claims": (
         "segregácia/inklúzia ako zákonný verdikt; obecná kategória != per-obvod podiel"
     ),

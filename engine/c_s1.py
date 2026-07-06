@@ -6,6 +6,16 @@ METHODOLOGY §Š1:
   FAIL = any uncovered or multi-assigned points.
   INCOMPLETE = no address_points available for this municipality (proxy fallback).
 
+LEGAL ANCHOR (docs/legal-audit-44.md): § 44 ods. 1 — the municipality
+determines by VZN one district for every school, and districts for the same
+school type must not overlap (except ods. 6). Finding vocabulary (client
+defect 8, 2026-07-06):
+  * an address inside the geometry of ANOTHER district than the one the VZN
+    street list assigns it to → "prekryv/nesúlad priradenia" (overlap),
+    NEVER "nesprávny obvod" — "wrong district" is not defensible from data;
+  * an address covered by NO district → "medzera v pokrytí" (coverage gap);
+  * zero-count categories are not enumerated (no "0 nepokrytých").
+
 Real address_points: Register adries MV SR (currently 0 rows in DB — GAP).
 Proxy: OSM building centroids from mrk_buildings WHERE obec matches municipality.
 Since mrk_buildings only covers MRK villages (not Prešov), proxy is shallow.
@@ -37,7 +47,11 @@ _METHODOLOGY = {
         "Does NOT test individual address assignment — use INCOMPLETE status."
     ),
     "data_source": "district geometries (q6), municipality boundary (q9)",
-    "never_claims": "geometric proxy is not equivalent to per-address coverage test",
+    "law_ref": "§ 44 ods. 1",
+    "never_claims": (
+        "'nesprávny obvod' (overlap/gap vocabulary only); "
+        "geometric proxy is not equivalent to per-address coverage test"
+    ),
 }
 
 
@@ -73,30 +87,52 @@ def check_s1(district: dict, all_districts: list[dict], municipality_id: str) ->
 
 
 def _check_s1_demo(district_id: str, demo: dict) -> Verdict:
-    """DEMO Š1: complete address-coverage input drives a decisive PASS/FAIL."""
+    """DEMO Š1: complete address-coverage input drives a decisive PASS/FAIL.
+
+    Wording contract (client defect 8): overlap/gap vocabulary, never
+    "nesprávny obvod", zero-count categories are not enumerated.
+    """
     total = int(demo.get("s1_total_addresses") or 0)
     uncovered = int(demo.get("s1_uncovered") or 0)
-    wrong = int(demo.get("s1_wrong_district") or 0)
-    is_pass = uncovered == 0 and wrong == 0
+    overlap = int(demo.get("s1_wrong_district") or 0)
+    is_pass = uncovered == 0 and overlap == 0
     provenance = {
         "source": "DEMO — kompletné adresné pokrytie (ukážkové dáta)",
         "demo": True,
         "total_addresses": total,
         "uncovered_count": uncovered,
-        "wrong_district_count": wrong,
-        "method": "DEMO: každá adresa priradená práve jednému obvodu; kontrola nesprávneho priradenia",
+        # DB column stays s1_wrong_district; semantics = geometry/VZN assignment
+        # mismatch (address inside another district's geometry), i.e. overlap.
+        "assignment_overlap_count": overlap,
+        "method": (
+            "DEMO: každá adresa má byť pokrytá práve jedným obvodom podľa uličného "
+            "zoznamu VZN; meria sa nesúlad geometrie s VZN priradením (prekryv) "
+            "a adresy bez obvodu (medzera v pokrytí)"
+        ),
     }
     methodology = {**_METHODOLOGY, "rule": "Š1-coverage-demo"}
     if is_pass:
         evidence = (
-            f"PASS [DEMO]: všetkých {total} adries obvodu patrí do správneho obvodu "
-            "(0 nepokrytých, 0 v nesprávnom obvode). Ukážkové dáta — demonštrácia "
+            f"PASS [DEMO]: všetkých {total} adries obvodu je pokrytých práve jedným "
+            "obvodom v súlade s uličným zoznamom VZN. Ukážkové dáta — demonštrácia "
             "kompletného Registra adries."
         )
     else:
+        problems = []
+        if overlap:
+            problems.append(
+                f"{overlap} adries leží v geometrii iného obvodu, než im určuje "
+                "uličný zoznam VZN (prekryv priradenia — VZN a geometria obvodov "
+                "si protirečia; obvody pre rovnaký druh školy sa nesmú prekrývať)"
+            )
+        if uncovered:
+            problems.append(
+                f"{uncovered} adries nepokrýva žiadny obvod (medzera v pokrytí — "
+                "adresa nemá VZN určenú spádovú školu)"
+            )
         evidence = (
-            f"FAIL [DEMO]: z {total} adries je {wrong} priradených do NESPRÁVNEHO obvodu "
-            f"a {uncovered} nepokrytých. Adresy žiakov nepatria do správneho obvodu "
+            f"FAIL [DEMO]: z {total} adries obvodu: " + "; ".join(problems) + ". "
+            "Obec určuje VZN obvod pre každú školu a obvody sa nesmú prekrývať "
             "(§ 44 ods. 1). Ukážkové dáta."
         )
     return Verdict(
@@ -137,6 +173,11 @@ def _check_s1_real(district_id: str, municipality_id: str, ap_count: int) -> Ver
     multi_n = int(multi[0]["n"]) if multi else 0
 
     is_pass = uncovered_n == 0 and multi_n == 0
+    problems = []
+    if multi_n:
+        problems.append(f"{multi_n} pokrytých viacerými obvodmi (prekryv)")
+    if uncovered_n:
+        problems.append(f"{uncovered_n} bez obvodu (medzera v pokrytí)")
     provenance = {
         "source": "Register adries MV SR (address_points table)",
         "address_point_count": ap_count,
@@ -154,8 +195,9 @@ def _check_s1_real(district_id: str, municipality_id: str, ap_count: int) -> Ver
         provenance=provenance,
         methodology=methodology,
         evidence_text=(
-            f"Adresné body: {ap_count}. Nepokryté: {uncovered_n}. "
-            f"Viacnásobne priradené: {multi_n}."
+            f"PASS: všetkých {ap_count} adresných bodov je pokrytých práve jedným obvodom."
+            if is_pass
+            else f"FAIL: z {ap_count} adresných bodov je " + " a ".join(problems) + "."
         ),
     )
 
