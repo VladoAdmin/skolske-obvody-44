@@ -49,7 +49,7 @@ _METHODOLOGY = {
     "data_source": "district geometries (q6), municipality boundary (q9)",
     "law_ref": "§ 44 ods. 1",
     "never_claims": (
-        "'nesprávny obvod' (overlap/gap vocabulary only); "
+        "wrong-district wording (overlap/gap vocabulary only — defect 8); "
         "geometric proxy is not equivalent to per-address coverage test"
     ),
 }
@@ -89,8 +89,8 @@ def check_s1(district: dict, all_districts: list[dict], municipality_id: str) ->
 def _check_s1_demo(district_id: str, demo: dict) -> Verdict:
     """DEMO Š1: complete address-coverage input drives a decisive PASS/FAIL.
 
-    Wording contract (client defect 8): overlap/gap vocabulary, never
-    "nesprávny obvod", zero-count categories are not enumerated.
+    Wording contract (client defect 8): overlap/gap vocabulary only (no
+    wrong-district phrasing), zero-count categories are not enumerated.
     """
     total = int(demo.get("s1_total_addresses") or 0)
     uncovered = int(demo.get("s1_uncovered") or 0)

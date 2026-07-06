@@ -79,3 +79,25 @@ imports valid — diff-reading artifacts). Deferred per owner's standing decisio
   conditional on non-empty — unify.
 - summary counts rows, not unique streets — guarantee 1 row/street in view
   contract or count street_norm.
+
+## 5. [BACKLOG] VLA-19 legal-audit follow-ups (out of evidence-text scope)
+
+Found during the § 44 legal audit (`docs/legal-audit-44.md`, 2026-07-06).
+Neither is user-visible today; both must be fixed before the affected surface
+ships.
+
+- **`skolske_obvody.finding_explanations` (AI explanations, DB):** rows contain
+  invented legal claims — e.g. Pa FAIL "Podľa § 44 nemá byť škola vzdialená
+  viac než 2 km", Pc/Pd FAIL framed as "porušenie podľa § 44". The table is
+  currently dormant (no UI component reads `so_finding_explanations`; only the
+  type in `lib/supabase/types.ts` remains). Before any UI re-enables it,
+  regenerate all rows from the corrected labels/evidence texts and add the
+  citation gate (`tests/test_legal_citations.py`) to the generation path —
+  or drop the table.
+- **`app/o-metodike/page.tsx` — section "Ako vyhodnocujeme § 44 zákona 321":**
+  the criteria table describes a stale taxonomy (Š4, Pa = kapacita,
+  Š3 = segregácia, Pb thresholds as norms) that matches neither the engine
+  (`engine/c_*.py`) nor § 44. VLA-19 fixed the law number and the condition
+  cards above it; the table itself needs a rewrite against
+  `docs/legal-audit-44.md`. The hardcoded engine-version footer on the same
+  page is also stale.
