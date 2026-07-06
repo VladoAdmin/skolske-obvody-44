@@ -2,7 +2,7 @@
 
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, getDistrictHue } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import {
@@ -38,6 +38,9 @@ interface RegionMapClientProps {
   streetLines?: SoDistrictStreetLine[]
   housePoints?: SoHousePoint[]
   houseDots?: SoHouseDot[]
+  // VLA-14: engine-classified uncovered streets (vzn_gap / data_gap). The
+  // client only draws + labels what the engine wrote — never classifies.
+  coverageGaps?: SoStreetCoverageGap[]
   // Engine findings (§ 44 demo scenarios included) — drives the per-district
   // evidence legend shown on selection. Never used to derive colour/severity
   // client-side; severity/text come straight from the engine output row.
@@ -51,7 +54,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], coverageGaps = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
@@ -759,11 +762,74 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             }
           })
 
-          // (E) Layer control. Default ON: street networks + school pins. Every
-          // analytical overlay (MRK, address dots) stays OFF by default.
+          // (D2) VLA-14 — uncovered streets (coverage gaps), engine-classified.
+          // Two visually distinct states, both dashed so they can never be
+          // mistaken for a district's assigned street:
+          //   vzn_gap  — red dashed: real Š1-family § 44 finding (street in the
+          //              register, assigned by no VZN)
+          //   data_gap — gray dashed: "neurčené — dátová medzera"; deliberately
+          //              neutral, MUST never look like a violation.
+          // Category, evidence text and counts come from so_street_coverage_gaps
+          // rows written by engine/coverage_gaps.py — nothing is derived here.
+          const GAP_STYLES = {
+            vzn_gap: { color: '#dc2626', weight: 3, dashArray: '7,7', opacity: 0.9, className: 'so-gap-vzn' },
+            data_gap: { color: '#6b7280', weight: 2.5, dashArray: '2,7', opacity: 0.8, className: 'so-gap-data' },
+          } as const
+          const coverageGapsGroup = L.featureGroup()
+          let vznGapCount = 0
+          let dataGapCount = 0
+          const gapCategories: Record<string, string> = {}
+          coverageGaps.forEach((gap) => {
+            const isVzn = gap.category === 'vzn_gap'
+            if (isVzn) vznGapCount++
+            else dataGapCount++
+            gapCategories[gap.street] = gap.category
+            // Streets with no OSM line stay counted (summary strip) but have
+            // nothing to draw (e.g. register street whose OSM name differs).
+            if (!gap.geom_geojson) return
+            const title = isVzn
+              ? 'VZN medzera — ulica bez obvodu'
+              : 'Nedostatočné dáta — neurčené'
+            const badgeStyle = isVzn
+              ? 'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca'
+              : 'background:#f9fafb;color:#4b5563;border:1px solid #e5e7eb'
+            const evidenceRows =
+              `<li>Register adries: ${gap.in_register ? `áno (${gap.register_address_count} obývateľných adries)` : 'nie'}</li>` +
+              `<li>VZN priradenie: ${gap.in_vzn ? 'áno' : 'žiadne'}</li>` +
+              `<li>OSM línia: ${gap.has_osm_line ? 'áno' : 'nie'}</li>`
+            const popupHtml =
+              `<div style="font-size:12px;line-height:1.45;max-width:250px">` +
+              `<strong>${gap.street}</strong><br/>` +
+              `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;${badgeStyle}">${title}</span>` +
+              `<p style="margin:4px 0">${gap.reason_sk}</p>` +
+              `<ul style="margin:4px 0 0;padding-left:16px;color:#4b5563">${evidenceRows}</ul>` +
+              `</div>`
+            const layer = L.geoJSON(gap.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+              style: GAP_STYLES[gap.category],
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'districts' as any,
+            })
+            layer.bindTooltip(`${gap.street} — ${title}`, { sticky: true })
+            layer.bindPopup(popupHtml, { maxWidth: 270, autoPan: true, autoPanPadding: [20, 20] })
+            layer.addTo(coverageGapsGroup)
+          })
+
+          // E2E hooks (tests/e2e/coverage-gaps.e2e.mjs): per-category counts on
+          // the map container + street→category map on window. Testing only.
+          containerRef.current?.setAttribute('data-vzn-gaps', String(vznGapCount))
+          containerRef.current?.setAttribute('data-data-gaps', String(dataGapCount))
+          ;(window as unknown as { __soGapCategories?: Record<string, string> }).__soGapCategories =
+            gapCategories
+
+          // (E) Layer control. Default ON: street networks + school pins +
+          // coverage gaps (holes must always be explained). Every analytical
+          // overlay (MRK, address dots) stays OFF by default.
           const overlays: Record<string, unknown> = {}
           overlays[`Ulice obvodov (${features.length} obvodov)`] = districtsGroup
           overlays[`Školy (${schools.length})`] = schoolsGroup
+          if (coverageGaps.length > 0) {
+            overlays[`Nepokryté ulice (${vznGapCount} VZN medzera · ${dataGapCount} dátová)`] = coverageGapsGroup
+          }
           if (mrkLocalities.length > 0) {
             overlays[`MRK lokality — body (${mrkLocalities.length}, Atlas MRK)`] = mrkGroup
           }
@@ -786,6 +852,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
 
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
+          coverageGapsGroup.addTo(map)
 
           const fitToDistricts = () => {
             try {
@@ -808,14 +875,16 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             housePointsEnabled = false
             if (!map.hasLayer(districtsGroup)) districtsGroup.addTo(map)
             if (!map.hasLayer(schoolsGroup)) schoolsGroup.addTo(map)
+            if (!map.hasLayer(coverageGapsGroup)) coverageGapsGroup.addTo(map)
             fitToDistricts()
           }
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, mrkGroup, housePointsGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup]
         } else {
-          const [districtsGroup, schoolsGroup] = layersRef.current.psk
+          const [districtsGroup, schoolsGroup, coverageGapsGroup] = layersRef.current.psk
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
+          if (coverageGapsGroup) coverageGapsGroup.addTo(map)
           if (features.length > 0) {
             try {
               const bounds = districtsGroup.getBounds()

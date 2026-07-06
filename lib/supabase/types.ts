@@ -229,6 +229,24 @@ export interface SoDistrictStreetLine {
   linestring_geojson: Record<string, unknown> | null
 }
 
+// VLA-14: streets the VZN does not cover, classified BY THE ENGINE
+// (engine/coverage_gaps.py) into exactly one of:
+//   'vzn_gap'  — in the address register but assigned by no VZN (Š1-family
+//                structural finding, § 44 ods. 1)
+//   'data_gap' — OSM-only name that cannot be anchored to the register;
+//                "neurčené — dátová medzera", NEVER rendered as a violation.
+export interface SoStreetCoverageGap {
+  street: string
+  category: 'vzn_gap' | 'data_gap'
+  in_register: boolean
+  in_vzn: boolean
+  register_address_count: number
+  has_osm_line: boolean
+  reason_sk: string
+  is_demo: boolean
+  geom_geojson: Record<string, unknown> | null
+}
+
 export interface SoDistrictAddressStats {
   district_id: string
   habitable_addresses: number

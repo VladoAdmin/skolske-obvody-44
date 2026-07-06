@@ -63,3 +63,19 @@ segments fetched and rendered.
 - `components/region-map.client.tsx:592` — test global
   `window.__soStreetColors` is written in production runtime; gate it to
   test/dev builds.
+
+## 4. [BACKLOG] VLA-14 review findings (gpt-5.4 fallback, 2026-07-06; blockers verified false)
+
+Both BLOCKERs disproven against real code (ast.parse OK, tsc --noEmit clean,
+imports valid — diff-reading artifacts). Deferred per owner's standing decision:
+
+- `components/region-map.client.tsx` — `else dataGapCount++` counts any
+  non-vzn_gap as data_gap; tighten to explicit `=== 'data_gap'`.
+- `components/region-map.client.tsx` — `gapCategories[gap.street]` keyed by
+  display name; collides on duplicate street names, key by street_norm.
+- `so_street_coverage_gaps` view + fetch lack a `municipality_id` filter —
+  fine for Prešov-only demo, required before a second municipality.
+- coverageGapsGroup added to map unconditionally while overlay control is
+  conditional on non-empty — unify.
+- summary counts rows, not unique streets — guarantee 1 row/street in view
+  contract or count street_norm.

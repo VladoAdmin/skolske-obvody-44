@@ -32,6 +32,7 @@ from engine.c_pf import check_pf
 from engine.c_lang import check_lang
 from engine.compose import compose_color, LEGAL_CONDITIONS, INDICATOR_CONDITIONS, SIGNAL_CONDITIONS
 from engine.constants import ENGINE_VERSION, PRESOV_MUN_ID
+from engine.coverage_gaps import classify_coverage_gaps
 from engine.verdict import Verdict, strip_demo_tags
 from ingest.config import validate_config
 from ingest.supabase_client import exec_sql, query_sql
@@ -480,7 +481,16 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
         municipality_id, ENGINE_VERSION, written_finding_keys
     )
 
+    # --- Street coverage gaps (VLA-14, municipality-level) ---
+    # Classify every VZN-uncovered street as vzn_gap (register street with no
+    # VZN assignment — Š1-family structural evidence) or data_gap (OSM-only
+    # name, undecidable — never a violation). Engine stays the SSOT; the map
+    # only reads the resulting view.
+    print("\n--- Street coverage gaps (VLA-14) ---")
+    gap_stats = classify_coverage_gaps(municipality_id)
+
     print(f"\n{'='*70}")
+    print(f"Coverage gaps: vzn_gap={gap_stats['vzn_gap']} data_gap={gap_stats['data_gap']}")
     print(f"Verdicts written: {verdicts_written}")
     print(f"Findings written: {findings_written}")
     print(f"Stale findings deleted: {stale_deleted}")
