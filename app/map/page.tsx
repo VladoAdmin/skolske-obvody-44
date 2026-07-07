@@ -1,13 +1,14 @@
 import { Suspense } from 'react'
 import { RegionMap } from '@/components/region-map'
 import { FindingsPanel } from '@/components/findings-panel'
+import { DistrictTogglePanel } from '@/components/district-toggle-panel'
 import { MapWithPanel } from '@/components/map/map-with-panel'
 import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
@@ -96,8 +97,8 @@ async function fetchStreetLines(): Promise<SoDistrictStreetLine[]> {
   }
 }
 
-// VLA-14: engine-classified coverage gaps (vzn_gap / data_gap). The GUI only
-// renders what the engine wrote — no client-side classification.
+// VLA-14: engine-classified coverage gaps (vzn_gap). The GUI only renders
+// what the engine wrote — no client-side classification.
 async function fetchCoverageGaps(): Promise<SoStreetCoverageGap[]> {
   try {
     const sb = createPublicClient()
@@ -106,6 +107,21 @@ async function fetchCoverageGaps(): Promise<SoStreetCoverageGap[]> {
       .select('street,category,in_register,in_vzn,register_address_count,has_osm_line,reason_sk,is_demo,geom_geojson')
     if (error) throw error
     return (data ?? []) as SoStreetCoverageGap[]
+  } catch {
+    return []
+  }
+}
+
+// VLA-20: barrier input rows — the seeded railway is fictional (is_demo),
+// rendered with a DEMO badge.
+async function fetchBarriers(): Promise<SoBarrier[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_barriers')
+      .select('kind,name,is_demo,reason_sk,geom_geojson')
+    if (error) throw error
+    return (data ?? []) as SoBarrier[]
   } catch {
     return []
   }
@@ -165,7 +181,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -177,6 +193,7 @@ export default async function MapPage() {
     fetchHouseDots(),
     fetchScorecard(),
     fetchCoverageGaps(),
+    fetchBarriers(),
   ])
   const isEmpty = features.length === 0
 
@@ -228,10 +245,9 @@ export default async function MapPage() {
         <p className="px-3 pb-2 text-xs text-blue-800">
           Ulice bez farby obvodu sú explicitne klasifikované:{' '}
           <span className="font-medium text-red-700">VZN medzera</span> (červená prerušovaná) — ulica
-          je v Registri adries mesta, ale žiadne VZN ju nepriraďuje k obvodu (štrukturálny nález § 44);{' '}
-          <span className="font-medium text-gray-600">Nedostatočné dáta</span> (sivá prerušovaná) —
-          názov z mapových podkladov sa nedá priradiť k registru, stav je „neurčené — dátová medzera“
-          a nejde o porušenie. Kliknutím na úsek sa zobrazí vysvetlenie s dôkazmi.
+          je v Registri adries mesta, ale žiadne VZN ju nepriraďuje k obvodu (štrukturálny nález § 44).
+          Kliknutím na úsek sa zobrazí vysvetlenie s dôkazmi. Ukážkové vrstvy (bariéry a pod.) sú
+          vždy označené štítkom <span className="font-medium text-amber-700">DEMO</span>.
         </p>
         <p className="px-3 pb-2 text-xs text-blue-800">
           Značky škôl sú farebne rozlíšené podľa zriaďovateľa:{' '}
@@ -240,10 +256,12 @@ export default async function MapPage() {
         </p>
       </details>
 
-      {/* Map + findings panel layout — responsive via MapWithPanel */}
+      {/* Map + district-list panel layout — responsive via MapWithPanel.
+          VLA-20: the side panel holds ONLY the district list; findings moved
+          to their own section below the map. */}
       <div aria-describedby="map-fallback-table">
         <MapWithPanel
-          findingsCount={findings.length}
+          districtsCount={features.length}
           mapSlot={
             <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
               <RegionMap
@@ -256,15 +274,32 @@ export default async function MapPage() {
                 housePoints={housePoints}
                 houseDots={houseDots}
                 coverageGaps={coverageGaps}
+                barriers={barriers}
                 findings={findings}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
               />
             </Suspense>
           }
-          panelSlot={<FindingsPanel findings={findings} features={features} />}
+          panelSlot={
+            <div className="h-full bg-background overflow-y-auto">
+              <DistrictTogglePanel features={features} />
+            </div>
+          }
         />
       </div>
+
+      {/* Findings — own full-width panel below the map (VLA-20: moved out of
+          the district panel; stays on this page so click → fly-to keeps
+          working, and is visible together with the district list). */}
+      <section
+        aria-label="Nálezy"
+        className="mt-4 rounded-lg border border-border overflow-hidden"
+      >
+        <div className="h-[45vh] min-h-[280px]">
+          <FindingsPanel findings={findings} features={features} />
+        </div>
+      </section>
 
       {/* Map legend */}
       <div className="hidden md:block">
@@ -273,7 +308,7 @@ export default async function MapPage() {
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#dc2626' }}></span> VZN medzera — ulica bez obvodu (nález § 44)</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#6b7280' }}></span> Nedostatočné dáta — neurčené (nie je porušenie)</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#7c2d12' }}></span> Bariéra — DEMO (fiktívna železnica, nie je porušenie)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#7c3aed' }}></span> MRK lokalita — bod (Atlas MRK, budova/lokalita)</span>
           <span className="mx-2">·</span>

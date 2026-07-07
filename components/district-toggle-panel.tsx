@@ -71,7 +71,9 @@ export function DistrictTogglePanel({ features }: DistrictTogglePanelProps) {
       {open && (
         <div className="flex flex-col">
           {/* List */}
-          <ul className="max-h-48 overflow-y-auto">
+          {/* VLA-20: the district list is the sole panel content — let it use
+              most of the panel height instead of the old 12rem cap. */}
+          <ul className="max-h-[48vh] overflow-y-auto">
             {features.map((f, index) => {
               const hue = getDistrictHue(index)
               const color = `hsl(${hue}, 65%, 45%)`

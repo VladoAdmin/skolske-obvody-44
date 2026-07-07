@@ -86,22 +86,50 @@ class TestPaIsAirlineDistance:
 
 # --------------------------------------------------------------------------- Pd
 class TestPdIsBarriersNotLanguage:
-    """Pd must be physical barriers; with no barrier dataset → INSUFFICIENT_DATA.
-    It must NEVER emit language/teaching-language content (old meaning)."""
+    """Pd must be physical barriers, evaluated from the barrier INPUT table
+    (VLA-20: the "nedostatočné dáta" state was removed — the table is always
+    seeded, so Pd always has an input). It must NEVER emit language/teaching-
+    language content (old meaning)."""
 
-    def test_no_barrier_data_insufficient_and_not_language(self):
+    def test_demo_barrier_crossing_fails_is_mock_and_not_language(self):
         import engine.c_pd as c_pd
-        with mock.patch.object(c_pd, "query_sql", return_value=[{"n": 3}]):
+        crossing = [{"kind": "railway",
+                     "name": "Železničná trať bez podchodu (DEMO — fiktívna bariéra)",
+                     "is_demo": True}]
+        dataset = [{"n": 1, "any_demo": True}]
+        with mock.patch.object(c_pd, "get_demo_input", return_value=None), \
+             mock.patch.object(c_pd, "query_sql", side_effect=[crossing, dataset]):
             v = c_pd.check_pd(_D)
         assert v.condition_code == "Pd"
-        assert v.value == V.INSUFFICIENT_DATA
+        assert v.value == V.FAIL
+        # Fabricated barrier ⇒ verdict must carry the mock flag (DEMO badge,
+        # mock-never-RED gatekeeping: indicator FAIL maps to ORANGE).
+        assert v.is_mock is True
         text = v.evidence_text.lower()
-        # barriers vocabulary present
         assert "bariér" in text
         # language vocabulary absent (the bug we are fixing)
         assert "jazyk" not in text or "netýka jazyka" in text
         assert "menšin" not in text
         assert "vyučovac" not in text
+
+    def test_no_crossing_with_demo_dataset_passes_is_mock(self):
+        import engine.c_pd as c_pd
+        with mock.patch.object(c_pd, "get_demo_input", return_value=None), \
+             mock.patch.object(c_pd, "query_sql",
+                               side_effect=[[], [{"n": 1, "any_demo": True}]]):
+            v = c_pd.check_pd(_D)
+        assert v.value == V.PASS
+        assert v.is_mock is True
+
+    def test_empty_barrier_table_guard_insufficient(self):
+        """Unreachable in production (0045 seeds the table) — but the guard
+        must stay honest rather than invent a PASS from no input at all."""
+        import engine.c_pd as c_pd
+        with mock.patch.object(c_pd, "get_demo_input", return_value=None), \
+             mock.patch.object(c_pd, "query_sql",
+                               side_effect=[[], [{"n": 0, "any_demo": None}]]):
+            v = c_pd.check_pd(_D)
+        assert v.value == V.INSUFFICIENT_DATA
 
 
 # --------------------------------------------------------------------------- Pf

@@ -6,16 +6,18 @@ import { cn } from "@/lib/utils";
 interface MapWithPanelProps {
   mapSlot: React.ReactNode;
   panelSlot: React.ReactNode;
-  findingsCount: number;
+  districtsCount: number;
 }
 
 /**
- * Responsive wrapper for the map + findings panel layout.
- * Mobile (< md): stacked, with Mapa / Nálezy tab switcher.
+ * Responsive wrapper for the map + district-list panel layout.
+ * VLA-20: the side panel holds ONLY the district list; findings live in
+ * their own section below the map (no collision with the district list).
+ * Mobile (< md): stacked, with Mapa / Obvody tab switcher.
  * Tablet (md–lg): flex-row, panel w-72, height 60vh.
  * Desktop (>= lg): flex-row, panel w-80, height 60vh.
  */
-export function MapWithPanel({ mapSlot, panelSlot, findingsCount }: MapWithPanelProps) {
+export function MapWithPanel({ mapSlot, panelSlot, districtsCount }: MapWithPanelProps) {
   const [activeTab, setActiveTab] = useState<"map" | "list">("map");
 
   return (
@@ -44,7 +46,7 @@ export function MapWithPanel({ mapSlot, panelSlot, findingsCount }: MapWithPanel
               : "text-muted-foreground hover:bg-accent/50"
           )}
         >
-          Nálezy{findingsCount > 0 ? ` (${findingsCount})` : ""}
+          Obvody{districtsCount > 0 ? ` (${districtsCount})` : ""}
         </button>
       </div>
 
@@ -65,7 +67,7 @@ export function MapWithPanel({ mapSlot, panelSlot, findingsCount }: MapWithPanel
           </div>
         </div>
 
-        {/* Findings panel */}
+        {/* District list panel */}
         <div
           className={cn(
             "rounded-lg border border-border overflow-hidden flex-shrink-0",

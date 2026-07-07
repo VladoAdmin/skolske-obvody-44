@@ -230,20 +230,31 @@ export interface SoDistrictStreetLine {
 }
 
 // VLA-14: streets the VZN does not cover, classified BY THE ENGINE
-// (engine/coverage_gaps.py) into exactly one of:
+// (engine/coverage_gaps.py):
 //   'vzn_gap'  — in the address register but assigned by no VZN (Š1-family
 //                structural finding, § 44 ods. 1)
-//   'data_gap' — OSM-only name that cannot be anchored to the register;
-//                "neurčené — dátová medzera", NEVER rendered as a violation.
+// VLA-20: the former 'data_gap' ("nedostatočné dáta") category was removed
+// from the product — the engine no longer emits it.
 export interface SoStreetCoverageGap {
   street: string
-  category: 'vzn_gap' | 'data_gap'
+  category: 'vzn_gap'
   in_register: boolean
   in_vzn: boolean
   register_address_count: number
   has_osm_line: boolean
   reason_sk: string
   is_demo: boolean
+  geom_geojson: Record<string, unknown> | null
+}
+
+// VLA-20: barrier INPUT rows (public.so_barriers). Real barrier data is not
+// available — the table is seeded with a FICTIONAL railway (is_demo=TRUE),
+// so the map must always badge demo rows as DEMO.
+export interface SoBarrier {
+  kind: 'railway' | 'road'
+  name: string
+  is_demo: boolean
+  reason_sk: string | null
   geom_geojson: Record<string, unknown> | null
 }
 

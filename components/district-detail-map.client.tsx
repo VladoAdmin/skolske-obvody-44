@@ -5,7 +5,6 @@ import { useEffect, useRef } from 'react'
 import type {
   DistrictMapFeature,
   SoSchoolMarker,
-  SoHousePoint,
   SoDistrictStreetLine,
 } from '@/lib/supabase/types'
 import {
@@ -26,7 +25,6 @@ interface DistrictDetailMapClientProps {
   currentDistrictId: string
   features: DistrictMapFeature[]
   schools: SoSchoolMarker[]
-  housePoints: SoHousePoint[]
   // Streets pivot: same street source as the main map (single SSOT).
   streetLines: SoDistrictStreetLine[]
   districtSummaries?: Record<string, DistrictPopupSummary>
@@ -36,7 +34,6 @@ export function DistrictDetailMapClient({
   currentDistrictId,
   features,
   schools,
-  housePoints,
   streetLines,
   districtSummaries = {},
 }: DistrictDetailMapClientProps) {
@@ -71,8 +68,6 @@ export function DistrictDetailMapClient({
       districtPane.style.zIndex = '450'
       const schoolsPane = map.createPane('schools')
       schoolsPane.style.zIndex = '700'
-      const streetPointsPane = map.createPane('streetPoints')
-      streetPointsPane.style.zIndex = '680'
 
       // OSM tile layer
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -80,10 +75,6 @@ export function DistrictDetailMapClient({
         maxZoom: 19,
         noWrap: true,
       }).addTo(map)
-
-      // Stable per-district hue (same palette as the main map).
-      const districtIndexMap = new Map<string, number>()
-      features.forEach((f, idx) => districtIndexMap.set(f.id, idx))
 
       // --- Streets: the CURRENT district's streets are drawn prominently in its
       // colour; neighbour districts' streets are faint context. SAME rendering as
@@ -214,37 +205,12 @@ export function DistrictDetailMapClient({
 
       schoolsGroup.addTo(map)
 
-      // --- House points (current district larger) — OFF by default ---
-      const housePointsGroup = L.featureGroup()
-      housePoints.forEach((hp) => {
-        if (hp.lat == null || hp.lon == null) return
-        if (hp.valid === false) return
-        const isCurrent = hp.district_id === currentDistrictId
-        const distIdx = districtIndexMap.get(hp.district_id) ?? 0
-        const hue = getDistrictHue(distIdx)
-        const marker = L.circleMarker([hp.lat, hp.lon], {
-          radius: isCurrent ? 4 : 2,
-          fillColor: `hsl(${hue}, 70%, 45%)`,
-          color: `hsl(${hue}, 70%, 25%)`,
-          weight: isCurrent ? 1 : 0.5,
-          fillOpacity: isCurrent ? 0.9 : 0.6,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          pane: 'streetPoints' as any,
-        })
-        marker.bindTooltip(
-          `${hp.street} ${hp.house_number}${hp.formatted_address ? `<br/>${hp.formatted_address}` : ''}${hp.partial_match ? ' ⚠ partial' : ''}`,
-          { sticky: true }
-        )
-        marker.addTo(housePointsGroup)
-      })
-
       // Layer control.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const overlayLayers: Record<string, any> = {
         'Ulice tohto obvodu': currentGroup,
         'Ulice susedných obvodov (kontext)': contextGroup,
         'Školy': schoolsGroup,
-        '⚙ Expert: Adresné body (Google geokódovanie)': housePointsGroup,
       }
       const layersControl = L.control.layers(
         undefined,

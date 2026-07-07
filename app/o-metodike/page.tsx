@@ -146,7 +146,7 @@ export default function OMetodikePage() {
           <SemaforCard
             color="orange"
             title="🟠 Oranžová"
-            body="Niektoré podmienky Š1–Š3 sú INCOMPLETE alebo indikátory P-a až P-d signalizujú riziko."
+            body="Rizikové indikátory P-a až P-d signalizujú možný problém — nie je to porušenie zákona."
           />
           <SemaforCard
             color="red"
@@ -166,11 +166,11 @@ export default function OMetodikePage() {
         <ul className="space-y-2 text-sm not-prose">
           <li className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
             <strong>Register adries (Š1):</strong> nemáme prístup k adresám s trvalým pobytom žiakov →
-            Š1 je zatiaľ INCOMPLETE pre všetkých 12 obvodov.
+            Š1 sa vyhodnocuje z ukážkových (DEMO) vstupov, kým register nebude sprístupnený.
           </li>
           <li className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
             <strong>OSM hranice obvodov (Š2, Š3):</strong> nízka geometrická presnosť ručne digitalizovaných
-            polygónov → Š2/Š3 môžu byť demoteované z FAIL na INCOMPLETE.
+            polygónov → Š2/Š3 sa opierajú o ukážkové (DEMO) vstupy, kým nebudú presné hranice.
           </li>
           <li className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
             <strong>Demografia žiakov per ulica (P-e, P-f):</strong> chýba detailný rozklad →
@@ -376,10 +376,10 @@ export default function OMetodikePage() {
                 </TableCell>
                 <TableCell className="whitespace-normal text-xs">
                   <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-900">
-                    INSUFFICIENT_DATA
+                    DEMO vstup
                   </span>
                   <span className="block text-muted-foreground mt-1">
-                    register MŠSR nedostupný
+                    register MŠSR nedostupný — ukážkové dáta
                   </span>
                 </TableCell>
               </TableRow>
@@ -450,9 +450,9 @@ export default function OMetodikePage() {
                 </TableCell>
                 <TableCell className="whitespace-normal text-xs">
                   <span className="inline-block rounded bg-amber-100 px-1.5 py-0.5 font-mono text-[10px] text-amber-900">
-                    INSUFFICIENT_DATA
+                    DEMO vstup
                   </span>
-                  <span className="block text-muted-foreground mt-1">EDUZBER nedostupný — proxy</span>
+                  <span className="block text-muted-foreground mt-1">EDUZBER nedostupný — ukážkové dáta</span>
                 </TableCell>
               </TableRow>
 
@@ -589,7 +589,7 @@ export default function OMetodikePage() {
             <p className="text-sm font-semibold text-red-900 mb-2">Čo nerobíme</p>
             <ul className="space-y-1.5 text-xs text-red-950/90 list-disc list-inside leading-relaxed">
               <li>Real-time prístup do Registra adries MŠSR — čaká na sprístupnenie</li>
-              <li>Kapacitu budov ZŠ z EDUZBER zatiaľ neberieme (INSUFFICIENT_DATA)</li>
+              <li>Kapacitu budov ZŠ z EDUZBER zatiaľ neberieme — kapacita je ukážkový (DEMO) vstup</li>
               <li>Účet jednotlivých detí — osobné údaje mimo GDPR</li>
               <li>Nerozhodujeme za samosprávu — len identifikujeme problémy v VZN</li>
               <li>Nenahrádzame VZN — sme nástroj na kontrolu, nie zdroj práva</li>

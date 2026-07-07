@@ -12,19 +12,17 @@ METHODOLOGY §P-d (labels.ts canonical = "Bariéry (cesty, koľaje)"):
   labeled non-legal indicator and its FAIL is never presented as a § 44
   violation (owner directive 2026-07-06).
 
-  Computing this honestly requires a dataset of barrier features (railway lines,
-  class-I/II roads WITH the locations of legal crossings) AND the pupil's pedestrian
-  route. We have road_network (road centerlines, classes I/II/III) but:
-    - no railway geometry,
-    - no crossing/underpass locations,
-    - no per-pupil route barrier intersection model.
-  A barrier verdict computed without crossing data would be misleading (every
-  district touches a class-I road), so we return INSUFFICIENT_DATA honestly.
-
-  Value:
-    INSUFFICIENT_DATA = no barrier dataset (railway + crossings) available.
-  This is a risk INDICATOR (Pd ∈ INDICATOR_CONDITIONS); INSUFFICIENT_DATA can
-  push to ORANGE but never RED.
+  VLA-20 (client 2026-07-06): the "nedostatočné dáta" state was removed from
+  the product. The engine must ALWAYS have a barrier input:
+    1. district_demo_inputs.pd_barrier (per-district demo scenario), else
+    2. skolske_obvody.barriers — explicit barrier INPUT table. Real railway
+       data is unavailable, so it is seeded with a FICTIONAL railway line
+       flagged is_demo=TRUE (scripts/sql/0045_demo_barriers.sql). The verdict
+       is PASS/FAIL from a geometric intersection with the district, carries
+       is_mock=TRUE when derived from demo barrier data, and FAIL as an
+       indicator maps to ORANGE — never RED (mock-never-RED invariant).
+  INSUFFICIENT_DATA remains only as a last-resort guard for an EMPTY barriers
+  table; after 0045 is applied that path is unreachable.
 
   IMPORTANT: P-d is NOT about language. Minority-language teaching is handled as
   "podnet nad rámec § 44 (jazyk)" via a separate non-§44 finding — never under P-d.
@@ -38,21 +36,21 @@ from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
 _METHODOLOGY = {
-    "rule": "Pd-barriers-insufficient",
+    "rule": "Pd-barriers-input-table",
     "version": METHODOLOGY_VERSION,
     "description": (
         "Fyzické bariéry na trase domov→škola (rušná cesta bez priechodu, "
-        "železnica bez podchodu). Vyžaduje dataset bariér (železnice + polohy "
-        "priechodov/podchodov) a pešiu trasu žiaka. Tieto dáta nie sú dostupné."
+        "železnica bez podchodu). Vstup: district_demo_inputs.pd_barrier, "
+        "inak tabuľka bariér (skolske_obvody.barriers) — geometrický prienik "
+        "bariéry s obvodom. Ukážkové (is_demo) bariéry sú vždy označené."
     ),
-    "data_available": "road_network (osi ciest I/II/III) — bez železníc a bez priechodov",
-    "gap": "železničné línie + polohy priechodov/podchodov; bez nich je verdikt zavádzajúci",
+    "data_available": "skolske_obvody.barriers (línie bariér; demo železnica je fiktívna, is_demo)",
     "law_ref": "bez priamej opory v § 44 — metodický indikátor (zákon bariéry nespomína)",
     "never_claims": (
         "porušenie § 44 (bariéry nie sú v zákone); jazykové právo (to nie je P-d); "
-        "bariéra bez dát o priechodoch"
+        "reálnosť ukážkovej bariéry (is_demo dáta sú fiktívne)"
     ),
-    "gatekeeping": "rizikový indikátor — INSUFFICIENT_DATA môže posunúť na ORANGE, nikdy nie RED",
+    "gatekeeping": "rizikový indikátor — FAIL môže posunúť na ORANGE, nikdy nie RED",
 }
 
 
@@ -92,43 +90,74 @@ def check_pd(district: dict) -> Verdict:
             is_mock=True,
         )
 
-    # Honest signal of what road data exists near the district (centerlines only).
-    class_i_rows = query_sql(f"""
-        SELECT count(*) AS n
-        FROM skolske_obvody.road_network r
+    # Barrier INPUT table (VLA-20): geometric intersection barrier × district.
+    # The table is seeded with a fictional is_demo railway (0045), so this
+    # path always has an input — no "nedostatočné dáta" state exists anymore.
+    crossing = query_sql(f"""
+        SELECT b.kind, b.name, b.is_demo
+        FROM skolske_obvody.barriers b
         JOIN skolske_obvody.districts d ON d.id = '{district_id}'
-        WHERE r.class IN ('I', 'II')
-          AND public.ST_Intersects(r.geom, d.geom)
+        WHERE public.ST_Intersects(b.geom, d.geom)
     """)
-    class_i_n = int(class_i_rows[0]["n"]) if class_i_rows else 0
-
-    provenance = {
-        "source": "road_network (osi ciest I/II/III, q*) — bez železníc a priechodov",
-        "school_name": school_name,
-        "class_i_ii_road_segments_in_district": class_i_n,
-        "gap": "železničné línie + polohy priechodov/podchodov nie sú v DB",
-        "action_required": (
-            "Import železníc (OSM railway) a polôh priechodov/podchodov "
-            "odblokuje výpočet bariér na trase."
-        ),
-    }
-
-    evidence = (
-        "MÁLO DÁT: chýba dataset bariér (železnice + polohy priechodov/podchodov), "
-        "preto sa fyzické bariéry na trase domov→škola nedajú overiť. "
-        f"V obvode je {class_i_n} úsek(ov) ciest I/II. triedy, ale bez polôh priechodov "
-        "by bol verdikt zavádzajúci. "
-        "Indikátor môže posunúť na ORANGE, nikdy nie RED. (P-d sa netýka jazyka.)"
+    dataset = query_sql(
+        "SELECT count(*) AS n, bool_or(is_demo) AS any_demo FROM skolske_obvody.barriers"
     )
+    dataset_n = int(dataset[0]["n"]) if dataset else 0
+    dataset_demo = bool(dataset[0]["any_demo"]) if dataset else False
 
+    if dataset_n > 0:
+        barrier = len(crossing) > 0
+        # Verdict is mock whenever it rests on fabricated barrier data: a demo
+        # barrier crossing, or a PASS judged against a demo-only dataset.
+        from_demo = any(c.get("is_demo") for c in crossing) if barrier else dataset_demo
+        if barrier:
+            names = ", ".join(c["name"] for c in crossing)
+            evidence = (
+                f"FAIL{' [DEMO]' if from_demo else ''}: obvodom prechádza bariéra bez "
+                f"bezpečného priechodu/podchodu ({names}). Metodický indikátor bezpečnosti "
+                "trasy bez priamej opory v § 44 — nejde o porušenie zákona. "
+                f"{'Ukážkové dáta. ' if from_demo else ''}(P-d sa netýka jazyka.)"
+            )
+        else:
+            evidence = (
+                f"PASS{' [DEMO]' if from_demo else ''}: žiadna bariéra z tabuľky bariér "
+                "nepretína obvod. Metodický indikátor bez priamej opory v § 44. "
+                f"{'Ukážkové dáta. ' if from_demo else ''}(P-d sa netýka jazyka.)"
+            )
+        return Verdict(
+            district_id=district_id,
+            condition_code="Pd",
+            value=V.FAIL if barrier else V.PASS,
+            confidence=DEMO_CONFIDENCE if from_demo else 0.8,
+            data_completeness=DEMO_COMPLETENESS if from_demo else 0.8,
+            provenance={
+                "source": "skolske_obvody.barriers (tabuľka bariér; demo bariéry sú fiktívne)",
+                "demo": from_demo,
+                "barrier": barrier,
+                "barriers_crossing": [c["name"] for c in crossing],
+                "school_name": school_name,
+            },
+            methodology=_METHODOLOGY,
+            evidence_text=evidence,
+            is_mock=from_demo,
+        )
+
+    # Last-resort guard: EMPTY barriers table (unreachable once 0045 is applied).
     return Verdict(
         district_id=district_id,
         condition_code="Pd",
         value=V.INSUFFICIENT_DATA,
         confidence=0.0,
         data_completeness=0.0,
-        provenance=provenance,
+        provenance={
+            "source": "skolske_obvody.barriers — tabuľka je prázdna",
+            "school_name": school_name,
+            "action_required": "apply scripts/sql/0045_demo_barriers.sql",
+        },
         methodology=_METHODOLOGY,
-        evidence_text=evidence,
+        evidence_text=(
+            "Tabuľka bariér je prázdna — indikátor P-d nemá vstup. "
+            "Aplikujte scripts/sql/0045_demo_barriers.sql."
+        ),
         is_proxy=True,
     )

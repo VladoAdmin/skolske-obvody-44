@@ -1,10 +1,15 @@
 """
 VLA-14 — Street coverage-gap classifier (engine layer, single source of truth).
 
-Every street the streets-pivot map cannot colour (no VZN assignment) is
-explicitly classified into EXACTLY one of two categories and persisted to
+Every register street the streets-pivot map cannot colour (no VZN assignment)
+is classified as a vzn_gap and persisted to
 skolske_obvody.street_coverage_gaps, which the GUI reads via the
 public.so_street_coverage_gaps view. The GUI never classifies anything.
+
+VLA-20 (client 2026-07-06): the former second category — data_gap, the gray
+"nedostatočné dáta / neurčené" state for OSM-only names — was REMOVED from the
+product entirely. The engine no longer emits it and the full refresh deletes
+any previously persisted non-demo rows, so the state cannot reappear in views.
 
 METHODOLOGY §coverage-gaps:
   Authoritative register = register_adries_clean (habitable, not withdrawn —
@@ -19,11 +24,6 @@ METHODOLOGY §coverage-gaps:
              a structural Š1-family finding (§ 44 ods. 1 — the municipality
              determines a district for every school by VZN). Real-data
              evidence; may be presented as a finding.
-  data_gap — the name exists only in OSM map data inside the city boundary and
-             cannot be anchored to the register (spelling variants, passages,
-             courtyards, transit roads, non-address spaces). We CANNOT decide,
-             so it is "neurčené — dátová medzera" and MUST NEVER be presented
-             as a violation (same discipline as mock-never-RED).
 
   Rows carry is_demo (FALSE for these real-data derivations) and engine_version.
   Idempotent: each run deletes this municipality's non-demo rows and rewrites.
@@ -56,21 +56,14 @@ NORM = lambda col: f"""
     '\\s+', ' ', 'g')
 """
 
-# Evidence templates (SQL format() patterns). Intent, enforced by
+# Evidence template (SQL format() pattern). Intent, enforced by
 # tests/test_coverage_gaps.py:
 #   * vzn_gap cites § 44 / Š1 — it IS a structural finding.
-#   * data_gap explicitly negates a violation — it may NEVER read as one.
 REASON_VZN_GAP_SK = (
     "Ulica „%s“ je v Registri adries mesta Prešov (%s obývateľných adries), "
     "ale žiadne VZN ju nepriraďuje k školskému obvodu. Adresy na nej nemajú "
     "určený spádový obvod — medzera v pokrytí, štrukturálny nález Š1 "
     "(§ 44 ods. 1: obec určuje VZN školský obvod pre každú školu)."
-)
-REASON_DATA_GAP_SK = (
-    "Neurčené — dátová medzera. Názov „%s“ existuje v mapových podkladoch "
-    "(OSM), ale nedá sa priradiť k Registru adries mesta Prešov (nesúlad "
-    "názvov, pasáž/priestranstvo alebo úsek bez adries), preto nemožno "
-    "rozhodnúť o príslušnosti k obvodu. Nejde o zistené porušenie § 44."
 )
 
 # CTE fragments shared by both INSERTs. mun/vzn are municipality-scoped.
@@ -142,62 +135,11 @@ LEFT JOIN lines l ON l.n = g.ulica_norm
 """
 
 
-def _insert_data_gaps_sql(municipality_id: str) -> str:
-    """OSM names inside the city matched to NEITHER VZN NOR register -> data_gap."""
-    return f"""
-WITH {_base_ctes(municipality_id)},
-regn AS (
-  SELECT DISTINCT ulica_norm FROM skolske_obvody.register_adries_clean
-  WHERE ulica_norm IS NOT NULL AND ulica_norm <> ''
-),
-osm AS (
-  SELECT {NORM('o.name')} AS n,
-         min(o.name) AS name,
-         public.ST_Multi(public.ST_Union(
-           public.ST_Intersection(o.geom, (SELECT geom FROM mun)))) AS geom
-  FROM skolske_obvody.osm_street_lines o
-  WHERE o.name IS NOT NULL
-    AND public.ST_Intersects(o.geom, (SELECT geom FROM mun))
-  GROUP BY {NORM('o.name')}
-),
-gap AS (
-  SELECT * FROM osm
-  WHERE n <> ''
-    AND NOT EXISTS (SELECT 1 FROM vzn  WHERE vzn.n = osm.n)
-    AND NOT EXISTS (SELECT 1 FROM regn WHERE regn.ulica_norm = osm.n)
-)
-INSERT INTO skolske_obvody.street_coverage_gaps
-  (municipality_id, street, street_norm, category, in_register, in_vzn,
-   register_address_count, has_osm_line, reason_sk, provenance, geom,
-   is_demo, engine_version)
-SELECT
-  (SELECT id FROM mun),
-  g.name,
-  g.n,
-  'data_gap',
-  FALSE,
-  FALSE,
-  0,
-  TRUE,
-  format($fmt${REASON_DATA_GAP_SK}$fmt$, g.name),
-  jsonb_build_object(
-    'sources', jsonb_build_array(
-      'osm_street_lines', 'register_adries_clean', 'vzn_street_ranges'),
-    'register_match', false,
-    'vzn_match', false,
-    'method', 'normalised street-name join (build_street_districts NORM)'
-  ),
-  g.geom,
-  FALSE,
-  '{ENGINE_VERSION}'
-FROM gap g
-"""
-
-
 def classify_coverage_gaps(municipality_id: str = PRESOV_MUN_ID) -> dict:
     """
     Full refresh of street_coverage_gaps for one municipality. Returns
-    {'vzn_gap': n, 'data_gap': n}. Demo rows (is_demo) are never touched.
+    {'vzn_gap': n}. Demo rows (is_demo) are never touched. The full-refresh
+    DELETE also removes any legacy data_gap rows (category retired by VLA-20).
     """
     res = exec_sql(
         f"DELETE FROM skolske_obvody.street_coverage_gaps "
@@ -206,13 +148,9 @@ def classify_coverage_gaps(municipality_id: str = PRESOV_MUN_ID) -> dict:
     if not res.get("ok"):
         raise RuntimeError(f"coverage-gap cleanup failed: {res.get('message')}")
 
-    for label, sql in (
-        ("vzn_gap", _insert_vzn_gaps_sql(municipality_id)),
-        ("data_gap", _insert_data_gaps_sql(municipality_id)),
-    ):
-        res = exec_sql(sql)
-        if not res.get("ok"):
-            raise RuntimeError(f"coverage-gap insert ({label}) failed: {res.get('message')}")
+    res = exec_sql(_insert_vzn_gaps_sql(municipality_id))
+    if not res.get("ok"):
+        raise RuntimeError(f"coverage-gap insert (vzn_gap) failed: {res.get('message')}")
 
     rows = query_sql(
         f"SELECT category, count(*) AS n, "
@@ -222,7 +160,7 @@ def classify_coverage_gaps(municipality_id: str = PRESOV_MUN_ID) -> dict:
         f"WHERE municipality_id = '{municipality_id}' AND is_demo = FALSE "
         f"GROUP BY category ORDER BY category"
     )
-    stats = {"vzn_gap": 0, "data_gap": 0}
+    stats = {"vzn_gap": 0}
     for r in rows:
         stats[r["category"]] = int(r["n"])
         print(f"  coverage {r['category']}: {r['n']} streets "
@@ -245,4 +183,4 @@ if __name__ == "__main__":
     validate_config()
     print(f"Coverage-gap classification (engine v{ENGINE_VERSION})")
     stats = classify_coverage_gaps()
-    print(f"Done: vzn_gap={stats['vzn_gap']} data_gap={stats['data_gap']}")
+    print(f"Done: vzn_gap={stats['vzn_gap']}")
