@@ -18,6 +18,20 @@ export const CONDITION_LABELS_SK: Record<string, { label: string; order: number;
   JAZYK: { label: 'Jazykový podnet (mimo semaforu)', order: 10, description: 'Právo na vzdelávanie v štátnom jazyku alebo jazyku menšiny je hľadiskom pri určovaní obvodov (§ 44 ods. 8 písm. d)). Ak pridelená škola vyučuje len v menšinovom jazyku, žiaci so slovenčinou musia dochádzať inam. V tomto nástroji je jazyk samostatný podnet a NEVSTUPUJE do semaforu.' },
 }
 
+// VLA-15 — evidence-trail section labels (findings register + map legend).
+// The trail shows HOW the engine arrived at a street-level verdict: VZN
+// citation, address-register state, geometric evidence, Slovak conclusion.
+export const EVIDENCE_TRAIL_LABELS_SK = {
+  heading: 'Ako sme na to prišli',
+  vzn_citation: 'VZN (uličný zoznam)',
+  register_state: 'Register adries',
+  geometry_evidence: 'Geometria obvodov',
+  conclusion_sk: 'Záver',
+  source: 'Zdroj',
+  method: 'Metóda',
+  registerLink: 'Detail v registri nálezov →',
+} as const
+
 export function getConditionLabel(code: string): string {
   return CONDITION_LABELS_SK[code]?.label ?? code
 }
