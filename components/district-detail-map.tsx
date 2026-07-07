@@ -3,7 +3,6 @@ import dynamic from 'next/dynamic'
 import type {
   DistrictMapFeature,
   SoSchoolMarker,
-  SoHousePoint,
   SoDistrictStreetLine,
 } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
@@ -13,7 +12,6 @@ interface DistrictDetailMapProps {
   currentDistrictId: string
   features: DistrictMapFeature[]
   schools: SoSchoolMarker[]
-  housePoints: SoHousePoint[]
   streetLines: SoDistrictStreetLine[]
   districtSummaries?: Record<string, DistrictPopupSummary>
 }

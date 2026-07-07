@@ -10,7 +10,6 @@ import type {
   DistrictScorecardRow,
   DistrictMapFeature,
   SoSchoolMarker,
-  SoHousePoint,
   SoDistrictAddressStats,
   SoDistrictStreetLine,
   SoFindingsPanelItem,
@@ -35,7 +34,6 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawRows, error: scorecardError },
     { data: allFeatures },
     { data: rawSchools },
-    { data: rawHousePoints },
     rawStreetLines,
     { data: rawAllScorecard },
     { data: rawFindings },
@@ -45,7 +43,6 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
     sb.from('so_school_markers').select('*'),
-    sb.from('so_house_points').select('district_id,street,house_number,lat,lon,status,partial_match,formatted_address,point_geojson,valid,validation_reason'),
     // Streets pivot: the detail map uses the SAME street source as the main map.
     // Paged (>1000 rows, PostgREST cap) — see lib/supabase/fetch-all.ts.
     fetchAllRows<SoDistrictStreetLine>(
@@ -69,7 +66,6 @@ export default async function DistrictPage({ params }: Props) {
   const rows = (rawRows ?? []) as DistrictScorecardRow[]
   const features = (allFeatures ?? []) as DistrictMapFeature[]
   const schools = (rawSchools ?? []) as SoSchoolMarker[]
-  const housePoints = (rawHousePoints ?? []) as SoHousePoint[]
   const streetLines = rawStreetLines
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
   const districtFindings = (rawDistrictFindings ?? []) as SoFindingsPanelItem[]
@@ -178,7 +174,6 @@ export default async function DistrictPage({ params }: Props) {
         currentDistrictId={id}
         features={features}
         schools={schools}
-        housePoints={housePoints}
         streetLines={streetLines}
         districtSummaries={districtSummaries}
       />
