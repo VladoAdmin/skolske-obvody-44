@@ -90,7 +90,8 @@ async function fetchStreetLines(): Promise<SoDistrictStreetLine[]> {
     return await fetchAllRows<SoDistrictStreetLine>(
       sb,
       'so_district_street_linestrings',
-      'district_id,school_id,street,is_fallback_point,linestring_geojson'
+      'district_id,school_id,street,is_fallback_point,linestring_geojson,segment_id',
+      'segment_id'
     )
   } catch {
     return []

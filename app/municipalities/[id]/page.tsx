@@ -24,7 +24,8 @@ export default async function MunicipalityDetailPage({ params }: Props) {
     fetchAllRows<SoDistrictStreetLine>(
       sb,
       'so_district_street_linestrings',
-      'district_id,school_id,street,is_fallback_point,linestring_geojson'
+      'district_id,school_id,street,is_fallback_point,linestring_geojson,segment_id',
+      'segment_id'
     ).catch(() => [] as SoDistrictStreetLine[]),
   ])
 

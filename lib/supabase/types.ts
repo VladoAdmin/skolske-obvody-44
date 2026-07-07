@@ -242,6 +242,7 @@ export interface SoDistrictStreetLine {
   street: string
   is_fallback_point: boolean
   linestring_geojson: Record<string, unknown> | null
+  segment_id: string
 }
 
 // VLA-14: streets the VZN does not cover, classified BY THE ENGINE

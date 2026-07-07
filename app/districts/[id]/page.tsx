@@ -48,7 +48,8 @@ export default async function DistrictPage({ params }: Props) {
     fetchAllRows<SoDistrictStreetLine>(
       sb,
       'so_district_street_linestrings',
-      'district_id,school_id,street,is_fallback_point,linestring_geojson'
+      'district_id,school_id,street,is_fallback_point,linestring_geojson,segment_id',
+      'segment_id'
     ).catch(() => [] as SoDistrictStreetLine[]),
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
