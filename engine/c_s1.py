@@ -33,6 +33,11 @@ from __future__ import annotations
 
 from engine.constants import V, ENGINE_VERSION, METHODOLOGY_VERSION
 from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, get_demo_input
+from engine.evidence_trail import (
+    build_s1_demo_trail,
+    build_s1_proxy_trail,
+    build_s1_real_trail,
+)
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -109,6 +114,9 @@ def _check_s1_demo(district_id: str, demo: dict) -> Verdict:
             "zoznamu VZN; meria sa nesúlad geometrie s VZN priradením (prekryv) "
             "a adresy bez obvodu (medzera v pokrytí)"
         ),
+        # VLA-15: structured evidence trail — VZN citation + register state are
+        # REAL data; the coverage counts are the demo input.
+        "evidence_trail": build_s1_demo_trail(district_id, total, uncovered, overlap),
     }
     methodology = {**_METHODOLOGY, "rule": "Š1-coverage-demo"}
     if is_pass:
@@ -184,6 +192,7 @@ def _check_s1_real(district_id: str, municipality_id: str, ap_count: int) -> Ver
         "uncovered_count": uncovered_n,
         "multi_assigned_count": multi_n,
         "method": "ST_Within per address_point vs district geom",
+        "evidence_trail": build_s1_real_trail(district_id, ap_count, uncovered_n, multi_n),
     }
     methodology = {**_METHODOLOGY, "rule": "Š1-coverage-real"}
     return Verdict(
@@ -253,6 +262,7 @@ def _check_s1_proxy(district_id: str, municipality_id: str, all_districts: list[
             "Proxy coverage check. Real Š1 requires per-address-point spatial join. "
             "Geometric gap may include forest/fields outside urban area."
         ),
+        "evidence_trail": build_s1_proxy_trail(district_id, gap_pct, len(all_districts)),
     }
 
     evidence = (

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from engine.constants import V, METHODOLOGY_VERSION
 from engine.demo_inputs import DEMO_COMPLETENESS, DEMO_CONFIDENCE, demo_mode_enabled
+from engine.evidence_trail import build_s2_trail
 from engine.verdict import Verdict
 from ingest.supabase_client import query_sql
 
@@ -93,6 +94,7 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             d2.id   AS partner_id,
             d2.name AS partner_name,
             count(DISTINCT lower(trim(h1.street)) || '|' || trim(h1.house_number)) AS shared_addresses,
+            (array_agg(DISTINCT trim(h1.street) || ' ' || trim(h1.house_number)))[1:5] AS example_addresses,
             bool_or(h1.is_demo OR h2.is_demo) AS any_demo
         FROM skolske_obvody.house_geocodes h1
         JOIN skolske_obvody.house_geocodes h2
@@ -135,6 +137,9 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
 
     partners = sorted({r["partner_name"] for r in overlap_rows if r["partner_name"]})
     total_shared = sum(int(r["shared_addresses"] or 0) for r in overlap_rows)
+    shared_examples = sorted({
+        ex for r in overlap_rows for ex in (r.get("example_addresses") or [])
+    })
     demo_suffix = " Ukážkové dáta." if is_mock else ""
     return Verdict(
         district_id=district_id,
@@ -150,6 +155,9 @@ def check_s2(district: dict, all_districts: list[dict], municipality_id: str) ->
             "shared_addresses": total_shared,
             "method": "same-full-address-in-2+-districts",
             "demo": is_mock,
+            # VLA-15: structured evidence trail (VZN citation, register state,
+            # geometry, conclusion) for the street/address-assignment class.
+            "evidence_trail": build_s2_trail(district_id, partners, shared_examples),
         },
         methodology=_METHODOLOGY,
         evidence_text=(
