@@ -9,25 +9,18 @@ interface SummaryStripProps {
   coverageGaps?: SoStreetCoverageGap[]
 }
 
-// VLA-14 coverage-gap counters. Shown in BOTH display modes: the owner mandate
-// is that map "holes" are always explained, and the data_gap state is not a
-// compliance verdict (it is explicitly "neurčené"), so the step-1 gate does
-// not apply to it. Counts come straight from engine rows — never derived here.
+// VLA-14 coverage-gap counter. Shown in BOTH display modes: the owner mandate
+// is that map "holes" are always explained. Counts come straight from engine
+// rows — never derived here. VLA-20: the "nedostatočné dáta" (data_gap)
+// counter was removed together with the state itself.
 function CoverageGapCounts({ coverageGaps }: { coverageGaps: SoStreetCoverageGap[] }) {
   const vznGaps = coverageGaps.filter((g) => g.category === 'vzn_gap').length
-  const dataGaps = coverageGaps.filter((g) => g.category === 'data_gap').length
   return (
     <dl className="flex items-center justify-around gap-3 sm:gap-4 list-none m-0 px-1">
       <div className="flex flex-col items-center" data-testid="summary-vzn-gaps">
         <dt className="text-[10px] text-muted-foreground leading-tight order-2">VZN medzera</dt>
         <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-red-700">
           {vznGaps}
-        </dd>
-      </div>
-      <div className="flex flex-col items-center" data-testid="summary-data-gaps">
-        <dt className="text-[10px] text-muted-foreground leading-tight order-2">Nedostatočné dáta</dt>
-        <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-gray-600">
-          {dataGaps}
         </dd>
       </div>
     </dl>

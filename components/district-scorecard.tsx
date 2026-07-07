@@ -24,8 +24,8 @@ export function DistrictScorecard({ rows }: DistrictScorecardProps) {
                   Hodnota
                 </TooltipTrigger>
                 <TooltipContent>
-                  Výsledok podmienky: PASS (splnená), FAIL (nesplnená),
-                  INCOMPLETE (chýbajú dáta), RISK alebo INSUFFICIENT_DATA.
+                  Výsledok podmienky: PASS (splnená), FAIL (nesplnená)
+                  alebo RISK (riziko pri indikátore).
                   SIGNAL je len upozornenie pri mäkkých ukazovateľoch (sociálny
                   kontext, demografia) — nie je to verdikt a nevstupuje do semaforu.
                 </TooltipContent>
