@@ -482,15 +482,15 @@ def run(municipality_id: str = MUNICIPALITY_ID) -> list[dict]:
     )
 
     # --- Street coverage gaps (VLA-14, municipality-level) ---
-    # Classify every VZN-uncovered street as vzn_gap (register street with no
-    # VZN assignment — Š1-family structural evidence) or data_gap (OSM-only
-    # name, undecidable — never a violation). Engine stays the SSOT; the map
-    # only reads the resulting view.
+    # Classify every VZN-uncovered register street as vzn_gap (Š1-family
+    # structural evidence). The data_gap category was retired by VLA-20 —
+    # the refresh purges legacy rows. Engine stays the SSOT; the map only
+    # reads the resulting view.
     print("\n--- Street coverage gaps (VLA-14) ---")
     gap_stats = classify_coverage_gaps(municipality_id)
 
     print(f"\n{'='*70}")
-    print(f"Coverage gaps: vzn_gap={gap_stats['vzn_gap']} data_gap={gap_stats['data_gap']}")
+    print(f"Coverage gaps: vzn_gap={gap_stats['vzn_gap']}")
     print(f"Verdicts written: {verdicts_written}")
     print(f"Findings written: {findings_written}")
     print(f"Stale findings deleted: {stale_deleted}")
