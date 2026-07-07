@@ -220,6 +220,10 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             layer.setStyle({ weight: 2, opacity: 0.25, color: `hsl(${hue}, 45%, 55%)` })
           }
         })
+        // VLA-15: route the panel→map selection through the streets-pivot
+        // selectDistrict bridge too, so the district evidence legend (short
+        // trail + register link) renders — same as a direct street tap.
+        if (drawDemoRef.current) drawDemoRef.current({ id })
       }
       window.addEventListener(EVENT_SELECT_DISTRICT, selectDistrictHandler)
 
