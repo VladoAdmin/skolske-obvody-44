@@ -16,6 +16,7 @@ import {
   type DrawRouteDetail,
 } from '@/lib/map-events'
 import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
+import { EVIDENCE_TRAIL_LABELS_SK } from '@/lib/compliance/labels'
 
 // Zoom threshold (inclusive) at which per-house dots become visible.
 const HOUSE_DOTS_MIN_ZOOM = 16
@@ -457,7 +458,14 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                   const demoTag = f.is_demo
                     ? '<span style="font-weight:600;color:#b45309">DEMO</span> · '
                     : ''
-                  return `<div style="margin-bottom:5px"><span class="${cls}" style="display:inline-block;border-radius:4px;border-width:1px;border-style:solid;padding:0 5px;font-size:10px;font-weight:600;margin-right:5px">${label}</span>${demoTag}<strong>${f.condition_label_sk}</strong>${f.evidence_public_text ? `<div style="color:#4b5563;font-size:11px;margin-top:1px">${f.evidence_public_text}</div>` : ''}</div>`
+                  // VLA-15: short evidence trail — the Slovak conclusion of the
+                  // street-level verdict + deep link to the register entry
+                  // (auto-expands the full "Ako sme na to prišli" section there).
+                  const conclusion = f.evidence_trail?.conclusion_sk
+                    ? `<div style="color:#374151;font-size:11px;margin-top:2px"><strong>${EVIDENCE_TRAIL_LABELS_SK.conclusion_sk}:</strong> ${f.evidence_trail.conclusion_sk}</div>`
+                    : ''
+                  const registerLink = `<a href="/findings#f-${f.finding_id}" style="font-size:11px;color:#1d4ed8;text-decoration:underline">${EVIDENCE_TRAIL_LABELS_SK.registerLink}</a>`
+                  return `<div style="margin-bottom:5px"><span class="${cls}" style="display:inline-block;border-radius:4px;border-width:1px;border-style:solid;padding:0 5px;font-size:10px;font-weight:600;margin-right:5px">${label}</span>${demoTag}<strong>${f.condition_label_sk}</strong>${f.evidence_public_text ? `<div style="color:#4b5563;font-size:11px;margin-top:1px">${f.evidence_public_text}</div>` : ''}${conclusion}${registerLink}</div>`
                 })
                 .join('')
               const legend = document.createElement('div')
