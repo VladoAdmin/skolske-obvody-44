@@ -1,12 +1,17 @@
 """
-JAZYK — Podnet nad rámec § 44 (jazyk).
+JAZYK — Jazykový podnet (mimo semaforu).
 
-Minority teaching language is NOT one of the nine § 44 conditions. It is therefore
-NEVER part of the semafor and NEVER uses code P-d. When a district's assigned
-school teaches only in a minority language while the surrounding pupils' nearest
-school teaches in SK (or vice-versa), that is a real geometric statement worth
-surfacing — but explicitly as a "podnet nad rámec § 44 (jazyk)", outside the legal
-verdict.
+LEGAL ANCHOR (docs/legal-audit-44.md): the right to education in the state
+language or the language of a national minority IS one of the § 44 factors —
+ods. 8 písm. d) — and ods. 6/7 regulate additional districts for
+minority-language schools. Earlier texts claiming "jazyk NIE je podmienkou
+§ 44" were wrong and are removed (VLA-19).
+
+In THIS tool the language question stays a separate podnet rendered OUTSIDE
+the semafor (invariant: JAZYK never enters compose_color) and NEVER uses code
+P-d. When a district's assigned school teaches only in a minority language
+while pupils need Slovak (or vice-versa), that is surfaced as a podnet, not a
+legal verdict.
 
 Value:
   SIGNAL        = assigned school teaches in a minority language code
@@ -33,16 +38,18 @@ from ingest.supabase_client import query_sql
 _MAJORITY_LANGS = {"SK", "SLOVE", "SLOVAK", "SLOVENSKY"}
 
 _METHODOLOGY = {
-    "rule": "jazyk-podnet-mimo-44",
+    "rule": "jazyk-podnet-mimo-semaforu",
     "version": METHODOLOGY_VERSION,
     "description": (
-        "Vyučovací jazyk pridelenej školy. Menšinový jazyk je podnet NAD RÁMEC § 44 "
-        "— nie je to zákonná podmienka a nevstupuje do semaforu. Nepoužíva sa kód P-d."
+        "Vyučovací jazyk pridelenej školy. Právo na vzdelávanie v štátnom jazyku "
+        "alebo jazyku menšiny je hľadiskom podľa § 44 ods. 8 písm. d); v tomto "
+        "nástroji sa jazyk vyhodnocuje ako samostatný podnet MIMO semaforu. "
+        "Nepoužíva sa kód P-d."
     ),
     "data_source": "schools.teaching_language (WFS q9)",
-    "law_ref": "mimo § 44 (jazykové práva menšín — iný právny režim)",
-    "never_claims": "porušenie § 44; jazyk nie je § 44 podmienka",
-    "panel": "podnet nad rámec § 44 — NIKDY v zákonnom semafore",
+    "law_ref": "§ 44 ods. 8 písm. d)",
+    "never_claims": "porušenie § 44; jazykový podnet nevstupuje do semaforu",
+    "panel": "jazykový podnet — NIKDY v zákonnom semafore",
 }
 
 
@@ -63,14 +70,15 @@ def check_lang(district: dict) -> Verdict:
                 confidence=DEMO_CONFIDENCE,
                 data_completeness=DEMO_COMPLETENESS,
                 provenance={"source": "DEMO — vyučovací jazyk (ukážkové dáta)",
-                            "teaching_language": dlang, "scope": "mimo § 44", "demo": True},
+                            "teaching_language": dlang, "scope": "podnet mimo semaforu", "demo": True},
                 methodology=_METHODOLOGY,
                 evidence_text=(
-                    f"PODNET NAD RÁMEC § 44 (jazyk) [DEMO]: pridelená škola {school_name} "
-                    f"vyučuje v menšinovom jazyku ({dlang}). Žiaci, ktorí potrebujú výučbu "
-                    "v slovenčine, musia dochádzať do školy v inom obvode. Toto NIE je "
-                    "§ 44 podmienka a NEVSTUPUJE do semaforu (nepoužíva sa kód P-d). "
-                    "Ukážkové dáta."
+                    f"JAZYKOVÝ PODNET [DEMO]: pridelená škola {school_name} vyučuje "
+                    f"v menšinovom jazyku ({dlang}). Žiaci, ktorí potrebujú výučbu "
+                    "v slovenčine, musia dochádzať do školy v inom obvode. Právo na "
+                    "vzdelávanie v štátnom jazyku alebo jazyku menšiny je hľadiskom "
+                    "pri určovaní obvodov (§ 44 ods. 8 písm. d)); tento podnet "
+                    "NEVSTUPUJE do semaforu (nepoužíva sa kód P-d). Ukážkové dáta."
                 ),
                 is_mock=True,
             )
@@ -84,11 +92,11 @@ def check_lang(district: dict) -> Verdict:
             confidence=DEMO_CONFIDENCE,
             data_completeness=DEMO_COMPLETENESS,
             provenance={"source": "DEMO — vyučovací jazyk (ukážkové dáta)",
-                        "teaching_language": "SK", "scope": "mimo § 44", "demo": True},
+                        "teaching_language": "SK", "scope": "podnet mimo semaforu", "demo": True},
             methodology=_METHODOLOGY,
             evidence_text=(
                 f"Bez jazykového podnetu: pridelená škola {school_name} vyučuje v "
-                "slovenčine. Jazyk je mimo § 44 — nevstupuje do semaforu. Ukážkové dáta."
+                "slovenčine. Jazykový podnet nevstupuje do semaforu. Ukážkové dáta."
             ),
             is_mock=True,
         )
@@ -110,7 +118,7 @@ def check_lang(district: dict) -> Verdict:
         "school_name": school_name,
         "teaching_language": lang,
         "lang_is_demo": is_demo,
-        "scope": "mimo § 44",
+        "scope": "podnet mimo semaforu",
     }
 
     if lang is None or lang in _MAJORITY_LANGS:
@@ -124,7 +132,7 @@ def check_lang(district: dict) -> Verdict:
             methodology=_METHODOLOGY,
             evidence_text=(
                 f"Bez podnetu: škola {school_name} vyučuje v slovenčine ({lang or 'neznáme'}). "
-                "Jazyk je mimo § 44 — nevstupuje do zákonného stavu."
+                "Jazykový podnet nevstupuje do zákonného stavu."
             ),
         )
 
@@ -137,10 +145,12 @@ def check_lang(district: dict) -> Verdict:
         provenance=base_prov,
         methodology=_METHODOLOGY,
         evidence_text=(
-            f"PODNET NAD RÁMEC § 44 (jazyk): pridelená škola {school_name} vyučuje v "
+            f"JAZYKOVÝ PODNET: pridelená škola {school_name} vyučuje v "
             f"menšinovom jazyku ({lang}). Žiaci, ktorí potrebujú výučbu v slovenčine, "
-            "musia dochádzať do školy v inom obvode. Toto NIE je § 44 podmienka a "
-            "NEVSTUPUJE do semaforu (nepoužíva sa kód P-d)."
+            "musia dochádzať do školy v inom obvode. Právo na vzdelávanie v štátnom "
+            "jazyku alebo jazyku menšiny je hľadiskom pri určovaní obvodov "
+            "(§ 44 ods. 8 písm. d)); tento podnet NEVSTUPUJE do semaforu "
+            "(nepoužíva sa kód P-d)."
             + (" [DEMO]" if is_demo else "")
         ),
         is_mock=is_demo,

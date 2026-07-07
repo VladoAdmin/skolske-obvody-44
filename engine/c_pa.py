@@ -1,11 +1,17 @@
 """
 P-a — Vzdialenosť ZŠ 1. stupeň ≤ 2 km (air-line distance address → assigned school).
 
-METHODOLOGY §P-a (labels.ts canonical = "Vzdialenosť ZŠ 1. stupeň ≤ 2 km"):
+METHODOLOGY §P-a (labels.ts canonical = "Vzdialenosť (vzdušná čiara)"):
   For each geocoded address assigned to the district, compute the air-line
   (straight-line) distance to the district's assigned school.
-  §44 ods. 8 písm. a): a 1st-grade pupil should not have the school more than
-  2 km away as the crow flies.
+
+  LEGAL ANCHOR (docs/legal-audit-44.md): § 44 ods. 8 písm. b) lists distance
+  from the pupil's place of residence as ONE of the factors weighed when
+  districts are determined — the law sets NO numeric threshold. The 2 000 m
+  threshold (PB_PASS_DISTANCE_M) is OUR methodological demo parameter, never
+  a legal limit, and every user-facing text must say so. Air-line distance is
+  an approximation — the real walking route (P-b) is typically longer.
+  NEVER cite písm. a) here: that provision is about building capacity.
 
   Value:
     FAIL  = at least one real address is > 2 000 m from the assigned school.
@@ -39,13 +45,18 @@ _METHODOLOGY = {
     "version": METHODOLOGY_VERSION,
     "description": (
         "Vzdušná (priama) vzdialenosť každej geokódovanej adresy obvodu k pridelenej "
-        "škole. Prah pre 1. stupeň ZŠ: 2 km. FAIL = aspoň jedna adresa > 2 km."
+        "škole. Prah 2 000 m je metodický parameter dema (zákon číselný limit "
+        "neurčuje). FAIL = aspoň jedna adresa nad metodickým prahom."
     ),
     "threshold_m": PB_PASS_DISTANCE_M,
+    "threshold_is_legal_limit": False,
     "min_samples": MIN_SAMPLES,
     "data_source": "house_geocodes (Register adries + geokódovanie), district geom (q6)",
-    "law_ref": "§44 ods. 8 písm. a)",
-    "never_claims": "presný počet dotknutých detí; vzdušná čiara nie je pešia trasa (to je P-b)",
+    "law_ref": "§ 44 ods. 8 písm. b)",
+    "never_claims": (
+        "zákonný limit vzdialenosti (§ 44 ods. 8 písm. b) limit neuvádza); "
+        "presný počet dotknutých detí; vzdušná čiara nie je pešia trasa (to je P-b)"
+    ),
     "gatekeeping": "rizikový indikátor — môže posunúť na ORANGE, nikdy nie RED",
 }
 
@@ -62,14 +73,17 @@ def check_pa(district: dict) -> Verdict:
         is_fail = max_m > PB_PASS_DISTANCE_M
         if is_fail:
             evidence = (
-                f"FAIL [DEMO]: najvzdialenejšia adresa obvodu je {round(max_m)} m vzdušnou "
-                f"čiarou od pridelenej školy {school_name} (prah 2 000 m pre 1. stupeň). "
-                "Žiak má školu ďalej než 2 km (§ 44 ods. 8 písm. a). Ukážkové dáta."
+                f"FAIL [DEMO]: najvzdialenejšia adresa obvodu je {round(max_m)} m od "
+                f"pridelenej školy {school_name}, merané vzdušnou čiarou (aproximácia — "
+                "reálna pešia trasa je spravidla dlhšia, viď P-b). Prekročený metodický "
+                "prah dema 2 000 m; zákon číselný limit neurčuje, vzdialenosť je jedno "
+                "z hľadísk pri určovaní obvodov (§ 44 ods. 8 písm. b)). Ukážkové dáta."
             )
         else:
             evidence = (
                 f"PASS [DEMO]: najvzdialenejšia adresa obvodu je {round(max_m)} m vzdušnou "
-                f"čiarou od školy {school_name} (≤ 2 km). Ukážkové dáta."
+                f"čiarou od školy {school_name} — v rámci metodického prahu dema 2 km. "
+                "Ukážkové dáta."
             )
         return Verdict(
             district_id=district_id,
@@ -164,9 +178,10 @@ def check_pa(district: dict) -> Verdict:
     if far_dist > PB_PASS_DISTANCE_M:
         value = V.FAIL
         evidence = (
-            f"FAIL: {n_over} z {n} adries je nad 2 km vzdušnou čiarou od pridelenej školy "
-            f"{school_name}. Najvzdialenejšia: „{far_addr}“ = {round(far_dist)} m "
-            f"(prah 2 000 m)."
+            f"FAIL: {n_over} z {n} adries je nad metodickým prahom dema 2 km od pridelenej "
+            f"školy {school_name}, merané vzdušnou čiarou (aproximácia — pešia trasa je "
+            f"spravidla dlhšia, viď P-b). Najvzdialenejšia: „{far_addr}“ = {round(far_dist)} m. "
+            "Zákon číselný limit neurčuje (§ 44 ods. 8 písm. b))."
             + (" [DEMO adresa]" if decided_by_demo else "")
         )
         return Verdict(
@@ -206,7 +221,8 @@ def check_pa(district: dict) -> Verdict:
         provenance=provenance,
         methodology=_METHODOLOGY,
         evidence_text=(
-            f"PASS: všetkých {n} geokódovaných adries je do 2 km vzdušnou čiarou od školy "
-            f"{school_name}. Najvzdialenejšia: „{far_addr}“ = {round(far_dist)} m."
+            f"PASS: všetkých {n} geokódovaných adries je v rámci metodického prahu dema "
+            f"2 km vzdušnou čiarou od školy {school_name}. "
+            f"Najvzdialenejšia: „{far_addr}“ = {round(far_dist)} m."
         ),
     )

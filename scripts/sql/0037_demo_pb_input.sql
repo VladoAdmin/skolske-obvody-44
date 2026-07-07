@@ -9,7 +9,7 @@ ALTER TABLE skolske_obvody.district_demo_inputs
 
 -- Curated P-b values. Thresholds (constants.py): PASS <= 2000 m AND <= 1800 s;
 -- RISK <= 4000 m; FAIL > 4000 m. ">30 min" walking is the P-b violation type
--- (Lesnícka, demonstrating §44 ods. 8 písm. b). Everyone else PASS.
+-- (Lesnícka, demonstrating § 44 ods. 8 písm. b) — distance factor; 30-min threshold is a demo methodological parameter). Everyone else PASS.
 UPDATE skolske_obvody.district_demo_inputs di
 SET pb_minutes = v.mins, pb_distance_m = v.dist
 FROM (VALUES

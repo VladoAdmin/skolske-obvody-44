@@ -81,7 +81,7 @@ FROM (VALUES
     -- name, s1_total, s1_uncov, s1_wrong, s2_ovl, s3_cnt, pa_max, pc_tr, pc_min, pd_barr, pd_kind, pe, pf_cap, pf_enr, jazyk, note
     ('Základná škola, Bajkalská č. 29',
         820, 0, 14, false, 1, 2480::numeric, 1, 18, false, NULL, false, 640, 590, NULL,
-        'DEMO RED: 14 adries priradených do nesprávneho obvodu (S1 FAIL) + najvzdialenejšia adresa 2480 m > 2 km (Pa FAIL).'),
+        'DEMO RED: 14 adries v geometrii iného obvodu, než určuje VZN — prekryv priradenia (S1 FAIL) + najvzdialenejšia adresa 2480 m nad metodickým prahom dema 2 km (Pa FAIL).'),
     ('Základná škola, Kúpeľná č. 2',
         540, 0, 0, true, 1, 1450::numeric, 1, 16, false, NULL, false, 480, 430, NULL,
         'DEMO RED: prekryv obvodu so Sibírskou (S2 FAIL — dvojité pokrytie ulíc).'),

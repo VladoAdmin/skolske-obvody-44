@@ -22,7 +22,7 @@ SET capacity = 560,
     metadata = COALESCE(s.metadata, '{}'::jsonb)
                || jsonb_build_object(
                     'pf_capacity_is_demo', true,
-                    'pf_demo_note', 'DEMO: fabricated capacity/enrolment to demonstrate § 44 ods. 8 f) overcrowding'
+                    'pf_demo_note', 'DEMO: fabricated capacity/enrolment to demonstrate § 44 ods. 8 písm. a) capacity overload'
                   )
 WHERE s.id = (
     SELECT d.school_id FROM skolske_obvody.districts d
@@ -66,7 +66,7 @@ SELECT
     true,
     jsonb_build_object(
         'layer', 'DEMO inklúzia',
-        'note', 'DEMO: fabricated MRK locality to demonstrate § 44 ods. 8 e) inclusion case'
+        'note', 'DEMO: fabricated MRK locality to demonstrate § 44 ods. 8 písm. e) segregation-ban case'
     )
 FROM skolske_obvody.districts d
 WHERE d.name = 'Základná škola, Šrobárova č. 20';

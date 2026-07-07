@@ -48,8 +48,13 @@ _METHODOLOGY = {
     "threshold_zs_1st_stage_m": PB_PASS_DISTANCE_M,
     "threshold_zs_1st_stage_s": PB_PASS_DURATION_S,
     "threshold_risk_m": PB_RISK_DISTANCE_M,
-    "law_ref": "§44 ods. 8 písm. b)",
-    "never_claims": "presný počet dotknutých detí (REGOB GAP — výsledok nie je vážený počtom detí)",
+    "threshold_is_legal_limit": False,
+    "law_ref": "§ 44 ods. 8 písm. b)",
+    "never_claims": (
+        "zákonný limit trvania/vzdialenosti (§ 44 ods. 8 písm. b) limit neuvádza; "
+        "prahy 30 min / 2 km / 4 km sú metodické parametre dema); "
+        "presný počet dotknutých detí (REGOB GAP — výsledok nie je vážený počtom detí)"
+    ),
     "caveat": "chýbajúce chodníky/povrch v OSM môže podceňovať skutočnú pešiu trasu",
 }
 
@@ -144,14 +149,16 @@ def _check_pb_demo(district: dict, demo: dict) -> Verdict:
         value = V.RISK
         evidence = (
             f"RISK [DEMO]: pešia trasa do školy {school_name} trvá {minutes} min "
-            f"({round(dist_m)} m) — viac ako 30 minút (§ 44 ods. 8 písm. b). "
+            f"({round(dist_m)} m) — nad metodickým prahom dema 30 minút. Zákon číselný "
+            "limit neurčuje; vzdialenosť je hľadisko podľa § 44 ods. 8 písm. b). "
             "Rizikový indikátor — môže posunúť na ORANGE. Ukážkové dáta."
         )
     else:
         value = V.FAIL
         evidence = (
             f"FAIL [DEMO]: pešia trasa do školy {school_name} je {round(dist_m)} m "
-            f"({minutes} min) — nad 4 km. Ukážkové dáta."
+            f"({minutes} min) — nad metodickým prahom dema 4 km (nie zákonný limit). "
+            "Ukážkové dáta."
         )
     return Verdict(
         district_id=district_id,

@@ -93,7 +93,7 @@ export function isOutsideSemafor(value: string | null | undefined): boolean {
 
 // Condition-group membership: which §44 conditions feed the legal traffic light.
 // S1–S3 (legal) and Pa–Pd (risk indicators) are IN the semafor; Pe/Pf (analytical
-// signals) and JAZYK (podnet nad rámec § 44) are OUTSIDE it. This replaces the
+// signals) and JAZYK (jazykový podnet mimo semaforu) are OUTSIDE it. This replaces the
 // previous `condition_code === 'JAZYK'` hardcode in verdict-row.tsx (item 8a):
 // outside-semafor status now comes from the condition-group contract, mirrored
 // from the engine's LEGAL/INDICATOR/SIGNAL grouping in engine/compose.py.

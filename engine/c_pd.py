@@ -2,8 +2,15 @@
 P-d — Bariéry (cesty, koľaje) — physical barriers on the home→school route.
 
 METHODOLOGY §P-d (labels.ts canonical = "Bariéry (cesty, koľaje)"):
-  §44 ods. 8 písm. d) (metodika): the route from home to school should not cross
-  a busy road without a crossing, nor a railway without an underpass.
+  Methodological safety indicator: the route from home to school should not
+  cross a busy road without a crossing, nor a railway without an underpass.
+
+  LEGAL ANCHOR (docs/legal-audit-44.md): NONE. § 44 does not mention route
+  barriers anywhere. § 44 ods. 8 písm. d) — previously cited here — is about
+  the right to education in the state language or a minority language, NOT
+  about barriers. P-d therefore carries NO legal citation: it is a clearly
+  labeled non-legal indicator and its FAIL is never presented as a § 44
+  violation (owner directive 2026-07-06).
 
   Computing this honestly requires a dataset of barrier features (railway lines,
   class-I/II roads WITH the locations of legal crossings) AND the pupil's pedestrian
@@ -40,8 +47,11 @@ _METHODOLOGY = {
     ),
     "data_available": "road_network (osi ciest I/II/III) — bez železníc a bez priechodov",
     "gap": "železničné línie + polohy priechodov/podchodov; bez nich je verdikt zavádzajúci",
-    "law_ref": "§44 ods. 8 písm. d)",
-    "never_claims": "jazykové právo (to nie je P-d); bariéra bez dát o priechodoch",
+    "law_ref": "bez priamej opory v § 44 — metodický indikátor (zákon bariéry nespomína)",
+    "never_claims": (
+        "porušenie § 44 (bariéry nie sú v zákone); jazykové právo (to nie je P-d); "
+        "bariéra bez dát o priechodoch"
+    ),
     "gatekeeping": "rizikový indikátor — INSUFFICIENT_DATA môže posunúť na ORANGE, nikdy nie RED",
 }
 
@@ -58,13 +68,15 @@ def check_pd(district: dict) -> Verdict:
         if barrier:
             evidence = (
                 f"FAIL [DEMO]: pešia trasa domov→škola kríži bariéru ({kind}) bez "
-                "bezpečného priechodu/podchodu (§ 44 ods. 8 písm. d). Ukážkové dáta. "
+                "bezpečného priechodu/podchodu. Metodický indikátor bezpečnosti trasy "
+                "bez priamej opory v § 44 — nejde o porušenie zákona. Ukážkové dáta. "
                 "(P-d sa netýka jazyka.)"
             )
         else:
             evidence = (
                 "PASS [DEMO]: pešia trasa domov→škola nekríži rušnú cestu bez priechodu "
-                "ani železnicu bez podchodu. Ukážkové dáta. (P-d sa netýka jazyka.)"
+                "ani železnicu bez podchodu. Metodický indikátor bez priamej opory v § 44. "
+                "Ukážkové dáta. (P-d sa netýka jazyka.)"
             )
         return Verdict(
             district_id=district_id,

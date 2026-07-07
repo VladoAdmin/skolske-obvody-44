@@ -46,7 +46,7 @@ _METHODOLOGY = {
         "AND teaching_language. Shared/boundary STREETS are NOT a violation — only "
         "a duplicated full address is."
     ),
-    "law_ref": "§44 ods. 1 a 7",
+    "law_ref": "§ 44 ods. 1 a 7",
     "never_claims": "a shared boundary street = an administrative overlap",
 }
 

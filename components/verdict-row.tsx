@@ -18,14 +18,15 @@ const VALUE_DESCRIPTIONS: Record<string, string> = {
   INCOMPLETE:        'Chýbajú vstupné dáta, preto výsledok zatiaľ nevieme určiť.',
   RISK:              'Indikátor upozorňuje na možný problém, ktorý stojí za bližšiu kontrolu.',
   INSUFFICIENT_DATA: 'Dát je príliš málo na to, aby mal výsledok dostatočnú výpovednú hodnotu.',
-  // SIGNAL is a soft risk indicator for the "mäkké" indicators that § 44 NEEN
-  // numerates as hard conditions (sociálny kontext / MRK = P-e, demografia = P-f).
+  // SIGNAL is a soft risk indicator for the analytical areas (P-e sociálny
+  // kontext, P-f demografia, JAZYK). These map to § 44 ods. 8 factors but the
+  // law sets no hard PASS/FAIL rule for them — see docs/legal-audit-44.md.
   // It flags a risk worth a closer look; it is explicitly NOT a PASS/FAIL verdict
   // and never drives the legal semafor.
-  SIGNAL:            'Upozornenie, nie verdikt. Ukazuje na možné riziko v oblasti, ktorú zákon § 44 priamo nehodnotí (sociálny kontext, demografia, jazyk). Nie je to PASS ani FAIL — len podnet na bližšie preskúmanie.',
-  // NO_SIGNAL = evaluated, no issue found in a non-§44 (mimo semaforu) oblasti.
-  NO_SIGNAL:         'Vyhodnotené — bez podnetu. V tejto oblasti mimo § 44 (sociálny kontext, demografia, jazyk) sa nenašiel žiadny problém. Nevstupuje do zákonného semaforu.',
-  NOT_EVALUATED:     'Údaj sa zatiaľ nedal vyhodnotiť. Oblasť je mimo zákonného semaforu § 44.',
+  SIGNAL:            'Upozornenie, nie verdikt. Ukazuje na možné riziko v analytickej oblasti (sociálny kontext, demografia, jazyk), ktorá nevstupuje do zákonného semaforu. Nie je to PASS ani FAIL — len podnet na bližšie preskúmanie.',
+  // NO_SIGNAL = evaluated, no issue found in an analytical (mimo semaforu) area.
+  NO_SIGNAL:         'Vyhodnotené — bez podnetu. V tejto analytickej oblasti (sociálny kontext, demografia, jazyk) sa nenašiel žiadny problém. Nevstupuje do zákonného semaforu.',
+  NOT_EVALUATED:     'Údaj sa zatiaľ nedal vyhodnotiť. Oblasť je mimo zákonného semaforu.',
 }
 
 function ValueBadge({ value }: { value: string }) {

@@ -38,7 +38,8 @@ _METHODOLOGY = {
     "version": METHODOLOGY_VERSION,
     "scenario": "school morning, next Monday 07:30 local, max 2 transfers",
     "api": "Google Routes API computeRoutes travelMode=TRANSIT",
-    "law_ref": "§44 ods. 8 písm. c)",
+    "law_ref": "§ 44 ods. 8 písm. c)",
+    "threshold_is_legal_limit": False,
     "never_claims": (
         "doprava spĺňa/nespĺňa zákon — ilustračný náhľad bez agentúrneho GTFS; "
         "nevstupuje do zákonného stavu"
@@ -117,7 +118,8 @@ def check_pc(district: dict) -> Verdict:
 
     # DEMO MODE: complete MHD model (transfers + minutes) → decisive PASS/FAIL.
     # In demo mode P-c is a real risk indicator (not illustrative): >= 2 transfers
-    # means poor accessibility (§ 44 ods. 8 písm. c), can push to ORANGE.
+    # exceeds OUR demo methodological threshold (the law sets none; transport
+    # infrastructure is a factor per § 44 ods. 8 písm. c)), can push to ORANGE.
     demo = get_demo_input(district_id)
     if demo is not None and demo.get("pc_transfers") is not None:
         transfers = int(demo["pc_transfers"])
@@ -126,8 +128,9 @@ def check_pc(district: dict) -> Verdict:
         if is_fail:
             evidence = (
                 f"FAIL [DEMO]: modelovaná MHD trasa do školy má {transfers} prestupy "
-                f"({minutes} min). Viac ako jeden prestup = slabá dostupnosť MHD "
-                "(§ 44 ods. 8 písm. c). Ukážkové dáta."
+                f"({minutes} min) — nad metodickým prahom dema (viac ako jeden prestup). "
+                "Zákon počet prestupov neurčuje; dopravná infraštruktúra obce je hľadisko "
+                "podľa § 44 ods. 8 písm. c). Ukážkové dáta."
             )
         else:
             evidence = (
