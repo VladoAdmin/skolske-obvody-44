@@ -48,3 +48,7 @@ __pycache__/
 
 # AI-UAT screenshots (large viewport PNGs — not for diff history)
 /tools/ai-uat/screenshots/
+
+# CC bookkeeping (local continuity, not for diff history)
+/log/
+/memory/
