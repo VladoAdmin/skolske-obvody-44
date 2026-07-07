@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import type { SoFindingsPanelItem, DistrictMapFeature } from '@/lib/supabase/types'
-import { DistrictTogglePanel } from '@/components/district-toggle-panel'
 import {
   EVENT_FLYTO,
   EVENT_SELECT_DISTRICT,
@@ -129,9 +128,6 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
 
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* District toggle panel — collapsible above findings */}
-      {features.length > 0 && <DistrictTogglePanel features={features} />}
-
       {/* Header */}
       <div className="px-3 py-2 border-b border-border flex-shrink-0">
         <p className="text-xs font-semibold text-foreground">Nálezy</p>

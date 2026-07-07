@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { RegionMap } from '@/components/region-map'
 import { FindingsPanel } from '@/components/findings-panel'
+import { DistrictTogglePanel } from '@/components/district-toggle-panel'
 import { MapWithPanel } from '@/components/map/map-with-panel'
 import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
@@ -240,10 +241,12 @@ export default async function MapPage() {
         </p>
       </details>
 
-      {/* Map + findings panel layout — responsive via MapWithPanel */}
+      {/* Map + district-list panel layout — responsive via MapWithPanel.
+          VLA-20: the side panel holds ONLY the district list; findings moved
+          to their own section below the map. */}
       <div aria-describedby="map-fallback-table">
         <MapWithPanel
-          findingsCount={findings.length}
+          districtsCount={features.length}
           mapSlot={
             <Suspense fallback={<Skeleton className="w-full h-full rounded-none" />}>
               <RegionMap
@@ -262,9 +265,25 @@ export default async function MapPage() {
               />
             </Suspense>
           }
-          panelSlot={<FindingsPanel findings={findings} features={features} />}
+          panelSlot={
+            <div className="h-full bg-background overflow-y-auto">
+              <DistrictTogglePanel features={features} />
+            </div>
+          }
         />
       </div>
+
+      {/* Findings — own full-width panel below the map (VLA-20: moved out of
+          the district panel; stays on this page so click → fly-to keeps
+          working, and is visible together with the district list). */}
+      <section
+        aria-label="Nálezy"
+        className="mt-4 rounded-lg border border-border overflow-hidden"
+      >
+        <div className="h-[45vh] min-h-[280px]">
+          <FindingsPanel findings={findings} features={features} />
+        </div>
+      </section>
 
       {/* Map legend */}
       <div className="hidden md:block">
