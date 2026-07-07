@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { SoFindingsPanelItem, DistrictMapFeature } from '@/lib/supabase/types'
+import { EVIDENCE_TRAIL_LABELS_SK } from '@/lib/compliance/labels'
 import {
   EVENT_FLYTO,
   EVENT_SELECT_DISTRICT,
@@ -190,9 +191,28 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
                           {item.evidence_public_text}
                         </p>
                       )}
+                      {/* VLA-15: short evidence trail — the conclusion of the
+                          street-level verdict + deep link to the register
+                          entry (full "Ako sme na to prišli" section there). */}
+                      {isSelected && item.evidence_trail?.conclusion_sk && (
+                        <p className="text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed">
+                          <span className="font-medium text-foreground">
+                            {EVIDENCE_TRAIL_LABELS_SK.conclusion_sk}:{' '}
+                          </span>
+                          {item.evidence_trail.conclusion_sk}
+                        </p>
+                      )}
                       {isSelected && (
-                        <p className="mt-1 text-[11px] text-primary">
-                          Zvýraznené na mape →
+                        <p className="mt-1 text-[11px]">
+                          <span className="text-primary">Zvýraznené na mape →</span>
+                          {' · '}
+                          <a
+                            href={`/findings#f-${item.finding_id}`}
+                            className="text-primary underline hover:text-primary/80"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {EVIDENCE_TRAIL_LABELS_SK.registerLink}
+                          </a>
                         </p>
                       )}
                     </div>

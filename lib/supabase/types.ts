@@ -60,6 +60,15 @@ export interface SoMunicipalitySummary {
   none_districts_count: number
 }
 
+/** VLA-15: structured evidence trail of a street-level verdict — how the
+ * engine arrived at it (VZN citation, register state, geometry, conclusion). */
+export interface SoEvidenceTrail {
+  vzn_citation: string | null
+  register_state: string | null
+  geometry_evidence: string | null
+  conclusion_sk: string | null
+}
+
 export interface SoFindingPublic {
   finding_id: string
   district_id: string
@@ -73,6 +82,9 @@ export interface SoFindingPublic {
   status: string
   evidence_public_text: string | null
   provenance_source: string | null
+  source_public: string | null
+  method_public: string | null
+  evidence_trail: SoEvidenceTrail | null
   created_at: string
   is_demo: boolean
   tag: string | null
@@ -135,6 +147,9 @@ export interface SoFindingsPanelItem {
   status: string
   evidence_public_text: string | null
   provenance_source: string | null
+  source_public: string | null
+  method_public: string | null
+  evidence_trail: SoEvidenceTrail | null
   created_at: string
   is_demo: boolean
   tag: string | null

@@ -1,11 +1,11 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { FindingPublic } from '@/lib/supabase/types'
 import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
 import { relativeTime } from '@/lib/format/dates'
-import { getConditionLabel } from '@/lib/compliance/labels'
+import { EVIDENCE_TRAIL_LABELS_SK, getConditionLabel } from '@/lib/compliance/labels'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 interface FindingsTableProps {
@@ -30,6 +30,51 @@ function DemoBadge() {
   )
 }
 
+// VLA-15 — "Ako sme na to prišli": the evidence trail of a street-level
+// verdict (VZN citation, register state, geometry, conclusion) + the
+// source/method provenance every finding must carry. A verdict without
+// visible reasoning must not be presented as an assertion (client 2026-07-06).
+function EvidenceTrail({ finding }: { finding: FindingPublic }) {
+  const trail = finding.evidence_trail
+  const hasProvenance = Boolean(finding.source_public || finding.method_public)
+  if (!trail && !hasProvenance) return null
+  const L = EVIDENCE_TRAIL_LABELS_SK
+  const rows: Array<[string, string | null | undefined]> = [
+    [L.vzn_citation, trail?.vzn_citation],
+    [L.register_state, trail?.register_state],
+    [L.geometry_evidence, trail?.geometry_evidence],
+    [L.conclusion_sk, trail?.conclusion_sk],
+  ]
+  return (
+    <div className="mt-3 rounded-md border border-border bg-background p-3 space-y-2" data-testid="evidence-trail">
+      <p className="text-xs font-semibold text-foreground">{L.heading}</p>
+      {rows.map(([label, text]) =>
+        text ? (
+          <div key={label} className="text-xs leading-relaxed">
+            <span className="font-medium text-foreground">{label}: </span>
+            <span className="text-muted-foreground whitespace-pre-wrap">{text}</span>
+          </div>
+        ) : null
+      )}
+      {hasProvenance && (
+        <p className="text-xs text-muted-foreground border-t border-border pt-2">
+          {finding.source_public && (
+            <>
+              {L.source}: {finding.source_public}
+            </>
+          )}
+          {finding.source_public && finding.method_public && ' · '}
+          {finding.method_public && (
+            <>
+              {L.method}: {finding.method_public}
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
 const STATUS_LABELS: Record<string, string> = {
   open: 'Otvorený',
   acknowledged: 'Zaznamenaný',
@@ -39,6 +84,20 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function FindingsTable({ findings, totalCount, page, pageSize, filterQuery }: FindingsTableProps) {
   const [openId, setOpenId] = useState<string | null>(null)
+
+  // Deep link from the map legend: /findings#f-<finding_id> auto-expands the
+  // trail of that finding and scrolls it into view (VLA-15).
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.startsWith('#f-')) return
+    const id = hash.slice(3)
+    if (findings.some((f) => f.finding_id === id)) {
+      setOpenId(id)
+      document.getElementById(`f-${id}`)?.scrollIntoView({ block: 'center' })
+    }
+    // findings change only with server-side navigation; run once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const pageHref = (p: number) => {
     const params = new URLSearchParams(filterQuery)
@@ -72,6 +131,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
           return (
             <div
               key={finding.finding_id}
+              id={`f-${finding.finding_id}`}
               className="rounded-lg border border-border p-3 space-y-1.5 bg-background cursor-pointer hover:bg-muted/30 transition-colors"
               onClick={() => setOpenId(open ? null : finding.finding_id)}
               role="button"
@@ -116,6 +176,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
                   {finding.evidence_public_text}
                 </p>
               )}
+              {open && <EvidenceTrail finding={finding} />}
               <p className="text-xs text-muted-foreground">
                 {relativeTime(finding.created_at)}
               </p>
@@ -143,10 +204,14 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
           <TableBody>
             {findings.map((finding) => {
               const open = openId === finding.finding_id
-              const hasReason = Boolean(finding.evidence_public_text)
+              const hasReason = Boolean(
+                finding.evidence_public_text || finding.evidence_trail ||
+                finding.source_public || finding.method_public
+              )
               return (
                 <Fragment key={finding.finding_id}>
                   <TableRow
+                    id={`f-${finding.finding_id}`}
                     className={`cursor-pointer hover:bg-muted/30 transition-colors ${open ? 'bg-muted/30' : ''}`}
                     onClick={() => hasReason && setOpenId(open ? null : finding.finding_id)}
                     onKeyDown={(e) => { if (hasReason && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpenId(open ? null : finding.finding_id) } }}
@@ -203,9 +268,12 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
                   {hasReason && open && (
                     <TableRow className="bg-muted/20 hover:bg-muted/20">
                       <TableCell colSpan={7} className="px-4 py-3">
-                        <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                          {finding.evidence_public_text}
-                        </p>
+                        {finding.evidence_public_text && (
+                          <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                            {finding.evidence_public_text}
+                          </p>
+                        )}
+                        <EvidenceTrail finding={finding} />
                         {finding.is_demo && (
                           <p className="mt-2 text-xs text-amber-800">
                             Ukážkové (DEMO) dáta — ilustrácia scenára, nevstupuje do zákonného verdiktu.
