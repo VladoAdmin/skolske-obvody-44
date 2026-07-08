@@ -677,26 +677,93 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
 
           schoolsGroup.addTo(map)
 
-          // (C) MRK localities — point markers (Atlas MRK). OFF by default.
+          // (C) MRK localities — hatched AREA (Atlas MRK), never a bare point.
+          // so_mrk_localities carries per-building POINTS only (no footprint
+          // polygon, no street list) — see 0038's own comment — so the area is
+          // a buffer around the point; the point itself is kept only as the
+          // label-anchor dot, not the locality's representation. OFF by default.
           const mrkGroup = L.featureGroup()
+          const MRK_AREA_RADIUS_M = 60
           mrkLocalities.forEach((loc) => {
             const geom = loc.geom_geojson as { type?: string; coordinates?: [number, number] } | null
             if (!geom || geom.type !== 'Point' || !geom.coordinates) return
             const [lon, lat] = geom.coordinates
-            L.circleMarker([lat, lon], {
-              radius: 5,
-              fillColor: '#7c3aed',
+            const demoBadge = loc.is_demo
+              ? `<span style="display:inline-block;margin:3px 4px 3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#fef3c7;color:#b45309;border:1px solid #fcd34d">DEMO</span>`
+              : ''
+            const tooltipText = `MRK lokalita (Atlas MRK) — budova/lokalita marginalizovanej rómskej komunity${loc.is_demo ? ' — DEMO' : ''}`
+
+            // Area: hatched circle buffer (reuses the mrkHatch SVG pattern).
+            L.circle([lat, lon], {
+              radius: MRK_AREA_RADIUS_M,
               color: '#4c1d95',
               weight: 1.5,
-              fillOpacity: 0.85,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              fillColor: 'url(#mrkHatch)' as any,
+              fillOpacity: 1,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'mrk' as any,
             })
-              .bindTooltip(
-                'MRK lokalita (Atlas MRK) — budova/lokalita marginalizovanej rómskej komunity',
-                { sticky: true }
-              )
+              .bindTooltip(tooltipText, { sticky: true })
               .addTo(mrkGroup)
+
+            // Label anchor: small point at the centre — anchor only, never
+            // the sole representation of the locality.
+            L.circleMarker([lat, lon], {
+              radius: 3,
+              fillColor: '#7c3aed',
+              color: '#4c1d95',
+              weight: 1,
+              fillOpacity: 0.9,
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'mrk' as any,
+            })
+              .bindTooltip(tooltipText, { sticky: true })
+              .addTo(mrkGroup)
+
+            // Exclusion link: the locality's real geometry sits inside a
+            // different district than the one it is administratively
+            // assigned to — draw the link + explain it (Pe demo scenario).
+            const assignedGeom = loc.assigned_school_geojson as
+              | { type?: string; coordinates?: [number, number] }
+              | null
+            if (
+              loc.assigned_district_id &&
+              loc.assigned_district_id !== loc.geographic_district_id &&
+              assignedGeom?.type === 'Point' &&
+              assignedGeom.coordinates
+            ) {
+              const [slon, slat] = assignedGeom.coordinates
+              const geoKm = loc.geographic_distance_m != null ? (loc.geographic_distance_m / 1000).toFixed(1) : null
+              const assignedKm = loc.assigned_distance_m != null ? (loc.assigned_distance_m / 1000).toFixed(1) : null
+              const geoName = loc.geographic_district_name ?? 'iný obvod'
+              const assignedName = loc.assigned_district_name ?? 'pridelený obvod'
+              const popupHtml =
+                `<div style="font-size:12px;line-height:1.45;max-width:270px">` +
+                `<strong>MRK lokalita — vyčlenenie do vzdialenejšieho obvodu</strong><br/>` +
+                demoBadge +
+                `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe">P-e — sociálny kontext</span>` +
+                `<p style="margin:4px 0">Lokalita je pridelená do obvodu <strong>${assignedName}</strong>` +
+                (assignedKm ? ` (škola vo vzdialenosti ${assignedKm} km)` : '') +
+                `, hoci geograficky patrí do obvodu <strong>${geoName}</strong>` +
+                (geoKm ? ` (škola vo vzdialenosti ${geoKm} km)` : '') +
+                `.</p>` +
+                (geoKm && assignedKm
+                  ? `<p style="margin:4px 0;color:#4b5563">Dôkaz: vzdušná vzdialenosť do prideleného obvodu (${assignedKm} km) je väčšia než do geograficky prislúchajúceho obvodu (${geoKm} km).</p>`
+                  : '') +
+                `</div>`
+              L.polyline([[lat, lon], [slat, slon]], {
+                color: '#6d28d9',
+                weight: 3,
+                dashArray: '8,5',
+                opacity: 0.85,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                pane: 'mrk' as any,
+              })
+                .bindPopup(popupHtml, { maxWidth: 290, autoPan: true, autoPanPadding: [20, 20] })
+                .bindTooltip(`vyčlenenie → ${assignedName}${loc.is_demo ? ' (DEMO)' : ''}`, { sticky: true })
+                .addTo(mrkGroup)
+            }
           })
 
           // (D) Per-house address points — VZN house geocodes, district-hued.
@@ -869,7 +936,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             overlays[`Bariéry (${barriers.length}, DEMO)`] = barriersGroup
           }
           if (mrkLocalities.length > 0) {
-            overlays[`MRK lokality — body (${mrkLocalities.length}, Atlas MRK)`] = mrkGroup
+            overlays[`MRK lokality — plocha (${mrkLocalities.length}, Atlas MRK)`] = mrkGroup
           }
           const validHousePointsCount = housePoints.filter((hp) => hp.valid !== false).length
           if (validHousePointsCount > 0) {

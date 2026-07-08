@@ -128,10 +128,24 @@ export interface SoMrkOverlay {
 // Locality-level MRK points (mrk_buildings) inside Prešov city districts —
 // powers the "MRK lokality" map layer (item 14) instead of the whole-obec
 // mrk_atlas polygon. geom_geojson is a Point.
+// VLA-16: geographic_district_* is the real district whose polygon actually
+// contains the point (ST_Within, same predicate engine/c_pe.py uses);
+// assigned_district_* is the district the locality is administratively
+// assigned to. When they differ, the locality is excluded into a different
+// (and — per assigned/geographic_distance_m — typically more distant)
+// school district than its geography would suggest.
 export interface SoMrkLocality {
   id: string
   obec_name: string | null
   geom_geojson: Record<string, unknown> | null
+  is_demo: boolean
+  geographic_district_id: string | null
+  geographic_district_name: string | null
+  geographic_distance_m: number | null
+  assigned_district_id: string | null
+  assigned_district_name: string | null
+  assigned_school_geojson: Record<string, unknown> | null
+  assigned_distance_m: number | null
 }
 
 export interface SoFindingsPanelItem {
