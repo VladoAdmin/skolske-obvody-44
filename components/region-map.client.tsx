@@ -701,6 +701,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               fillColor: 'url(#mrkHatch)' as any,
               fillOpacity: 1,
+              className: 'so-mrk-area',
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'mrk' as any,
             })
@@ -715,6 +716,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               color: '#4c1d95',
               weight: 1,
               fillOpacity: 0.9,
+              className: 'so-mrk-anchor',
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'mrk' as any,
             })
@@ -757,6 +759,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 weight: 3,
                 dashArray: '8,5',
                 opacity: 0.85,
+                className: 'so-mrk-exclusion-link',
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 pane: 'mrk' as any,
               })
