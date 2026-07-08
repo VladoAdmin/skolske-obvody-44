@@ -50,9 +50,12 @@ Deferred to backlog per owner's standing decision (same as the two Sprint 3/4
 review findings). None blocks the pagination fix — the E2E gate proves 2974
 segments fetched and rendered.
 
-- `lib/supabase/fetch-all.ts:17` — paging via `.range()` has no deterministic
-  `.order()`; a view could in theory return duplicates/gaps across pages. Add
-  a stable unique ordering parameter.
+- ~~`lib/supabase/fetch-all.ts:17` — paging via `.range()` has no deterministic
+  `.order()`~~ **[FIXED VLA-10]** `fetchAllRows` now takes a required
+  `orderBy` param; `so_district_street_linestrings` gained a genuinely
+  unique `segment_id` column (`scripts/sql/0046_street_segment_id.sql`) since
+  `(district_id, school_id, street, is_fallback_point)` isn't unique — 2863
+  of 2974 rows share it with a sibling segment.
 - `app/map/page.tsx` / `app/districts/[id]/page.tsx` /
   `app/municipalities/[id]/page.tsx` — `catch → []` silently hides fetch
   errors and renders the map without streets (pre-existing pattern). Log or
@@ -101,3 +104,25 @@ ships.
   cards above it; the table itself needs a rewrite against
   `docs/legal-audit-44.md`. The hardcoded engine-version footer on the same
   page is also stale.
+
+## 6. [PRE-EXISTING, NOT CAUSED BY VLA-10] `proof-pack.e2e.mjs` fails to find a clickable point on a highlighted Kúpeľná street
+
+`tests/e2e/proof-pack.e2e.mjs` samples 5 points along each `stroke-width=5`
+(highlighted) SVG path and asserts `document.elementFromPoint` returns that
+same path at at least one point. This currently fails.
+
+**Verified NOT a VLA-10 regression**, by three separate baselines: (1) with
+VLA-10's `.order('segment_id')` applied, (2) with `.order()` disabled but the
+`segment_id`-bearing view still live, (3) fully reverted to unmodified `main`
+— original `so_district_street_linestrings` view, no `.order()`, original
+select lists. All three fail identically and deterministically (3 runs each).
+The other 6 E2E specs (`street-coverage`, `coverage-gaps`, `overlay-toggle`,
+`scenario-filter`, `vla15-evidence-trail`, `vla20-ui-cleanup`) are green on
+VLA-10's branch, including the 2974-segment count this job's acceptance
+criterion depends on.
+
+Root cause not yet isolated (candidate: an overlapping non-highlighted street
+path or a UI layer occluding all 5 sampled sample points on the highlighted
+path — needs a dedicated investigation, out of scope for VLA-10). Deferred to
+backlog; not blocking this job's acceptance criteria, which are scoped to the
+street-count regression signal and the other 6 specs.
