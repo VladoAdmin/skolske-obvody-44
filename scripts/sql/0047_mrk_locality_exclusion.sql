@@ -61,15 +61,15 @@ SELECT
     geo_d.id                                   AS geographic_district_id,
     geo_d.name                                 AS geographic_district_name,
     public.ST_Distance(
-        public.ST_Transform(b.geom, 3857),
-        public.ST_Transform(geo_s.geom, 3857)
+        public.ST_Transform(b.geom, 32634),
+        public.ST_Transform(geo_s.geom, 32634)
     )                                           AS geographic_distance_m,
     asn_d.id                                    AS assigned_district_id,
     asn_d.name                                  AS assigned_district_name,
     public.ST_AsGeoJSON(asn_s.geom)::jsonb     AS assigned_school_geojson,
     public.ST_Distance(
-        public.ST_Transform(b.geom, 3857),
-        public.ST_Transform(asn_s.geom, 3857)
+        public.ST_Transform(b.geom, 32634),
+        public.ST_Transform(asn_s.geom, 32634)
     )                                           AS assigned_distance_m
 FROM skolske_obvody.mrk_buildings b
 LEFT JOIN skolske_obvody.districts geo_d ON public.ST_Within(b.geom, geo_d.geom)
