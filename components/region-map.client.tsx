@@ -125,9 +125,15 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
         maxBounds: [[47.2, 16.5], [49.9, 22.8]] as [[number, number], [number, number]],
         maxBoundsViscosity: 1.0,
         minZoom: 7,
+        zoomControl: false,
       })
 
       mapRef.current = map
+
+      // Default zoom control sits top-left, same corner as the custom
+      // "← Späť na Slovensko" / home buttons below — moved to bottom-right so
+      // it stacks with the attribution control instead of covering them.
+      L.control.zoom({ position: 'bottomright' }).addTo(map)
 
       // Create z-ordering panes
       // MRK pane sits BELOW districts so that, even when the MRK overlay is
