@@ -8,7 +8,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
@@ -128,6 +128,23 @@ async function fetchBarriers(): Promise<SoBarrier[]> {
   }
 }
 
+// VLA-17: 5 longest real walking routes per district (comparison only —
+// no threshold, precomputed by scripts/compute_longest_routes.py).
+async function fetchLongestRoutes(): Promise<SoDistrictLongestRoute[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_district_longest_routes')
+      .select('*')
+      .order('district_id', { ascending: true })
+      .order('rank', { ascending: true })
+    if (error) throw error
+    return (data ?? []) as SoDistrictLongestRoute[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   try {
     const sb = createPublicClient()
@@ -182,7 +199,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -195,6 +212,7 @@ export default async function MapPage() {
     fetchScorecard(),
     fetchCoverageGaps(),
     fetchBarriers(),
+    fetchLongestRoutes(),
   ])
   const isEmpty = features.length === 0
 
@@ -276,6 +294,7 @@ export default async function MapPage() {
                 houseDots={houseDots}
                 coverageGaps={coverageGaps}
                 barriers={barriers}
+                longestRoutes={longestRoutes}
                 findings={findings}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
@@ -320,6 +339,8 @@ export default async function MapPage() {
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#d97706' }}></span> Škola súkromná / cirkevná</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body obvodov (Google geokód, priblížte sa)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-1 rounded-sm" style={{ background: 'hsl(210,75%,40%)' }}></span> 5 najdlhších trás — reálna pešia trasa (Google Maps), porovnanie, nie prah/verdikt</span>
         </p>
       </div>
 

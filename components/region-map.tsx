@@ -1,6 +1,6 @@
 // SSR-safe wrapper: dynamically imports the Leaflet client component
 import dynamic from 'next/dynamic'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -17,6 +17,8 @@ interface RegionMapProps {
   coverageGaps?: SoStreetCoverageGap[]
   // VLA-20 barrier input rows (fictional demo railway → DEMO badge)
   barriers?: SoBarrier[]
+  // VLA-17: 5 longest real walking routes per district (comparison only)
+  longestRoutes?: SoDistrictLongestRoute[]
   findings?: SoFindingsPanelItem[]
   districtSummaries?: Record<string, DistrictPopupSummary>
   initialMode?: 'sk' | 'psk'
@@ -30,6 +32,6 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], coverageGaps = [], barriers = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
-  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} municipalities={municipalities} streetLines={streetLines} housePoints={housePoints} houseDots={houseDots} coverageGaps={coverageGaps} barriers={barriers} findings={findings} districtSummaries={districtSummaries} initialMode={initialMode} />
+export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], coverageGaps = [], barriers = [], longestRoutes = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
+  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} municipalities={municipalities} streetLines={streetLines} housePoints={housePoints} houseDots={houseDots} coverageGaps={coverageGaps} barriers={barriers} longestRoutes={longestRoutes} findings={findings} districtSummaries={districtSummaries} initialMode={initialMode} />
 }
