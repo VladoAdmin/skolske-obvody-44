@@ -126,3 +126,20 @@ path or a UI layer occluding all 5 sampled sample points on the highlighted
 path — needs a dedicated investigation, out of scope for VLA-10). Deferred to
 backlog; not blocking this job's acceptance criteria, which are scoped to the
 street-count regression signal and the other 6 specs.
+
+## #7 — VLA-16 mobile-responsive follow-up: GPT-5.5 non-blocking hardening items (2026-07-10)
+
+From GPT-5.5 review of e110679/ab81a31/0a810ba/d2078c1 (PR #3), logged as
+follow-up, not blocking merge (reported 375px/768px bugs are fixed and
+tested):
+- Bottom-right zoom control untested vs attribution control + MRK exclusion
+  popups; no safe-area-inset handling for iOS home-indicator area.
+- `sm:` (640px) breakpoint untested in 640-767px range; is viewport- not
+  container-based, could reintroduce overlap in a narrower parent.
+- mobile-responsive.e2e.mjs: only checks outer bounding boxes (not text
+  overflow), only checks zoom-vs-back-button (not attribution/popups), no
+  explicit wait for fonts/hydration before assertions, 4px y-tolerance at
+  768px could mask a partial wrap, `deviceScaleFactor: 1.4` is nonstandard
+  vs real-device DPR 2/3.
+- Re-adding `L.control.zoom()` post-construction may change keyboard tab
+  order vs the back button — worth a manual check.
