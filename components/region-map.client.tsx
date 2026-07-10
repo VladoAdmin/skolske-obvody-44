@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, getDistrictHue } from '@/lib/config/region'
-import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
+import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, escapeHtml, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import {
   EVENT_FLYTO,
   EVENT_SELECT_DISTRICT,
@@ -951,7 +951,12 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             if (!route.route_geojson) return
             const distIdx = districtIndexMap.get(route.district_id) ?? 0
             const hue = getDistrictHue(distIdx)
-            const districtName = features.find((f) => f.id === route.district_id)?.name ?? 'obvod'
+            // DB-sourced labels go through Leaflet's innerHTML-based popup/
+            // tooltip rendering — escape them so a street/municipality/
+            // transit-line label ever containing HTML-special characters
+            // renders as text, never as markup (XSS finding, PR #4 review).
+            const districtName = escapeHtml(features.find((f) => f.id === route.district_id)?.name ?? 'obvod')
+            const originLabel = escapeHtml(route.origin_label)
             const km = (route.distance_m / 1000).toFixed(1)
             const min = Math.round(route.duration_s / 60)
             const originKindLabel =
@@ -963,7 +968,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               const tMin = Math.round(route.transit_duration_s / 60)
               transitHtml =
                 `<p style="margin:4px 0;padding-top:4px;border-top:1px solid #e5e7eb">` +
-                `<strong>Prímestská doprava:</strong> ${route.transit_line ?? 'linka MHD'}, ${tKm} km, ${tMin} min</p>`
+                `<strong>Prímestská doprava:</strong> ${escapeHtml(route.transit_line ?? 'linka MHD')}, ${tKm} km, ${tMin} min</p>`
             } else if (route.transit_status) {
               // Attempted but genuinely no route found (low_data/unavailable)
               // — say so, never silently omit or fabricate a number.
@@ -976,7 +981,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               `<div style="font-size:12px;line-height:1.45;max-width:270px">` +
               `<strong>${districtName}</strong><br/>` +
               `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">#${route.rank} najdlhšia trasa</span>` +
-              `<p style="margin:4px 0">Od: <strong>${route.origin_label}</strong> (${originKindLabel})</p>` +
+              `<p style="margin:4px 0">Od: <strong>${originLabel}</strong> (${originKindLabel})</p>` +
               `<p style="margin:4px 0">Pešia trasa: <strong>${km} km</strong>, ${min} min (reálna trasa, Google Maps)</p>` +
               transitHtml +
               `</div>`
@@ -986,7 +991,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               pane: 'routes' as any,
             })
-            layer.bindTooltip(`#${route.rank} · ${route.origin_label} · ${km} km`, { sticky: true })
+            layer.bindTooltip(`#${route.rank} · ${originLabel} · ${km} km`, { sticky: true })
             layer.bindPopup(popupHtml, { maxWidth: 290, autoPan: true, autoPanPadding: [20, 20] })
             layer.addTo(longestRoutesGroup)
           })
