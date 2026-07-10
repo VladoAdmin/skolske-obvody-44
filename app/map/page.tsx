@@ -311,7 +311,9 @@ export default async function MapPage() {
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#7c2d12' }}></span> Bariéra — DEMO (fiktívna železnica, nie je porušenie)</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#7c3aed' }}></span> MRK lokalita — bod (Atlas MRK, budova/lokalita)</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border border-[#4c1d95]" style={{ background: 'repeating-linear-gradient(45deg,#7c3aed,#7c3aed 2px,transparent 2px,transparent 5px)' }}></span> MRK lokalita — plocha (Atlas MRK, budova/lokalita)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#6d28d9' }}></span> Vyčlenenie do vzdialenejšieho obvodu — DEMO (P-e)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#2563eb' }}></span> Škola verejná (mesto Prešov)</span>
           <span className="mx-2">·</span>

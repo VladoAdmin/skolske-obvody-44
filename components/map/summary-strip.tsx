@@ -77,9 +77,9 @@ export function SummaryStrip({ features, findings, coverageGaps = [] }: SummaryS
       aria-label="Súhrnný prehľad pilotu"
       className="rounded-lg border border-border bg-card p-3"
     >
-      <div className="flex flex-wrap items-stretch gap-2">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch gap-2">
         {/* Semafor breakdown */}
-        <ul className="flex flex-1 min-w-0 items-center justify-around gap-1 list-none p-0 m-0">
+        <ul className="flex sm:flex-1 sm:min-w-0 items-center justify-around gap-1 list-none p-0 m-0">
           {SEMAFOR.map(({ color, emoji, label }) => (
             <li key={color} className="flex flex-col items-center px-1">
               <span className="text-lg leading-none" aria-hidden="true">
