@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { getGoogleRoute } from '@/services/routing-google/client'
 
-// Google Directions API responses, mocked — no real network calls. Mirrors
-// the "never fabricate straight-line" contract of services/routing/client.ts:
-// every non-OK API status must map to low_data/unavailable, never a guessed
-// distance.
+// Google Routes API v2 (computeRoutes) responses, mocked — no real network
+// calls. Mirrors the "never fabricate straight-line" contract of
+// services/routing/client.ts: every no-route / error response must map to
+// low_data/unavailable, never a guessed distance.
+//
+// Response shapes verified live against the real API before writing these
+// mocks: no-route -> HTTP 200 with an empty body ({}); auth/request errors
+// -> non-2xx with an { error: ... } body.
 
 const ORIGIN: [number, number] = [21.2611, 49.0014]
 const DEST: [number, number] = [21.24, 49.02]
@@ -44,11 +48,11 @@ describe('getGoogleRoute', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          status: 'OK',
           routes: [
             {
-              legs: [{ distance: { value: 2345.6 }, duration: { value: 1800.2 } }],
-              overview_polyline: { points: 'abc123' },
+              distanceMeters: 2345.6,
+              duration: '1800s',
+              polyline: { encodedPolyline: 'abc123' },
             },
           ],
         })
@@ -66,28 +70,45 @@ describe('getGoogleRoute', () => {
     })
   })
 
+  it('sends travelMode WALK/TRANSIT and the field mask header', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ routes: [{ distanceMeters: 100, duration: '60s', polyline: { encodedPolyline: 'x' } }] })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGoogleRoute({ origin: ORIGIN, destination: DEST, mode: 'transit' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toContain('routes.googleapis.com/directions/v2:computeRoutes')
+    expect(init.method).toBe('POST')
+    expect(init.headers['X-Goog-Api-Key']).toBe('test-key')
+    expect(init.headers['X-Goog-FieldMask']).toContain('transitDetails')
+    const body = JSON.parse(init.body)
+    expect(body.travelMode).toBe('TRANSIT')
+    expect(body.origin.location.latLng).toEqual({ latitude: ORIGIN[1], longitude: ORIGIN[0] })
+  })
+
   it('extracts a transit line label for mode=transit', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
         jsonResponse({
-          status: 'OK',
           routes: [
             {
+              distanceMeters: 9000,
+              duration: '1500s',
+              polyline: { encodedPolyline: 'xyz789' },
               legs: [
                 {
-                  distance: { value: 9000 },
-                  duration: { value: 1500 },
                   steps: [
-                    { travel_mode: 'WALKING' },
+                    { travelMode: 'WALK' },
                     {
-                      travel_mode: 'TRANSIT',
-                      transit_details: { line: { short_name: '22', vehicle: { name: 'Autobus' } } },
+                      travelMode: 'TRANSIT',
+                      transitDetails: { transitLine: { nameShort: '22', vehicle: { name: { text: 'Autobus' } } } },
                     },
                   ],
                 },
               ],
-              overview_polyline: { points: 'xyz789' },
             },
           ],
         })
@@ -100,24 +121,19 @@ describe('getGoogleRoute', () => {
     expect(result.transitLine).toBe('Autobus 22')
   })
 
-  it('returns low_data on ZERO_RESULTS — never fabricates a straight-line distance', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ status: 'ZERO_RESULTS' })))
+  it('returns low_data when the API returns no routes (HTTP 200, empty body) — never fabricates a straight-line distance', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({})))
 
     const result = await getGoogleRoute({ origin: ORIGIN, destination: DEST, mode: 'walking' })
 
     expect(result).toEqual({ status: 'low_data' })
   })
 
-  it('returns unavailable on an API-level error status (e.g. REQUEST_DENIED)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ status: 'REQUEST_DENIED' })))
-
-    const result = await getGoogleRoute({ origin: ORIGIN, destination: DEST, mode: 'walking' })
-
-    expect(result).toEqual({ status: 'unavailable' })
-  })
-
-  it('returns unavailable on a non-2xx HTTP response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({}, false)))
+  it('returns unavailable on a non-2xx HTTP response (e.g. invalid API key)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ error: { code: 400, status: 'INVALID_ARGUMENT' } }, false))
+    )
 
     const result = await getGoogleRoute({ origin: ORIGIN, destination: DEST, mode: 'walking' })
 
