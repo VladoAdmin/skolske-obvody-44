@@ -51,6 +51,7 @@ import time
 import unicodedata
 import urllib.request
 import urllib.error
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -102,10 +103,13 @@ def _directions(origin_lat: float, origin_lon: float, dest_lat: float, dest_lon:
     """
     Call Google Routes API v2 (computeRoutes). Returns dict with keys:
       status ('ok' | 'low_data' | 'unavailable'), distance_m, duration_s,
-      polyline, transit_line, query_used, raw_status.
+      polyline, transit_line, query_used, raw_status, attempts.
     NEVER fabricates a straight-line distance — no route (HTTP 200, empty
     body, verified live) -> low_data; any non-2xx or network failure ->
     unavailable.
+    `attempts` is the number of HTTP requests actually sent (1 + retries) —
+    each is separately billable, so callers must count it, not a flat 1,
+    toward the printed cost estimate.
     """
     query_used = f"{origin_lat},{origin_lon} -> {dest_lat},{dest_lon} (mode={mode})"
     body = json.dumps({
@@ -119,7 +123,9 @@ def _directions(origin_lat: float, origin_lon: float, dest_lat: float, dest_lon:
         "X-Goog-FieldMask": FIELD_MASK,
     }
 
+    attempts = 0
     for attempt in range(MAX_RETRIES + 1):
+        attempts += 1
         try:
             req = urllib.request.Request(ROUTES_URL, data=body, method="POST", headers=headers)
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -130,23 +136,23 @@ def _directions(origin_lat: float, origin_lon: float, dest_lat: float, dest_lon:
                 print(f"    HTTP {e.code}, retry in {wait}s ...")
                 time.sleep(wait)
                 continue
-            return {"status": "unavailable", "raw_status": f"HTTP_{e.code}", "query_used": query_used}
+            return {"status": "unavailable", "raw_status": f"HTTP_{e.code}", "query_used": query_used, "attempts": attempts}
         except Exception as ex:
             if attempt < MAX_RETRIES:
                 time.sleep(2 ** (attempt + 1))
                 continue
-            return {"status": "unavailable", "raw_status": str(ex), "query_used": query_used}
+            return {"status": "unavailable", "raw_status": str(ex), "query_used": query_used, "attempts": attempts}
 
         routes = data.get("routes")
         if not routes:
             # Verified live: HTTP 200 + {} body for a genuinely unroutable pair.
-            return {"status": "low_data", "raw_status": "NO_ROUTES", "query_used": query_used}
+            return {"status": "low_data", "raw_status": "NO_ROUTES", "query_used": query_used, "attempts": attempts}
 
         route = routes[0]
         distance = route.get("distanceMeters")
         duration = _parse_duration_seconds(route.get("duration"))
         if distance is None or duration is None:
-            return {"status": "low_data", "raw_status": "MISSING_FIELDS", "query_used": query_used}
+            return {"status": "low_data", "raw_status": "MISSING_FIELDS", "query_used": query_used, "attempts": attempts}
 
         transit_line = None
         if mode == "transit":
@@ -167,9 +173,10 @@ def _directions(origin_lat: float, origin_lon: float, dest_lat: float, dest_lon:
             "polyline": (route.get("polyline") or {}).get("encodedPolyline"),
             "transit_line": transit_line,
             "query_used": query_used,
+            "attempts": attempts,
         }
 
-    return {"status": "unavailable", "raw_status": "MAX_RETRIES", "query_used": query_used}
+    return {"status": "unavailable", "raw_status": "MAX_RETRIES", "query_used": query_used, "attempts": attempts}
 
 
 # ── Polyline decode (standard Google encoded-polyline algorithm) ───────────
@@ -243,7 +250,7 @@ def _load_street_geocode_candidates(district_id: str) -> list[dict]:
     rows = query_sql(f"""
         SELECT id, street AS label, lat, lon
         FROM skolske_obvody.street_geocodes
-        WHERE district_id = '{district_id}'::uuid AND status = 'OK'
+        WHERE district_id = {_dq(district_id)}::uuid AND status = 'OK'
         ORDER BY street
     """)
     for r in rows:
@@ -260,7 +267,7 @@ def _load_shared_municipality_candidates(district_name: str, shared_names_raw: l
     # Matched via unaccent() — the VZN-parsed name and the WFS municipalities
     # table disagree on diacritics for at least one real name ("Dulová Ves"
     # vs "Dulova Ves"); exact matching silently drops those candidates.
-    placeholders = ",".join("unaccent('" + n.replace("'", "''") + "')" for n in cleaned)
+    placeholders = ",".join(f"unaccent({_dq(n)})" for n in cleaned)
     rows = query_sql(f"""
         SELECT id, name AS label,
                public.ST_Y(public.ST_Centroid(geom)) AS lat,
@@ -281,15 +288,29 @@ def _load_shared_municipality_candidates(district_name: str, shared_names_raw: l
 
 # ── DB upsert ─────────────────────────────────────────────────────────────────
 
-def _dq(tag: str, val: str) -> str:
-    return f"$__{tag}__${val}$__{tag}__$"
+def _dq(val: str) -> str:
+    """
+    Dollar-quote a SQL string value with a fresh random tag.
+
+    f2_exec_sql/f2_query_sql (ingest/supabase_client.py) take a single raw
+    SQL string over PostgREST RPC — there is no native bind-parameter
+    support to hand off to, so a per-call random tag is the equivalent of a
+    parameterized placeholder here: unlike a fixed tag reused across calls,
+    a value can never contain (and thus cannot break out of) a tag it had
+    no way to predict.
+    """
+    for _ in range(8):
+        tag = f"$__q{uuid.uuid4().hex}__$"
+        if tag not in val:
+            return f"{tag}{val}{tag}"
+    raise ValueError("could not generate a collision-free SQL dollar-quote tag")
 
 
 def _replace_district_routes(district_id: str, ranked: list[dict]) -> None:
     """Delete this district's existing routes, insert the fresh top-N.
     Re-run-safe: a re-run with fewer successful routes than last time must
     not leave stale higher-rank rows behind."""
-    del_sql = f"DELETE FROM skolske_obvody.district_longest_routes WHERE district_id = '{district_id}'::uuid"
+    del_sql = f"DELETE FROM skolske_obvody.district_longest_routes WHERE district_id = {_dq(district_id)}::uuid"
     result = exec_sql(del_sql)
     if not result.get("ok"):
         print(f"    DELETE ERROR: {result.get('message')}")
@@ -297,16 +318,16 @@ def _replace_district_routes(district_id: str, ranked: list[dict]) -> None:
 
     for row in ranked:
         origin_geom = f"public.ST_SetSRID(public.ST_MakePoint({row['lon']}, {row['lat']}), 4326)"
-        route_geom = f"public.ST_SetSRID(public.ST_GeomFromText({_dq('rg', row['route_wkt'])}), 4326)"
+        route_geom = f"public.ST_SetSRID(public.ST_GeomFromText({_dq(row['route_wkt'])}), 4326)"
 
-        transit_status_sql = _dq("tst", row["transit_status"]) if row.get("transit_status") else "NULL"
+        transit_status_sql = _dq(row["transit_status"]) if row.get("transit_status") else "NULL"
         transit_dist_sql = row["transit_distance_m"] if row.get("transit_distance_m") is not None else "NULL"
         transit_dur_sql = row["transit_duration_s"] if row.get("transit_duration_s") is not None else "NULL"
         transit_geom_sql = (
-            f"public.ST_SetSRID(public.ST_GeomFromText({_dq('tg', row['transit_route_wkt'])}), 4326)"
+            f"public.ST_SetSRID(public.ST_GeomFromText({_dq(row['transit_route_wkt'])}), 4326)"
             if row.get("transit_route_wkt") else "NULL"
         )
-        transit_line_sql = _dq("tl", row["transit_line"]) if row.get("transit_line") else "NULL"
+        transit_line_sql = _dq(row["transit_line"]) if row.get("transit_line") else "NULL"
 
         provenance = json.dumps({
             "source": "Google Maps Directions API (walking)",
@@ -321,10 +342,10 @@ INSERT INTO skolske_obvody.district_longest_routes
    duration_s, route_geom, transit_status, transit_distance_m,
    transit_duration_s, transit_geom, transit_line, provenance)
 VALUES (
-  '{district_id}'::uuid,
+  {_dq(district_id)}::uuid,
   {row['rank']},
-  {_dq('ok', row['origin_kind'])},
-  {_dq('ol', row['label'])},
+  {_dq(row['origin_kind'])},
+  {_dq(row['label'])},
   {origin_geom},
   {row['distance_m']},
   {row['duration_s']},
@@ -334,7 +355,7 @@ VALUES (
   {transit_dur_sql},
   {transit_geom_sql},
   {transit_line_sql},
-  {_dq('prov', provenance)}::jsonb
+  {_dq(provenance)}::jsonb
 )
 """
         result = exec_sql(sql)
@@ -402,8 +423,8 @@ def main() -> None:
         successful: list[dict] = []
         for c in cands:
             res = _directions(c["lat"], c["lon"], school_lat, school_lon, "walking")
-            stats["calls"] += 1
-            stats["walk_calls"] += 1
+            stats["calls"] += res["attempts"]
+            stats["walk_calls"] += res["attempts"]
             stats[res["status"]] = stats.get(res["status"], 0) + 1
             if res["status"] == "ok":
                 c["distance_m"] = res["distance_m"]
@@ -443,8 +464,8 @@ def main() -> None:
 
             if c["origin_kind"] == "shared_municipality":
                 tr = _directions(c["lat"], c["lon"], school_lat, school_lon, "transit")
-                stats["calls"] += 1
-                stats["transit_calls"] += 1
+                stats["calls"] += tr["attempts"]
+                stats["transit_calls"] += tr["attempts"]
                 stats[tr["status"]] = stats.get(tr["status"], 0) + 1
                 row["transit_status"] = tr["status"]
                 if tr["status"] == "ok":
