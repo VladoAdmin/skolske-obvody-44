@@ -143,3 +143,55 @@ tested):
   vs real-device DPR 2/3.
 - Re-adding `L.control.zoom()` post-construction may change keyboard tab
   order vs the back button — worth a manual check.
+
+## #8 — [PRE-EXISTING, NOT CAUSED BY VLA-18] `districts.geom` polygon coverage hole at Sekčov (2.70 km²)
+
+Found during VLA-18's investigation of whether a real street/district data
+gap remains to mock-fill (`log/2026-07-11-vla-18-datagap-mock.md` §2).
+`ingest.build_street_districts.check_coverage()` reports 96.0% polygon
+coverage of the municipality boundary (67.55 / 70.39 km²), 2.836 km² of
+holes across 30 disjoint pieces. One hole dominates: **270.36 ha (2.70 km²)**
+centered on the Sekčov housing estate (48.99491, 21.29922); the other 29 are
+slivers under 6 ha each.
+
+**Root cause:** `ingest/build_street_districts.py`'s `ASSIGN_SQL` uses
+`INNER JOIN ... ON ST_Contains(cell_geom, seed.geom)` to assign Voronoi
+cells to district seeds — an `INNER JOIN` silently drops any Voronoi cell
+that doesn't strictly contain a seed point. At Sekčov's seed density (many
+streets, many house points, tight spacing) this drops real cells from the
+polygon union. Confirmed NOT a data problem: `check_overlaps()` returns 0
+double-claimed pairs, `house_geocodes` inside the hole = 0 (no
+under-geocoded cluster), and every street touching the hole (Bajkalská,
+Sekčovská, Terchovská, Levočská, Duklianska, Prostějovská, Antona
+Prídavka, K Surdoku, Ku Kráľovej hore, Jána Hollého, Jilemnického,
+Raymanova, Teriakovská) has a real row in
+`skolske_obvody.vzn_street_ranges` assigning it to a real district. This is
+a Voronoi-tessellation join artifact in the polygon builder, unrelated to
+VLA-14/18/20's street-coverage work.
+
+**Not user-visible today:** `districts.geom` / `geom_geojson` is fetched by
+`so_district_map_features` but not rendered by any map component — the
+streets-pivot sprint (VLA-16) switched rendering to street linestrings only
+(`app/map/page.tsx:82-84`; confirmed by grep of `region-map.client.tsx` and
+`district-detail-map.client.tsx`, neither references `geom_geojson`).
+
+**Not fixed here** — this is a geometry-algorithm bug in
+`ingest/build_street_districts.py` (change the join to preserve
+seedless-but-covered cells, or fall back to nearest-seed assignment),
+categorically different work from VLA-18's mock-assignment scope, and has
+zero current user impact since the polygon layer is dead in the UI.
+
+## #9 — [PRE-EXISTING, NOT CAUSED BY VLA-18] `rest-smoke.test.ts` scorecard test asserts a stale `condition_order` upper bound
+
+`tests/integration/rest-smoke.test.ts` — "should expose so_district_scorecard
+with condition_order 1-9" asserts `condition_order <= 9`; the live
+`so_district_scorecard` view returns `condition_order = 10` for the `JAZYK`
+(language) condition. Confirmed pre-existing on the VLA-18 branch base
+(`git show 1163ecd:tests/integration/rest-smoke.test.ts` already has the
+`1-9` hardcoded bound, before any VLA-18 commit touched this file), and the
+view's `CASE WHEN 'JAZYK' THEN 10` has existed since `scripts/sql/
+0033_jazyk_label_views.sql` (commit `397919c`) — the smoke test's upper
+bound has been stale since then, unrelated to any recent VLA ticket. Not
+fixed here: out of VLA-18's scope and the test assertion, not the
+underlying data, is what's wrong. Needs the upper bound updated to the
+live condition count (data-driven, not re-hardcoded) in a follow-up.
