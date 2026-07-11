@@ -34,7 +34,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawRows, error: scorecardError },
     { data: allFeatures },
     { data: rawSchools },
-    rawStreetLines,
+    { data: rawStreetLines, error: streetLinesError },
     { data: rawAllScorecard },
     { data: rawFindings },
     { data: rawAddressStats },
@@ -45,12 +45,16 @@ export default async function DistrictPage({ params }: Props) {
     sb.from('so_school_markers').select('*'),
     // Streets pivot: the detail map uses the SAME street source as the main map.
     // Paged (>1000 rows, PostgREST cap) — see lib/supabase/fetch-all.ts.
+    // VLA-11: a real fetch failure must be visible, not indistinguishable
+    // from "this district genuinely has no streets".
     fetchAllRows<SoDistrictStreetLine>(
       sb,
       'so_district_street_linestrings',
       'district_id,school_id,street,is_fallback_point,linestring_geojson,segment_id',
       'segment_id'
-    ).catch(() => [] as SoDistrictStreetLine[]),
+    )
+      .then((data) => ({ data, error: null as unknown }))
+      .catch((error) => ({ data: [] as SoDistrictStreetLine[], error })),
     sb.from('so_district_scorecard').select('district_id,condition_label_sk,condition_order,value,confidence,composition_color'),
     sb.from('so_findings_panel').select('district_id,status'),
     sb.from('so_district_address_stats').select('*').eq('district_id', id),
@@ -63,6 +67,10 @@ export default async function DistrictPage({ params }: Props) {
   ])
 
   if (scorecardError) throw scorecardError
+
+  if (streetLinesError) {
+    console.error(`[districts/${id}] street-line fetch failed:`, streetLinesError)
+  }
 
   const rows = (rawRows ?? []) as DistrictScorecardRow[]
   const features = (allFeatures ?? []) as DistrictMapFeature[]
@@ -169,6 +177,16 @@ export default async function DistrictPage({ params }: Props) {
           )}
         </div>
       </div>
+
+      {Boolean(streetLinesError) && (
+        <Alert variant="destructive">
+          <AlertTitle>Chyba načítania ulíc</AlertTitle>
+          <AlertDescription>
+            Nepodarilo sa načítať ulice tohto obvodu z databázy. Mapa nižšie môže byť neúplná —
+            toto nie je to isté ako obvod bez ulíc.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Full-width detail map — SAME street rendering as the main map */}
       <DistrictDetailMap

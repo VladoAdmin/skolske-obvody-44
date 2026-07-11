@@ -4,6 +4,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import type { DistrictMapFeature, MunicipalitySummary, SoDistrictStreetLine } from '@/lib/supabase/types'
 import { RegionMap } from '@/components/region-map'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
 import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
@@ -17,22 +18,32 @@ export default async function MunicipalityDetailPage({ params }: Props) {
   const { id } = params
   const sb = createPublicClient()
 
-  const [summaryRes, featuresRes, streetLines] = await Promise.all([
+  const [summaryRes, featuresRes, streetLinesRes] = await Promise.all([
     sb.from('so_municipalities_summary').select('*').eq('municipality_id', id).maybeSingle(),
     sb.from('so_district_map_features').select('*'),
     // Paged (>1000 rows, PostgREST cap) — see lib/supabase/fetch-all.ts.
+    // VLA-11: a real fetch failure must be visible, not indistinguishable
+    // from "this municipality genuinely has no streets".
     fetchAllRows<SoDistrictStreetLine>(
       sb,
       'so_district_street_linestrings',
       'district_id,school_id,street,is_fallback_point,linestring_geojson,segment_id',
       'segment_id'
-    ).catch(() => [] as SoDistrictStreetLine[]),
+    )
+      .then((data) => ({ data, error: null as unknown }))
+      .catch((error) => ({ data: [] as SoDistrictStreetLine[], error })),
   ])
 
   const summary = summaryRes.data as MunicipalitySummary | null
   // If no summary, municipality is not Prešov or doesn't exist
   if (!summary) notFound()
 
+  const streetLinesError = streetLinesRes.error
+  if (streetLinesError) {
+    console.error(`[municipalities/${id}] street-line fetch failed:`, streetLinesError)
+  }
+
+  const streetLines = streetLinesRes.data
   const features = (featuresRes.data ?? []) as DistrictMapFeature[]
 
   return (
@@ -53,6 +64,16 @@ export default async function MunicipalityDetailPage({ params }: Props) {
           <span className="text-green-700">✓ {summary.green_districts_count} GREEN</span>
           <span className="text-gray-500">? {summary.none_districts_count} NONE</span>
         </div>
+      )}
+
+      {Boolean(streetLinesError) && (
+        <Alert variant="destructive">
+          <AlertTitle>Chyba načítania ulíc</AlertTitle>
+          <AlertDescription>
+            Nepodarilo sa načítať ulice tejto obce z databázy. Mapa nižšie môže byť neúplná —
+            toto nie je to isté ako obec bez ulíc.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Mini map */}
