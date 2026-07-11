@@ -107,6 +107,8 @@ export interface SoEngineMetadata {
   districts_count: number
   schools_count: number
   open_findings_count: number
+  street_real_count: number
+  street_mock_count: number
 }
 
 export interface SoSchoolMarker {
