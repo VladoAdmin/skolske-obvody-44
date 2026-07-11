@@ -45,6 +45,9 @@ class SchoolDistrict:
     street_qualifiers: dict[str, str] = field(default_factory=dict)
     # Shared district municipalities
     shared_municipalities: list[str] = field(default_factory=list)
+    # Grade range per shared municipality (e.g. "5. – 9. ročníka"), only for
+    # municipalities where the VZN states one explicitly — see VLA-21.
+    shared_municipality_grades: dict[str, str] = field(default_factory=dict)
     vzn_article: str = "Článok 3"
     vzn_source_text: str = ""
 
@@ -161,7 +164,7 @@ def parse_vzn_text(text: str = VZN_FULL_TEXT) -> list[SchoolDistrict]:
         streets, qualifiers = _parse_street_list(streets_text)
 
         # Parse shared municipalities
-        shared = _parse_shared_municipalities(obec_text)
+        shared, shared_grades = _parse_shared_municipalities(obec_text)
 
         district = SchoolDistrict(
             district_number=num,
@@ -170,6 +173,7 @@ def parse_vzn_text(text: str = VZN_FULL_TEXT) -> list[SchoolDistrict]:
             streets=streets,
             street_qualifiers=qualifiers,
             shared_municipalities=shared,
+            shared_municipality_grades=shared_grades,
             vzn_source_text=match.group(0).strip(),
         )
         districts.append(district)
@@ -231,20 +235,44 @@ def _split_respecting_parens(text: str) -> list[str]:
     return parts
 
 
-def _parse_shared_municipalities(text: str) -> list[str]:
-    """Parse 'Obec:' section to extract municipality names."""
+def _parse_shared_municipalities(text: str) -> tuple[list[str], dict[str, str]]:
+    """Parse 'Obec:' section to extract municipality names and, where the VZN
+    states one explicitly, each municipality's grade range (e.g. VLA-21:
+    "Gregorovce (žiaci 5. – 9. ročníka)" -> name "Gregorovce", grade
+    "5. – 9. ročníka"). A municipality's parenthetical may also carry a
+    street sub-list ("(žiaci 1. – 9. ročníka; ulica: Hlavná, ...)") — that is
+    one single paren group in the source text, so a naive comma-split would
+    shatter it; reuse the same paren-aware splitter street parsing already
+    uses (_split_respecting_parens) instead of duplicating that logic.
+
+    Returns (names, grades) — grades maps name -> grade range string, only
+    for municipalities where the VZN states a grade explicitly.
+    """
     if not text or text.strip() in ("", "–"):
-        return []
+        return [], {}
 
-    # Remove grade qualifiers like "(žiaci 5. – 9. ročníka)"
-    text = re.sub(r"\s*\(žiaci[^)]*\)\s*", " ", text)
-    # Remove street sub-lists like "(ulica: ...)"
-    text = re.sub(r"\s*\(ulica:[^)]*\)\s*", " ", text)
-    text = re.sub(r"\s*;.*$", "", text, flags=re.MULTILINE)
+    # Strip the sentence-final period ending the whole "Obec: ..." clause
+    # (distinct from any period inside a grade range like "5.").
+    parts = _split_respecting_parens(text.strip().rstrip("."))
 
-    # Split by comma or semicolon
-    parts = re.split(r"[,;]", text)
-    return [p.strip() for p in parts if p.strip()]
+    names: list[str] = []
+    grades: dict[str, str] = {}
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        m = re.match(r"^(.+?)\s*\(([^)]*)\)\s*$", part)
+        if not m:
+            names.append(part)
+            continue
+        name = m.group(1).strip()
+        paren_content = m.group(2).strip()
+        names.append(name)
+        grade_match = re.match(r"^žiaci\s+([^;]+?)\s*(?:;.*)?$", paren_content)
+        if grade_match:
+            grades[name] = grade_match.group(1).strip()
+
+    return names, grades
 
 
 def geocode_street_nominatim(
