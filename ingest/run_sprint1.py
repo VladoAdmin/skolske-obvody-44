@@ -92,6 +92,7 @@ def load_districts(
             "streets": d.streets,
             "street_qualifiers": d.street_qualifiers,
             "shared_municipalities": d.shared_municipalities,
+            "shared_municipality_grades": d.shared_municipality_grades,
             "streets_count": len(d.streets),
             "municipality_nuts": MUNICIPALITY_NUTS,
         }

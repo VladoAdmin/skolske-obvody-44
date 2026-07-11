@@ -8,7 +8,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoEngineMetadata } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoEngineMetadata, SoSharedMunicipalityArea } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
@@ -157,6 +157,22 @@ async function fetchEngineMetadata(): Promise<SoEngineMetadata | null> {
   }
 }
 
+// VLA-21: municipalities pooled into a district's shared catchment
+// (VZN grades 5-9 / 1-9), rendered as real polygon areas coloured by the
+// owning district — descriptive/geographic only, never a § 44 verdict.
+async function fetchSharedMunicipalityAreas(): Promise<SoSharedMunicipalityArea[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_shared_municipality_areas')
+      .select('*')
+    if (error) throw error
+    return (data ?? []) as SoSharedMunicipalityArea[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   try {
     const sb = createPublicClient()
@@ -211,7 +227,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata, sharedMunicipalityAreas] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -226,6 +242,7 @@ export default async function MapPage() {
     fetchBarriers(),
     fetchLongestRoutes(),
     fetchEngineMetadata(),
+    fetchSharedMunicipalityAreas(),
   ])
   const isEmpty = features.length === 0
 
@@ -315,6 +332,7 @@ export default async function MapPage() {
                 coverageGaps={coverageGaps}
                 barriers={barriers}
                 longestRoutes={longestRoutes}
+                sharedMunicipalityAreas={sharedMunicipalityAreas}
                 findings={findings}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
@@ -345,6 +363,8 @@ export default async function MapPage() {
       <div className="hidden md:block">
         <p className="text-xs text-muted-foreground mt-2">
           Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-1 rounded-sm" style={{ background: 'hsl(210,70%,45%)' }}></span> Ulice obvodu (farba podľa školy)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border" style={{ background: 'hsla(210,65%,55%,.5)', borderColor: 'hsl(210,70%,32%)' }}></span> Obce spoločného obvodu (farba podľa obvodu, kliknutím škola + ročníky)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#dc2626' }}></span> VZN medzera — ulica bez obvodu (nález § 44)</span>
           <span className="mx-2">·</span>
