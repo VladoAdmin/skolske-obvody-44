@@ -46,6 +46,21 @@ describe('Supabase REST smoke tests (prod, read-only)', () => {
     expect(meta.districts_count).toBe(12)
   })
 
+  // VLA-18: real vs. mock street counters (scripts/sql/0049) — public wrapper
+  // must expose both, since a `SELECT *` view freezes its column list at
+  // CREATE time and would silently omit new base-view columns otherwise.
+  it.skipIf(skip)('should expose so_engine_metadata street_real_count and street_mock_count', async () => {
+    const result = await fetchRest('/so_engine_metadata?select=street_real_count,street_mock_count')
+    expect(result.status).toBe(200)
+    expect(result.data).toHaveLength(1)
+
+    const meta = result.data[0]
+    expect(typeof meta.street_real_count).toBe('number')
+    expect(typeof meta.street_mock_count).toBe('number')
+    expect(meta.street_real_count).toBeGreaterThan(0)
+    expect(meta.street_mock_count).toBeGreaterThanOrEqual(0)
+  })
+
   it.skipIf(skip)('should expose so_district_map_features with exactly 12 districts', async () => {
     const result = await fetchRest('/so_district_map_features?select=id,name,composition_color')
     expect(result.status).toBe(200)
