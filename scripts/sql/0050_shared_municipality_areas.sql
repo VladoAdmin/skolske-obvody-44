@@ -18,11 +18,28 @@
 --   "5. – 9. ročníka", only where the VZN states one explicitly). This view
 --   unnests that list, resolves each name to its real polygon in
 --   skolske_obvody.municipalities (PSK WFS, geo-psk:admunit_municipalities)
---   via unaccent() — the VZN spelling and WFS spelling disagree on
+--   via lower(unaccent(...)) — the VZN spelling and WFS spelling disagree on
 --   diacritics for at least one real name ("Dulová Ves" vs "Dulova Ves"),
 --   confirmed live in the VLA-21 investigation log; exact match silently
---   drops that municipality. Same join pattern as VLA-17's
---   scripts/compute_longest_routes.py::_load_shared_municipality_candidates.
+--   drops that municipality. lower() guards against casing drift between
+--   the two sources on top of the diacritics drift. Same join pattern as
+--   VLA-17's scripts/compute_longest_routes.py::_load_shared_municipality_candidates.
+--
+--   Name is NOT unique in skolske_obvody.municipalities: 16 names are
+--   shared by 2-3 municipalities across PSK (e.g. "Gerlachov", "Lúčka" x3;
+--   `SELECT unaccent(name), count(*) FROM skolske_obvody.municipalities
+--   GROUP BY unaccent(name) HAVING count(*) > 1`). The table has no
+--   okres/admin-code discriminator narrower than `region_id` — and
+--   `region_id` is useless here, every one of these rows shares the same
+--   region_id (the whole Prešovský samosprávny kraj is one region in this
+--   schema). In the absence of a real admin-code column, the join picks the
+--   candidate whose centroid is geographically nearest to the district's
+--   own home municipality (districts.municipality_id) — a shared
+--   municipality is by VZN definition a neighbour of the school's
+--   municipality, so "nearest same-named candidate" resolves to the
+--   correct polygon deterministically instead of an arbitrary/Cartesian
+--   match. Verified live: every duplicated name has an unambiguous nearest
+--   candidate (12-60km gap to the next-nearest same-named municipality).
 --
 --   One row per (district, shared municipality) pair — a municipality
 --   shared by two districts' catchments would appear twice, once per owning
@@ -41,16 +58,24 @@ SELECT
   (
     SELECT value
     FROM jsonb_each_text(COALESCE(d.metadata->'shared_municipality_grades', '{}'::jsonb))
-    WHERE unaccent(key) = unaccent(sm.name)
+    WHERE lower(unaccent(key)) = lower(unaccent(sm.name))
     LIMIT 1
   ) AS grade_range,
   public.ST_AsGeoJSON(m.geom)::jsonb AS geom_geojson
 FROM skolske_obvody.districts d
+JOIN skolske_obvody.municipalities home ON home.id = d.municipality_id
 CROSS JOIN LATERAL jsonb_array_elements_text(
   COALESCE(d.metadata->'shared_municipalities', '[]'::jsonb)
 ) AS sm(name)
-JOIN skolske_obvody.municipalities m
-  ON unaccent(m.name) = unaccent(sm.name)
-WHERE m.geom IS NOT NULL;
+JOIN LATERAL (
+  SELECT cand.id, cand.name, cand.geom
+  FROM skolske_obvody.municipalities cand
+  WHERE lower(unaccent(cand.name)) = lower(unaccent(sm.name))
+    AND cand.geom IS NOT NULL
+  ORDER BY public.ST_DistanceSphere(
+    public.ST_Centroid(cand.geom), public.ST_Centroid(home.geom)
+  ) ASC
+  LIMIT 1
+) m ON true;
 
 GRANT SELECT ON public.so_shared_municipality_areas TO anon, authenticated, service_role;
