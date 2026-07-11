@@ -8,7 +8,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoEngineMetadata } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
@@ -145,6 +145,18 @@ async function fetchLongestRoutes(): Promise<SoDistrictLongestRoute[]> {
   }
 }
 
+// VLA-18: engine_metadata street real/mock counters for the SummaryStrip.
+async function fetchEngineMetadata(): Promise<SoEngineMetadata | null> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb.from('so_engine_metadata').select('*').single()
+    if (error) throw error
+    return data as SoEngineMetadata
+  } catch {
+    return null
+  }
+}
+
 async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   try {
     const sb = createPublicClient()
@@ -199,7 +211,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -213,6 +225,7 @@ export default async function MapPage() {
     fetchCoverageGaps(),
     fetchBarriers(),
     fetchLongestRoutes(),
+    fetchEngineMetadata(),
   ])
   const isEmpty = features.length === 0
 
@@ -245,7 +258,7 @@ export default async function MapPage() {
       </div>
 
       {/* High-level pilot summary — first thing visible, above the fold on mobile */}
-      <SummaryStrip features={features} findings={findings} coverageGaps={coverageGaps} />
+      <SummaryStrip features={features} findings={findings} coverageGaps={coverageGaps} engineMetadata={engineMetadata} />
 
       {isEmpty && (
         <Alert>
