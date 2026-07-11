@@ -1,4 +1,4 @@
-import type { DistrictMapFeature, SoFindingsPanelItem, SoStreetCoverageGap } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoFindingsPanelItem, SoStreetCoverageGap, SoEngineMetadata } from '@/lib/supabase/types'
 import type { CompositionColor } from '@/lib/compliance/colors'
 import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
 
@@ -7,6 +7,8 @@ interface SummaryStripProps {
   findings: SoFindingsPanelItem[]
   // VLA-14: engine-classified uncovered streets (vzn_gap / data_gap)
   coverageGaps?: SoStreetCoverageGap[]
+  // VLA-18: real vs. mock street counts from engine_metadata
+  engineMetadata?: SoEngineMetadata | null
 }
 
 // VLA-14 coverage-gap counter. Shown in BOTH display modes: the owner mandate
@@ -21,6 +23,28 @@ function CoverageGapCounts({ coverageGaps }: { coverageGaps: SoStreetCoverageGap
         <dt className="text-[10px] text-muted-foreground leading-tight order-2">VZN medzera</dt>
         <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-red-700">
           {vznGaps}
+        </dd>
+      </div>
+    </dl>
+  )
+}
+
+// VLA-18: register-street real/mock counters from engine_metadata, shown
+// alongside CoverageGapCounts (vzn_gap). Counts come straight from the
+// engine view — never derived here.
+function StreetRealMockCounts({ metadata }: { metadata: SoEngineMetadata }) {
+  return (
+    <dl className="flex items-center justify-around gap-3 sm:gap-4 list-none m-0 px-1">
+      <div className="flex flex-col items-center" data-testid="summary-street-real">
+        <dt className="text-[10px] text-muted-foreground leading-tight order-2">Ulice reálne</dt>
+        <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-green-700">
+          {metadata.street_real_count}
+        </dd>
+      </div>
+      <div className="flex flex-col items-center" data-testid="summary-street-mock">
+        <dt className="text-[10px] text-muted-foreground leading-tight order-2">Ulice DEMO</dt>
+        <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1 text-amber-700">
+          {metadata.street_mock_count}
         </dd>
       </div>
     </dl>
@@ -43,7 +67,7 @@ const SEMAFOR: { color: CompositionColor; emoji: string; label: string }[] = [
  * compliance analysis lives in step 2. The strip shows only the obvod count.
  * Verdicts stay computed internally (engine SSOT); gated by SHOW_COMPLIANCE.
  */
-export function SummaryStrip({ features, findings, coverageGaps = [] }: SummaryStripProps) {
+export function SummaryStrip({ features, findings, coverageGaps = [], engineMetadata }: SummaryStripProps) {
   const counts: Record<CompositionColor, number> = { RED: 0, ORANGE: 0, GREEN: 0, NONE: 0 }
   for (const f of features) {
     const c = (f.composition_color as CompositionColor) ?? 'NONE'
@@ -66,6 +90,7 @@ export function SummaryStrip({ features, findings, coverageGaps = [] }: SummaryS
               Mesto Prešov — každý obvod má vlastnú farbu podľa školy
             </span>
           </div>
+          {engineMetadata && <StreetRealMockCounts metadata={engineMetadata} />}
           {coverageGaps.length > 0 && <CoverageGapCounts coverageGaps={coverageGaps} />}
         </div>
       </section>
@@ -113,6 +138,13 @@ export function SummaryStrip({ features, findings, coverageGaps = [] }: SummaryS
             </dd>
           </div>
         </dl>
+
+        {engineMetadata && (
+          <>
+            <div className="hidden sm:block w-px bg-border" aria-hidden="true" />
+            <StreetRealMockCounts metadata={engineMetadata} />
+          </>
+        )}
 
         {coverageGaps.length > 0 && (
           <>
