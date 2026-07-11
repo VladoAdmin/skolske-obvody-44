@@ -2,9 +2,9 @@
 
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, getDistrictHue } from '@/lib/config/region'
-import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
+import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, escapeHtml, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import {
   EVENT_FLYTO,
   EVENT_SELECT_DISTRICT,
@@ -45,6 +45,9 @@ interface RegionMapClientProps {
   // VLA-20: barrier input rows — the seeded railway is FICTIONAL (is_demo),
   // so the layer must always badge demo rows as DEMO.
   barriers?: SoBarrier[]
+  // VLA-17: 5 longest real walking routes per district (comparison/overview
+  // only — no threshold, never feeds the § 44 semaphore).
+  longestRoutes?: SoDistrictLongestRoute[]
   // Engine findings (§ 44 demo scenarios included) — drives the per-district
   // evidence legend shown on selection. Never used to derive colour/severity
   // client-side; severity/text come straight from the engine output row.
@@ -58,7 +61,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], coverageGaps = [], barriers = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], coverageGaps = [], barriers = [], longestRoutes = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
@@ -147,6 +150,10 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
       overlapsPane.style.zIndex = '470'
       // Apply multiply blend mode so stacked overlap polygons darken additively
       overlapsPane.style.mixBlendMode = 'multiply'
+      // Longest-route polylines sit above district street lines so a route
+      // is never hidden underneath a street stroke, but below schools.
+      const routesPane = map.createPane('routes')
+      routesPane.style.zIndex = '480'
       const schoolsPane = map.createPane('schools')
       schoolsPane.style.zIndex = '700'
       const streetPointsPane = map.createPane('streetPoints')
@@ -932,6 +939,64 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           ;(window as unknown as { __soGapCategories?: Record<string, string> }).__soGapCategories =
             gapCategories
 
+          // (D4) VLA-17 — 5 longest real walking routes per district (Google
+          // Maps, precomputed). Comparison/overview ONLY — no threshold, no
+          // pass/fail, never feeds the § 44 semaphore. OFF by default, same
+          // as MRK localities / address dots (analytical overlay, not a
+          // structural finding). The transit alternative for
+          // shared-municipality origins is TEXT in the popup ("linka/čas"
+          // per the job spec), not a second polyline.
+          const longestRoutesGroup = L.featureGroup()
+          longestRoutes.forEach((route) => {
+            if (!route.route_geojson) return
+            const distIdx = districtIndexMap.get(route.district_id) ?? 0
+            const hue = getDistrictHue(distIdx)
+            // DB-sourced labels go through Leaflet's innerHTML-based popup/
+            // tooltip rendering — escape them so a street/municipality/
+            // transit-line label ever containing HTML-special characters
+            // renders as text, never as markup (XSS finding, PR #4 review).
+            const districtName = escapeHtml(features.find((f) => f.id === route.district_id)?.name ?? 'obvod')
+            const originLabel = escapeHtml(route.origin_label)
+            const km = (route.distance_m / 1000).toFixed(1)
+            const min = Math.round(route.duration_s / 60)
+            const originKindLabel =
+              route.origin_kind === 'shared_municipality' ? 'susedná obec (spoločný obvod)' : 'ulica obvodu'
+
+            let transitHtml = ''
+            if (route.transit_status === 'ok' && route.transit_distance_m != null && route.transit_duration_s != null) {
+              const tKm = (route.transit_distance_m / 1000).toFixed(1)
+              const tMin = Math.round(route.transit_duration_s / 60)
+              transitHtml =
+                `<p style="margin:4px 0;padding-top:4px;border-top:1px solid #e5e7eb">` +
+                `<strong>Prímestská doprava:</strong> ${escapeHtml(route.transit_line ?? 'linka MHD')}, ${tKm} km, ${tMin} min</p>`
+            } else if (route.transit_status) {
+              // Attempted but genuinely no route found (low_data/unavailable)
+              // — say so, never silently omit or fabricate a number.
+              transitHtml =
+                `<p style="margin:4px 0;padding-top:4px;border-top:1px solid #e5e7eb;color:#6b7280">` +
+                `Prímestská doprava: dáta nedostupné</p>`
+            }
+
+            const popupHtml =
+              `<div style="font-size:12px;line-height:1.45;max-width:270px">` +
+              `<strong>${districtName}</strong><br/>` +
+              `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">#${route.rank} najdlhšia trasa</span>` +
+              `<p style="margin:4px 0">Od: <strong>${originLabel}</strong> (${originKindLabel})</p>` +
+              `<p style="margin:4px 0">Pešia trasa: <strong>${km} km</strong>, ${min} min (reálna trasa, Google Maps)</p>` +
+              transitHtml +
+              `</div>`
+
+            const layer = L.geoJSON(route.route_geojson as unknown as GeoJSON.GeoJsonObject, {
+              style: { color: `hsl(${hue}, 75%, 40%)`, weight: 4, opacity: 0.8, className: 'so-longest-route' },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'routes' as any,
+            })
+            layer.bindTooltip(`#${route.rank} · ${originLabel} · ${km} km`, { sticky: true })
+            layer.bindPopup(popupHtml, { maxWidth: 290, autoPan: true, autoPanPadding: [20, 20] })
+            layer.addTo(longestRoutesGroup)
+          })
+          containerRef.current?.setAttribute('data-longest-routes', String(longestRoutes.length))
+
           // (E) Layer control. Default ON: street networks + school pins +
           // coverage gaps (holes must always be explained). Every analytical
           // overlay (MRK, address dots) stays OFF by default.
@@ -950,6 +1015,9 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           const validHousePointsCount = housePoints.filter((hp) => hp.valid !== false).length
           if (validHousePointsCount > 0) {
             overlays[`Adresné body obvodov (${validHousePointsCount}, priblížte ≥ ${HOUSE_DOTS_MIN_ZOOM})`] = housePointsGroup
+          }
+          if (longestRoutes.length > 0) {
+            overlays[`5 najdlhších trás (${longestRoutes.length}, Google Maps)`] = longestRoutesGroup
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const layersControl = L.control.layers(undefined, overlays as any, {
@@ -982,7 +1050,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           fitToDistricts()
 
           // Home / reset-view: default extent + default layers, clear selection.
-          const allOverlayGroups = [mrkGroup, housePointsGroup]
+          const allOverlayGroups = [mrkGroup, housePointsGroup, longestRoutesGroup]
           homeResetRef.current = () => {
             if (clearDemoRef.current) clearDemoRef.current()
             else { try { map.closePopup() } catch { /* ignore */ } }
@@ -995,7 +1063,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             fitToDistricts()
           }
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup, barriersGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup, barriersGroup, longestRoutesGroup]
         } else {
           const [districtsGroup, schoolsGroup, coverageGapsGroup, , , barriersGroup] = layersRef.current.psk
           districtsGroup.addTo(map)

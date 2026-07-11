@@ -352,6 +352,30 @@ export interface SoMockIndicator {
   is_demo: boolean
 }
 
+// VLA-17: 5 najdlhších peších trás per district (public.so_district_longest_routes).
+// Comparison/overview only — NO threshold or verdict of its own; never feeds
+// the § 44 semaphore. route_geojson is a real Google Maps walking route
+// (never a straight-line substitute). transit_* fields are populated only
+// for 'shared_municipality' origins that made the top 5 (grades 5-9 pooled
+// districts, e.g. ZŠ Bajkalská).
+export interface SoDistrictLongestRoute {
+  id: string
+  district_id: string
+  rank: number
+  origin_kind: 'street_geocode' | 'shared_municipality'
+  origin_label: string
+  origin_geojson: Record<string, unknown> | null
+  distance_m: number
+  duration_s: number
+  route_geojson: Record<string, unknown> | null
+  transit_status: 'ok' | 'low_data' | 'unavailable' | null
+  transit_distance_m: number | null
+  transit_duration_s: number | null
+  transit_geojson: Record<string, unknown> | null
+  transit_line: string | null
+  computed_at: string
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

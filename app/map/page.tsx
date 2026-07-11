@@ -8,7 +8,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
@@ -128,6 +128,23 @@ async function fetchBarriers(): Promise<SoBarrier[]> {
   }
 }
 
+// VLA-17: 5 longest real walking routes per district (comparison only —
+// no threshold, precomputed by scripts/compute_longest_routes.py).
+async function fetchLongestRoutes(): Promise<SoDistrictLongestRoute[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_district_longest_routes')
+      .select('*')
+      .order('district_id', { ascending: true })
+      .order('rank', { ascending: true })
+    if (error) throw error
+    return (data ?? []) as SoDistrictLongestRoute[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   try {
     const sb = createPublicClient()
@@ -182,7 +199,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -195,6 +212,7 @@ export default async function MapPage() {
     fetchScorecard(),
     fetchCoverageGaps(),
     fetchBarriers(),
+    fetchLongestRoutes(),
   ])
   const isEmpty = features.length === 0
 
@@ -209,6 +227,13 @@ export default async function MapPage() {
   }
   // No polygon islands in the streets pivot → no multi-part flag.
   const districtSummaries = buildDistrictSummaries(scorecardRows, openFindingsByDistrict, {})
+
+  // VLA-17: routes per district, longest first. fetchLongestRoutes() already
+  // orders by (district_id, rank), so no re-sort needed here.
+  const routesByDistrict: Record<string, SoDistrictLongestRoute[]> = {}
+  for (const r of longestRoutes) {
+    ;(routesByDistrict[r.district_id] ??= []).push(r)
+  }
 
   return (
     <div className="space-y-3">
@@ -276,6 +301,7 @@ export default async function MapPage() {
                 houseDots={houseDots}
                 coverageGaps={coverageGaps}
                 barriers={barriers}
+                longestRoutes={longestRoutes}
                 findings={findings}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
@@ -320,8 +346,83 @@ export default async function MapPage() {
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#d97706' }}></span> Škola súkromná / cirkevná</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-full" style={{ background: '#10b981' }}></span> Adresné body obvodov (Google geokód, priblížte sa)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-1 rounded-sm" style={{ background: 'hsl(210,75%,40%)' }}></span> 5 najdlhších trás — reálna pešia trasa (Google Maps), porovnanie, nie prah/verdikt</span>
         </p>
       </div>
+
+      {/* VLA-17 — "najdlhšie trasy podľa obvodov" summary. Plain comparison,
+          NOT a compliance check: no threshold, no pass/fail, no verdict
+          colour. § 44 ods. 8 písm. b) names distance as one factor among
+          several but sets no numeric limit — same audited citation +
+          demo-parameter framing as the Pa/Pb scorecard labels
+          (lib/compliance/labels.ts). Collapsed <details> per district (60
+          rows total) so the page stays scannable by default. */}
+      <section
+        aria-labelledby="longest-routes-heading"
+        className="rounded shadow-gov bg-white overflow-hidden"
+      >
+        <h2
+          id="longest-routes-heading"
+          className="text-section font-semibold uppercase text-gov-blue px-4 pt-4 pb-1"
+        >
+          Najdlhšie trasy podľa obvodov
+        </h2>
+        <p className="text-xs text-muted-foreground px-4 pb-3">
+          Porovnanie, nie hodnotenie súladu. Vzdialenosť k pridelenej škole je jedno z hľadísk
+          podľa § 44 ods. 8 písm. b) — zákon číselný limit neurčuje. Nižšie je 5 najdlhších
+          reálnych peších trás (Google Maps) v každom obvode; pre obce v spoločných obvodoch
+          (roč. 5 – 9) aj prímestská doprava ako alternatíva.
+        </p>
+        {longestRoutes.length === 0 ? (
+          <p className="text-xs text-muted-foreground px-4 pb-4">
+            Trasy zatiaľ nie sú vypočítané.
+          </p>
+        ) : (
+          <ul className="list-none m-0 p-0 border-t border-gov-border divide-y divide-gov-border">
+            {features.map((f) => {
+              const routes = routesByDistrict[f.id] ?? []
+              if (routes.length === 0) return null
+              const longest = routes[0]
+              return (
+                <li key={f.id}>
+                  <details>
+                    <summary className="cursor-pointer list-none flex items-center gap-3 min-h-[44px] px-4 py-3 hover:bg-gov-blue50 transition-colors">
+                      <span className="text-gov-blue text-sm truncate">{f.name}</span>
+                      <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+                        najdlhšia: {(longest.distance_m / 1000).toFixed(1)} km
+                      </span>
+                      <span className="text-gov-muted" aria-hidden="true">▾</span>
+                    </summary>
+                    <ol className="list-decimal pl-9 pr-4 pb-3 text-xs text-gov-muted space-y-1.5">
+                      {routes.map((r) => {
+                        const km = (r.distance_m / 1000).toFixed(1)
+                        const min = Math.round(r.duration_s / 60)
+                        const originKindLabel =
+                          r.origin_kind === 'shared_municipality' ? 'susedná obec, spoločný obvod' : 'ulica obvodu'
+                        return (
+                          <li key={r.id}>
+                            <span className="text-foreground font-medium">{r.origin_label}</span>
+                            {' '}({originKindLabel}) — {km} km, {min} min (pešo)
+                            {r.transit_status === 'ok' && r.transit_distance_m != null && r.transit_duration_s != null ? (
+                              <>
+                                {' '}· prímestská doprava: {r.transit_line ?? 'linka MHD'},{' '}
+                                {(r.transit_distance_m / 1000).toFixed(1)} km, {Math.round(r.transit_duration_s / 60)} min
+                              </>
+                            ) : r.transit_status ? (
+                              <> · prímestská doprava: dáta nedostupné</>
+                            ) : null}
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  </details>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
 
       {/* Obvody results list — gov-style semafor rows (item 11). Each row carries
           a soft tint + a strong left bar + a strong-coloured TEXTUAL verdict, so
