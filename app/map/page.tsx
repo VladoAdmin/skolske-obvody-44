@@ -7,7 +7,7 @@ import { SummaryStrip } from '@/components/map/summary-strip'
 import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoEngineMetadata, SoSharedMunicipalityArea } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
@@ -84,17 +84,22 @@ async function fetchFindings(): Promise<SoFindingsPanelItem[]> {
 // with no OSM line). Single SSOT used by the main map and the detail page.
 // The view has ~3000 rows — above the PostgREST 1000-row cap — so it must be
 // paged via fetchAllRows or whole neighbourhoods go missing from the map.
-async function fetchStreetLines(): Promise<SoDistrictStreetLine[]> {
+// VLA-11: a real fetch failure must be visible, not indistinguishable from
+// "this territory genuinely has no streets" — capture and log the error
+// instead of swallowing it.
+async function fetchStreetLines(): Promise<{ data: SoDistrictStreetLine[]; error: unknown }> {
   try {
     const sb = createPublicClient()
-    return await fetchAllRows<SoDistrictStreetLine>(
+    const data = await fetchAllRows<SoDistrictStreetLine>(
       sb,
       'so_district_street_linestrings',
       'district_id,school_id,street,is_fallback_point,linestring_geojson,segment_id',
       'segment_id'
     )
-  } catch {
-    return []
+    return { data, error: null }
+  } catch (error) {
+    console.error('[map] street-line fetch failed:', error)
+    return { data: [], error }
   }
 }
 
@@ -227,7 +232,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLines, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata, sharedMunicipalityAreas] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLinesResult, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata, sharedMunicipalityAreas] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -244,6 +249,8 @@ export default async function MapPage() {
     fetchEngineMetadata(),
     fetchSharedMunicipalityAreas(),
   ])
+  const streetLines = streetLinesResult.data
+  const streetLinesError = streetLinesResult.error
   const isEmpty = features.length === 0
 
   // Open-findings count per district (status = open) for the school-pin popup.
@@ -281,6 +288,16 @@ export default async function MapPage() {
         <Alert>
           <AlertDescription>
             Engine ešte nebežal nad týmto územím. Mapa zobrazuje PSK hranicu bez dát.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {Boolean(streetLinesError) && (
+        <Alert variant="destructive">
+          <AlertTitle>Chyba načítania ulíc</AlertTitle>
+          <AlertDescription>
+            Nepodarilo sa načítať ulice z databázy. Mapa nižšie môže byť neúplná —
+            toto nie je to isté ako územie bez ulíc.
           </AlertDescription>
         </Alert>
       )}
