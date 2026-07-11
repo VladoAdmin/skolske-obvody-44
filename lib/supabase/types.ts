@@ -378,6 +378,21 @@ export interface SoDistrictLongestRoute {
   computed_at: string
 }
 
+// VLA-21: municipalities pooled into a district's shared catchment (VZN
+// grades 5-9, or for some municipalities all of 1-9) rendered as real
+// polygon areas (public.so_shared_municipality_areas). Descriptive/
+// geographic only — never feeds the § 44 semaphore, same boundary VLA-16/
+// 17/18 respected. grade_range is NULL only if the VZN text had no explicit
+// "žiaci ..." clause for that municipality — never invented client-side.
+export interface SoSharedMunicipalityArea {
+  district_id: string
+  district_name: string
+  municipality_id: string
+  municipality_name: string
+  grade_range: string | null
+  geom_geojson: Record<string, unknown> | null
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature
