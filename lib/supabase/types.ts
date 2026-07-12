@@ -384,6 +384,12 @@ export interface SoDistrictLongestRoute {
 // geographic only — never feeds the § 44 semaphore, same boundary VLA-16/
 // 17/18 respected. grade_range is NULL only if the VZN text had no explicit
 // "žiaci ..." clause for that municipality — never invented client-side.
+// VLA-31: geom_geojson now sources from municipality_inhabited_areas (real
+// OSM building footprints, buffered+unioned, clipped to the cadastral
+// boundary) instead of the raw cadastral polygon — building_count is
+// exposed so the UI can label this as an approximation, not fabricate
+// precision. Both are NULL only for a municipality with zero OSM buildings
+// fetched (none occurred in the 21 live municipalities as of VLA-31).
 export interface SoSharedMunicipalityArea {
   district_id: string
   district_name: string
@@ -391,6 +397,7 @@ export interface SoSharedMunicipalityArea {
   municipality_name: string
   grade_range: string | null
   geom_geojson: Record<string, unknown> | null
+  building_count: number | null
 }
 
 // Backward-compat aliases (deprecated — use So* names)
