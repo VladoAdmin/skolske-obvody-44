@@ -641,8 +641,15 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             // E2E hooks (tests/e2e/street-coverage.e2e.mjs): segment count on
             // the map container, per-street colour on window.
             containerRef.current?.setAttribute('data-street-segments', String(renderedSegments))
-            ;(window as unknown as { __soStreetColors?: Record<string, string> }).__soStreetColors =
-              renderedStreetColors
+            // window.__soStreetColors is diagnostics-only, read by E2E specs
+            // (street-coverage.e2e.mjs, vla21-shared-municipality-areas.e2e.mjs),
+            // never by app logic. Gated so it isn't written in real prod
+            // (NODE_ENV=production is true in both the Vercel deploy AND the
+            // local E2E production build, so it can't gate on NODE_ENV alone).
+            if (process.env.NEXT_PUBLIC_SO_E2E_HOOKS === '1') {
+              ;(window as unknown as { __soStreetColors?: Record<string, string> }).__soStreetColors =
+                renderedStreetColors
+            }
           }
 
           // (B) School markers as divIcon SVG (founder-coloured pins).
