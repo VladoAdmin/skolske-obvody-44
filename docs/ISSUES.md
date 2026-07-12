@@ -63,9 +63,16 @@ segments fetched and rendered.
 - `components/region-map.client.tsx:543` — `renderedStreetColors` keyed by
   street name collides when the same street name exists in multiple
   districts (E2E diagnostics only). Key by `district_id + street`.
-- `components/region-map.client.tsx:592` — test global
+- ~~`components/region-map.client.tsx:592` — test global
   `window.__soStreetColors` is written in production runtime; gate it to
-  test/dev builds.
+  test/dev builds.~~ **[FIXED VLA-13, `430fe5a`]** The write is now gated
+  behind `NEXT_PUBLIC_SO_E2E_HOOKS === '1'` (unset in Vercel prod, `1` in
+  `.env.local` for local dev/E2E builds — same pattern as
+  `NEXT_PUBLIC_SO_SHOW_COMPLIANCE`). NODE_ENV couldn't gate this: it's
+  `production` in both the real deploy and the local E2E production build.
+  Verified undefined in a no-flag production build (real headless Chrome);
+  both E2E consumers (`street-coverage.e2e.mjs`,
+  `vla21-shared-municipality-areas.e2e.mjs`) still pass with the flag on.
 
 ## 4. [BACKLOG] VLA-14 review findings (gpt-5.4 fallback, 2026-07-06; blockers verified false)
 
