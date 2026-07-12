@@ -152,7 +152,7 @@ def load_buildings(municipality_id: str, ways: list[dict]) -> int:
         batch = records[i:i + BATCH]
         vals = []
         for rec in batch:
-            wid = rec["osm_way_id"] if rec["osm_way_id"] is not None else "NULL"
+            wid = rec["osm_way_id"] if isinstance(rec["osm_way_id"], int) else "NULL"
             vals.append(
                 f"($m${municipality_id}$m$, {wid}, public.ST_GeomFromEWKT($g${rec['geom']}$g$))"
             )

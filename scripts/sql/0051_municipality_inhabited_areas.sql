@@ -73,7 +73,9 @@ SELECT
   ) AS geom,
   count(*) AS building_count
 FROM skolske_obvody.municipalities m
-JOIN skolske_obvody.osm_buildings b ON b.municipality_id = m.id
+JOIN skolske_obvody.osm_buildings b
+  ON b.municipality_id = m.id
+  AND public.ST_Intersects(b.geom, m.geom)
 GROUP BY m.id, m.geom;
 
 CREATE INDEX IF NOT EXISTS municipality_inhabited_areas_gix
