@@ -104,8 +104,12 @@ async function main() {
   const gregorovceFill = await areas.nth(found['Gregorovce'].index).evaluate(
     (el) => el.getAttribute('fill') || getComputedStyle(el).fill
   )
+  // __soStreetColors is keyed by `${district_id}::${street}` (VLA-12 — plain
+  // street-name keys collide across districts), so look up by suffix rather
+  // than hardcoding the district's DB-generated UUID.
   const streetColors = await page.evaluate(() => window.__soStreetColors)
-  const bajkalskaStreetColor = streetColors?.['Genplk. Jána Ambruša']
+  const bajkalskaKey = Object.keys(streetColors ?? {}).find((k) => k.endsWith('::Genplk. Jána Ambruša'))
+  const bajkalskaStreetColor = bajkalskaKey ? streetColors[bajkalskaKey] : undefined
   assert(!!bajkalskaStreetColor, 'Bajkalská street colour is exposed for comparison (window.__soStreetColors)')
   const hueOf = (s) => s?.match(/hsl\(\s*(\d+)/)?.[1]
   const gregorovceHue = hueOf(gregorovceFill)
