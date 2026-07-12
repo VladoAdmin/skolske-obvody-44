@@ -1,6 +1,9 @@
+'use client'
+
 import type { DistrictMapFeature, SoFindingsPanelItem, SoStreetCoverageGap, SoEngineMetadata } from '@/lib/supabase/types'
 import type { CompositionColor } from '@/lib/compliance/colors'
 import { SHOW_COMPLIANCE } from '@/lib/compliance/step1'
+import { useDemoMode } from '@/lib/demo-mode/context'
 
 interface SummaryStripProps {
   features: DistrictMapFeature[]
@@ -68,6 +71,11 @@ const SEMAFOR: { color: CompositionColor; emoji: string; label: string }[] = [
  * Verdicts stay computed internally (engine SSOT); gated by SHOW_COMPLIANCE.
  */
 export function SummaryStrip({ features, findings, coverageGaps = [], engineMetadata }: SummaryStripProps) {
+  const { demoMode } = useDemoMode()
+  // VLA-34: real-only mode drops is_demo=true rows client-side so the strip's
+  // counts match what the map/panel actually show — off already-fetched data.
+  const visibleFindings = demoMode ? findings : findings.filter((f) => !f.is_demo)
+  const visibleCoverageGaps = demoMode ? coverageGaps : coverageGaps.filter((g) => !g.is_demo)
   const counts: Record<CompositionColor, number> = { RED: 0, ORANGE: 0, GREEN: 0, NONE: 0 }
   for (const f of features) {
     const c = (f.composition_color as CompositionColor) ?? 'NONE'
@@ -91,7 +99,7 @@ export function SummaryStrip({ features, findings, coverageGaps = [], engineMeta
             </span>
           </div>
           {engineMetadata && <StreetRealMockCounts metadata={engineMetadata} />}
-          {coverageGaps.length > 0 && <CoverageGapCounts coverageGaps={coverageGaps} />}
+          {visibleCoverageGaps.length > 0 && <CoverageGapCounts coverageGaps={visibleCoverageGaps} />}
         </div>
       </section>
     )
@@ -134,7 +142,7 @@ export function SummaryStrip({ features, findings, coverageGaps = [], engineMeta
               Otvorených nálezov
             </dt>
             <dd className="text-base font-semibold tabular-nums leading-tight m-0 order-1">
-              {findings.length}
+              {visibleFindings.length}
             </dd>
           </div>
         </dl>
@@ -146,10 +154,10 @@ export function SummaryStrip({ features, findings, coverageGaps = [], engineMeta
           </>
         )}
 
-        {coverageGaps.length > 0 && (
+        {visibleCoverageGaps.length > 0 && (
           <>
             <div className="hidden sm:block w-px bg-border" aria-hidden="true" />
-            <CoverageGapCounts coverageGaps={coverageGaps} />
+            <CoverageGapCounts coverageGaps={visibleCoverageGaps} />
           </>
         )}
       </div>
