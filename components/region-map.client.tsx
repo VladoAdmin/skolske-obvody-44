@@ -629,8 +629,6 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               // invented client-side; NULL renders as "neuvedené".
               const fillColor = `hsl(${hue}, 65%, 55%)`
               const strokeColor = `hsl(${hue}, 70%, 32%)`
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const areaLayers = new Set<any>()
               areas.forEach((area) => {
                 // DB-sourced labels go through Leaflet's innerHTML-based
                 // popup/tooltip rendering — escape them (same XSS precedent
@@ -669,7 +667,18 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 )
                 areaLayer.bindPopup(popupHtml, { maxWidth: 280, autoPan: true, autoPanPadding: [20, 20] })
                 areaLayer.addTo(districtGroup)
-                areaLayers.add(areaLayer)
+                // districtGroup.bindPopup() below wires its OWN unconditional
+                // click→openPopup listener (Leaflet Layer.bindPopup) — that
+                // listener fires for ANY click that bubbles up to
+                // districtGroup, including one that already opened this
+                // area's own popup a moment earlier in the same propagation
+                // chain, clobbering it. Sever the event-propagation link
+                // (NOT the group membership — add/remove/toggle/setStyle/
+                // getBounds all go through the separate _layers registry
+                // and are unaffected) so an area click stays local to its
+                // own popup/tooltip and never reaches districtGroup's
+                // click listeners at all.
+                areaLayer.removeEventParent(districtGroup)
               })
 
               // Selecting/tapping a district's streets highlights them + opens the
@@ -687,11 +696,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               districtGroup.on('click', (e: any) => {
                 L.DomEvent.stopPropagation(e)
                 selectDistrict(feature.id)
-                // A click that originated on a shared-municipality-area
-                // polygon already opened THAT area's own popup (grade
-                // range/building count) via its own bindPopup — don't
-                // clobber it with the district summary popup here.
-                if (!areaLayers.has(e.propagatedFrom)) districtGroup.openPopup(e.latlng)
+                districtGroup.openPopup(e.latlng)
               })
               districtGroup.on('popupclose', () => {
                 if (selectedDistrictIdRef.current === feature.id) clearSelection()
