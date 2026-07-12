@@ -1,6 +1,6 @@
 // SSR-safe wrapper: dynamically imports the Leaflet client component
 import dynamic from 'next/dynamic'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoSharedMunicipalityArea } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoSharedMunicipalityArea, SoAtlasRomaMunicipality } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -21,6 +21,8 @@ interface RegionMapProps {
   longestRoutes?: SoDistrictLongestRoute[]
   // VLA-21: shared-municipality catchment areas (VZN grades 5-9 / 1-9)
   sharedMunicipalityAreas?: SoSharedMunicipalityArea[]
+  // VLA-33: REAL Atlas rómskych komunít 2019 data, Okres Prešov, above threshold
+  atlasRomaMunicipalities?: SoAtlasRomaMunicipality[]
   findings?: SoFindingsPanelItem[]
   districtSummaries?: Record<string, DistrictPopupSummary>
   initialMode?: 'sk' | 'psk'
@@ -34,6 +36,6 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], coverageGaps = [], barriers = [], longestRoutes = [], sharedMunicipalityAreas = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
-  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} municipalities={municipalities} streetLines={streetLines} housePoints={housePoints} houseDots={houseDots} coverageGaps={coverageGaps} barriers={barriers} longestRoutes={longestRoutes} sharedMunicipalityAreas={sharedMunicipalityAreas} findings={findings} districtSummaries={districtSummaries} initialMode={initialMode} />
+export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], coverageGaps = [], barriers = [], longestRoutes = [], sharedMunicipalityAreas = [], atlasRomaMunicipalities = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
+  return <RegionMapDynamic features={features} schools={schools} mrkOverlays={mrkOverlays} mrkLocalities={mrkLocalities} municipalities={municipalities} streetLines={streetLines} housePoints={housePoints} houseDots={houseDots} coverageGaps={coverageGaps} barriers={barriers} longestRoutes={longestRoutes} sharedMunicipalityAreas={sharedMunicipalityAreas} atlasRomaMunicipalities={atlasRomaMunicipalities} findings={findings} districtSummaries={districtSummaries} initialMode={initialMode} />
 }

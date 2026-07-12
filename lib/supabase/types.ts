@@ -400,6 +400,33 @@ export interface SoSharedMunicipalityArea {
   building_count: number | null
 }
 
+// VLA-33: REAL (non-demo) Atlas rómskych komunít 2019 data, obec-level Roma
+// population share, Okres Prešov, already filtered to > highlight_threshold_pct
+// by public.so_atlas_roma_municipalities — never confuse with SoMrkLocality
+// (so_mrk_localities), which is the separate DEMO/mock street-level layer.
+// roma_share_band is the verbatim 10-point band from the Atlas (never an
+// exact %); highlight_threshold_pct is read from DB config so the UI never
+// hardcodes the "20%" threshold. assigned_district_id/name is NULL when the
+// municipality has no known VZN-shared-catchment assignment in this app's
+// dataset — show that honestly, never invent a district.
+export interface SoAtlasRomaMunicipality {
+  municipality_id: string
+  municipality_name: string
+  okres: string
+  kraj: string
+  population: number | null
+  roma_share_band: string
+  roma_share_band_low: number
+  atlas_year: number
+  source_name: string
+  source_url: string
+  downloaded_at: string
+  highlight_threshold_pct: number
+  geom_geojson: Record<string, unknown> | null
+  assigned_district_id: string | null
+  assigned_district_name: string | null
+}
+
 // Backward-compat aliases (deprecated — use So* names)
 export type DistrictComposition = SoDistrictComposition
 export type DistrictMapFeature = SoDistrictMapFeature

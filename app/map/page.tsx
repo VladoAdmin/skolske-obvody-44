@@ -8,7 +8,7 @@ import { createPublicClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoEngineMetadata, SoSharedMunicipalityArea } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoFindingsPanelItem, SoPskMunicipality, SoHousePoint, SoHouseDot, DistrictScorecardRow, SoDistrictStreetLine, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoEngineMetadata, SoSharedMunicipalityArea, SoAtlasRomaMunicipality } from '@/lib/supabase/types'
 import Link from 'next/link'
 import { getColorSymbol, getColorLabel, getRowTint, getRowText } from '@/lib/compliance/colors'
 import { buildDistrictSummaries } from '@/lib/compliance/school-popup'
@@ -178,6 +178,22 @@ async function fetchSharedMunicipalityAreas(): Promise<SoSharedMunicipalityArea[
   }
 }
 
+// VLA-33: REAL (non-demo) Atlas rómskych komunít 2019 data, Okres Prešov,
+// already filtered to > highlight_threshold_pct by the view itself — the
+// component never hardcodes the threshold.
+async function fetchAtlasRomaMunicipalities(): Promise<SoAtlasRomaMunicipality[]> {
+  try {
+    const sb = createPublicClient()
+    const { data, error } = await sb
+      .from('so_atlas_roma_municipalities')
+      .select('*')
+    if (error) throw error
+    return (data ?? []) as SoAtlasRomaMunicipality[]
+  } catch {
+    return []
+  }
+}
+
 async function fetchMunicipalities(): Promise<SoPskMunicipality[]> {
   try {
     const sb = createPublicClient()
@@ -232,7 +248,7 @@ async function fetchHousePoints(): Promise<SoHousePoint[]> {
 }
 
 export default async function MapPage() {
-  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLinesResult, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata, sharedMunicipalityAreas] = await Promise.all([
+  const [features, schools, mrkOverlays, mrkLocalities, findings, municipalities, streetLinesResult, housePoints, houseDots, scorecardRows, coverageGaps, barriers, longestRoutes, engineMetadata, sharedMunicipalityAreas, atlasRomaMunicipalities] = await Promise.all([
     fetchFeatures(),
     fetchSchools(),
     fetchMrkOverlays(),
@@ -248,6 +264,7 @@ export default async function MapPage() {
     fetchLongestRoutes(),
     fetchEngineMetadata(),
     fetchSharedMunicipalityAreas(),
+    fetchAtlasRomaMunicipalities(),
   ])
   const streetLines = streetLinesResult.data
   const streetLinesError = streetLinesResult.error
@@ -350,6 +367,7 @@ export default async function MapPage() {
                 barriers={barriers}
                 longestRoutes={longestRoutes}
                 sharedMunicipalityAreas={sharedMunicipalityAreas}
+                atlasRomaMunicipalities={atlasRomaMunicipalities}
                 findings={findings}
                 districtSummaries={districtSummaries}
                 initialMode="psk"
@@ -390,6 +408,8 @@ export default async function MapPage() {
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full border border-[#4c1d95]" style={{ background: 'repeating-linear-gradient(45deg,#7c3aed,#7c3aed 2px,transparent 2px,transparent 5px)' }}></span> MRK lokalita — plocha (Atlas MRK, budova/lokalita)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#6d28d9' }}></span> Vyčlenenie do vzdialenejšieho obvodu — DEMO (P-e)</span>
+          <span className="mx-2">·</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-dashed" style={{ background: 'rgba(13,148,136,.45)', borderColor: '#115e59' }}></span> Segregovaná menšina — Atlas rómskych komunít 2019 (ÚSVRK, reálne dáta, Okres Prešov, nad prahom podielu; nezamieňať s DEMO MRK lokalitami)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-full" style={{ background: '#2563eb' }}></span> Škola verejná (mesto Prešov)</span>
           <span className="mx-2">·</span>

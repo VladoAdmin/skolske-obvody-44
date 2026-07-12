@@ -2,7 +2,7 @@
 
 import 'leaflet/dist/leaflet.css'
 import { useEffect, useRef, useState } from 'react'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoSharedMunicipalityArea } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoSharedMunicipalityArea, SoAtlasRomaMunicipality } from '@/lib/supabase/types'
 import { PSK_CENTER, PSK_DEFAULT_ZOOM, SK_CENTER, SK_DEFAULT_ZOOM, PSK_KRAJ_NAMES, getDistrictHue } from '@/lib/config/region'
 import { buildDistrictSchoolPopup, buildDistrictSummaryPopup, buildNonVznSchoolPopup, escapeHtml, type DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import {
@@ -52,6 +52,11 @@ interface RegionMapClientProps {
   // some municipalities all of 1-9, pooled into a district's catchment).
   // Descriptive/geographic only — never feeds the § 44 semaphore.
   sharedMunicipalityAreas?: SoSharedMunicipalityArea[]
+  // VLA-33: REAL (non-demo) Atlas rómskych komunít 2019 data — Okres Prešov
+  // municipalities above the configured Roma-population-share threshold.
+  // Never confuse with mrkLocalities (DEMO/mock, street-level, Prešov city
+  // only) — this is real government data, obec-level, whole Okres Prešov.
+  atlasRomaMunicipalities?: SoAtlasRomaMunicipality[]
   // Engine findings (§ 44 demo scenarios included) — drives the per-district
   // evidence legend shown on selection. Never used to derive colour/severity
   // client-side; severity/text come straight from the engine output row.
@@ -65,7 +70,7 @@ function isPskKraj(name: string): boolean {
   return PSK_KRAJ_NAMES.some((n) => lower.includes(n.toLowerCase()))
 }
 
-export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], coverageGaps = [], barriers = [], longestRoutes = [], sharedMunicipalityAreas = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
+export function RegionMapClient({ features, schools, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], coverageGaps = [], barriers = [], longestRoutes = [], sharedMunicipalityAreas = [], atlasRomaMunicipalities = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapClientProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null)
@@ -154,6 +159,11 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
       // catchment fill underneath it.
       const sharedMuniPane = map.createPane('sharedMunicipalities')
       sharedMuniPane.style.zIndex = '445'
+      // VLA-33: real Atlas rómskych komunít municipality highlight sits just
+      // above the shared-municipality fill (so it reads as the more specific
+      // layer when both are on) but still below district streets/schools.
+      const atlasRomaPane = map.createPane('atlasRoma')
+      atlasRomaPane.style.zIndex = '447'
       const districtPane = map.createPane('districts')
       districtPane.style.zIndex = '450'
       const overlapsPane = map.createPane('overlaps')
@@ -1074,6 +1084,56 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           })
           containerRef.current?.setAttribute('data-shared-municipality-areas', String(sharedMunicipalityAreas.length))
 
+          // (D6) VLA-33 — REAL Atlas rómskych komunít 2019 municipality
+          // highlight (Okres Prešov, share above the DB-configured
+          // threshold — so_atlas_roma_municipalities already applied the
+          // filter, this component never hardcodes "20%"). Rendered as the
+          // real municipality cadastral polygon in a fixed teal style —
+          // deliberately NOT per-district hue (so_shared_municipality_areas)
+          // and NOT the purple hatch used by the DEMO MRK layer (mrkGroup)
+          // — a viewer must never confuse this real government layer with
+          // either. assigned_district_name is shown honestly as "not
+          // assigned" when NULL (this app's districts only cover Prešov
+          // city + its VZN-listed shared-catchment villages — most Okres
+          // Prešov municipalities have no known assignment here).
+          const atlasRomaGroup = L.featureGroup()
+          atlasRomaMunicipalities.forEach((muni) => {
+            if (!muni.geom_geojson) return
+            const muniName = escapeHtml(muni.municipality_name)
+            const districtName = muni.assigned_district_name ? escapeHtml(muni.assigned_district_name) : null
+            const districtHtml = districtName
+              ? `<p style="margin:4px 0">Školský obvod: <strong>${districtName}</strong></p>`
+              : `<p style="margin:4px 0;color:#6b7280">Školský obvod: nie je súčasťou žiadneho evidovaného obvodu v tomto systéme</p>`
+            const popupHtml =
+              `<div style="font-size:12px;line-height:1.45;max-width:270px">` +
+              `<strong>${muniName}</strong><br/>` +
+              `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#ccfbf1;color:#0f766e;border:1px solid #5eead4">Atlas rómskych komunít 2019 — reálne dáta</span>` +
+              `<p style="margin:4px 0">Podiel rómskych obyvateľov: <strong>${escapeHtml(muni.roma_share_band)}</strong> (nad prahom ${muni.highlight_threshold_pct}%)</p>` +
+              (muni.population != null ? `<p style="margin:4px 0">Počet obyvateľov: ${muni.population}</p>` : '') +
+              districtHtml +
+              `<p style="margin:4px 0;color:#6b7280;font-size:11px">Zdroj: ${escapeHtml(muni.source_name)}, stiahnuté ${escapeHtml(muni.downloaded_at)}</p>` +
+              `</div>`
+            const layer = L.geoJSON(muni.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+              style: {
+                color: '#115e59',
+                weight: 2,
+                dashArray: '4,3',
+                fillColor: '#0d9488',
+                fillOpacity: 0.45,
+                className: 'so-atlas-roma-area',
+              },
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              pane: 'atlasRoma' as any,
+            })
+            layer.bindTooltip(
+              `${muniName} — ${muni.roma_share_band} (Atlas ÚSVRK 2019)`,
+              { sticky: true }
+            )
+            layer.bindPopup(popupHtml, { maxWidth: 290, autoPan: true, autoPanPadding: [20, 20] })
+            layer.addTo(atlasRomaGroup)
+          })
+          containerRef.current?.setAttribute('data-atlas-roma-municipalities', String(atlasRomaMunicipalities.length))
+
           // (E) Layer control. Default ON: street networks + school pins +
           // coverage gaps (holes must always be explained). Every analytical
           // overlay (MRK, address dots) stays OFF by default.
@@ -1098,6 +1158,9 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           }
           if (sharedMunicipalityAreas.length > 0) {
             overlays[`Obce spoločného obvodu (${sharedMunicipalityAreas.length})`] = sharedMuniGroup
+          }
+          if (atlasRomaMunicipalities.length > 0) {
+            overlays[`Segregovaná menšina — Atlas ÚSVRK 2019 (${atlasRomaMunicipalities.length}, reálne dáta)`] = atlasRomaGroup
           }
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const layersControl = L.control.layers(undefined, overlays as any, {
@@ -1131,7 +1194,10 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           fitToDistricts()
 
           // Home / reset-view: default extent + default layers, clear selection.
-          const allOverlayGroups = [mrkGroup, housePointsGroup, longestRoutesGroup]
+          // VLA-33: atlasRomaGroup joins the OFF-by-default analytical overlays
+          // (same treatment as MRK) — sensitive population data opts in via the
+          // layer control rather than painting on load.
+          const allOverlayGroups = [mrkGroup, housePointsGroup, longestRoutesGroup, atlasRomaGroup]
           homeResetRef.current = () => {
             if (clearDemoRef.current) clearDemoRef.current()
             else { try { map.closePopup() } catch { /* ignore */ } }
@@ -1145,7 +1211,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             fitToDistricts()
           }
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup, barriersGroup, longestRoutesGroup, sharedMuniGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup, barriersGroup, longestRoutesGroup, sharedMuniGroup, atlasRomaGroup]
         } else {
           const [districtsGroup, schoolsGroup, coverageGapsGroup, , , barriersGroup, , sharedMuniGroup] = layersRef.current.psk
           districtsGroup.addTo(map)
