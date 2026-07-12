@@ -8,6 +8,7 @@ import { AppNav } from "@/components/layout/app-nav";
 import { EngineFooter } from "@/components/engine-footer";
 import { DisclaimerBanner } from "@/components/disclaimer-banner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { DemoModeProvider } from "@/lib/demo-mode/context";
 
 // minedu.sk uses Rubik. latin-ext is required for Slovak diacritics (š, č, ž, ô, ľ).
 const rubik = Rubik({
@@ -45,6 +46,7 @@ export default function RootLayout({
           Preskočiť na hlavný obsah
         </a>
         <TooltipProvider>
+        <DemoModeProvider>
         <AppHeader />
         {/* Single app-wide DEMO disclaimer: a slim banner + a first-load popup
             (item 17). Per-page banners and inline disclaimer prose were removed;
@@ -57,6 +59,7 @@ export default function RootLayout({
           </main>
         </div>
         <EngineFooter />
+        </DemoModeProvider>
         </TooltipProvider>
       </body>
     </html>
