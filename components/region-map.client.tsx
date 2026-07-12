@@ -1022,6 +1022,11 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           // (districts.metadata->'shared_municipality_grades'), never
           // invented client-side; a NULL is shown as "neuvedené", never
           // silently omitted.
+          //
+          // VLA-31: geom_geojson is now the OSM-building-derived inhabited
+          // area, not the full cadastral polygon — building_count labels
+          // this explicitly as an approximation so the shape's precision
+          // isn't overclaimed.
           const sharedMuniGroup = L.featureGroup()
           sharedMunicipalityAreas.forEach((area) => {
             if (!area.geom_geojson) return
@@ -1038,12 +1043,16 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             const gradeHtml = gradeEscaped
               ? `<p style="margin:4px 0">Ročníky: <strong>${gradeEscaped}</strong></p>`
               : `<p style="margin:4px 0;color:#6b7280">Ročníky: neuvedené vo VZN</p>`
+            const provenanceHtml = area.building_count
+              ? `<p style="margin:4px 0;color:#6b7280;font-size:11px">Obývaná oblasť — aproximácia z ${area.building_count} budov OSM</p>`
+              : ''
             const popupHtml =
               `<div style="font-size:12px;line-height:1.45;max-width:260px">` +
               `<strong>${muniName}</strong><br/>` +
               `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">Spoločný školský obvod</span>` +
               `<p style="margin:4px 0">Škola: <strong>${districtName}</strong></p>` +
               gradeHtml +
+              provenanceHtml +
               `</div>`
             const layer = L.geoJSON(area.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
               style: {

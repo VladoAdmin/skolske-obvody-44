@@ -381,7 +381,7 @@ export default async function MapPage() {
         <p className="text-xs text-muted-foreground mt-2">
           Legenda: <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-1 rounded-sm" style={{ background: 'hsl(210,70%,45%)' }}></span> Ulice obvodu (farba podľa školy)</span>
           <span className="mx-2">·</span>
-          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border" style={{ background: 'hsla(210,65%,55%,.5)', borderColor: 'hsl(210,70%,32%)' }}></span> Obce spoločného obvodu (farba podľa obvodu, kliknutím škola + ročníky)</span>
+          <span className="inline-flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border" style={{ background: 'hsla(210,65%,55%,.5)', borderColor: 'hsl(210,70%,32%)' }}></span> Obce spoločného obvodu (obývaná oblasť, aproximácia z budov OSM; farba podľa obvodu, kliknutím škola + ročníky)</span>
           <span className="mx-2">·</span>
           <span className="inline-flex items-center gap-1"><span className="inline-block w-6 h-0 border-t-2 border-dashed" style={{ borderColor: '#dc2626' }}></span> VZN medzera — ulica bez obvodu (nález § 44)</span>
           <span className="mx-2">·</span>

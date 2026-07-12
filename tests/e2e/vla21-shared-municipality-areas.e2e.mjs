@@ -20,6 +20,10 @@
 //           grade ranges in their popups.
 //   [UAT-5] map legend names this layer (compact group, not one line per
 //           municipality) and the layer-control checkbox shows the count.
+//   [UAT-6] VLA-31: polygons are the OSM-building-derived inhabited area,
+//           not the full cadastral polygon — Gregorovce's popup names its
+//           real building_count ("aproximácia z N budov OSM"), and the
+//           static legend line for this layer names it an approximation.
 // Plus the standing §44 gate: ZERO console errors.
 import { BASE, launch, makeErrorTracker, dismissDemoModal, assert } from './helpers.mjs'
 
@@ -79,6 +83,12 @@ async function main() {
   assert(found['Gregorovce'].text.includes('Spoločný školský obvod'), 'Gregorovce popup carries the shared-district badge')
   assert(!found['Gregorovce'].text.includes('neuvedené'), 'Gregorovce has an explicit VZN grade — never shown as missing')
 
+  // ── [UAT-6] VLA-31: OSM-building-derived area, not the cadastral polygon ─
+  assert(
+    /aproximácia z \d+ budov OSM/.test(found['Gregorovce'].text),
+    `Gregorovce popup names its real OSM building_count, got: ${found['Gregorovce'].text.slice(0, 300)}`
+  )
+
   assert(found['Malý Šariš'], 'found a polygon popup naming Malý Šariš')
   assert(found['Mirkovce'], 'found a polygon popup naming Mirkovce')
   assert(found['Malý Šariš'].text.includes('1. – 9. ročníka'), `Malý Šariš popup shows 1.–9. ročníka, got: ${found['Malý Šariš'].text.slice(0, 200)}`)
@@ -115,6 +125,7 @@ async function main() {
   assert((await checkboxLabel.count()) === 1, 'layer-control checkbox for the shared-municipality-areas layer present')
   const checkboxText = await checkboxLabel.innerText()
   assert(checkboxText.includes(String(EXPECTED_AREA_COUNT)), `layer-control checkbox shows the area count, got: ${checkboxText}`)
+  assert(legendText.includes('aproximácia'), 'static legend line labels this layer as an OSM-building approximation, not the cadastral boundary')
 
   // ── standing gate: zero console errors ───────────────────────────────────
   const totalErrors = tracker.report()
@@ -122,7 +133,7 @@ async function main() {
 
   await page.close()
   await browser.close()
-  console.log(`\nVLA-21 E2E: ALL ASSERTIONS PASSED (${areaCount} shared-municipality areas, Gregorovce popup + colour + legend verified)`)
+  console.log(`\nVLA-21/VLA-31 E2E: ALL ASSERTIONS PASSED (${areaCount} shared-municipality areas, Gregorovce popup + colour + legend + OSM-building provenance verified)`)
 }
 
 main().catch((e) => {
