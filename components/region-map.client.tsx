@@ -582,7 +582,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                       .bindTooltip(`${sl.street} (bez OSM línie)`, { sticky: true })
                       .addTo(districtGroup)
                     renderedSegments++
-                    renderedStreetColors[sl.street] = lineColor
+                    renderedStreetColors[`${feature.id}::${sl.street}`] = lineColor
                   }
                   return
                 }
@@ -598,7 +598,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 layer.bindTooltip(`${feature.name}<br/>${sl.street}`, { sticky: true })
                 layer.addTo(districtGroup)
                 renderedSegments++
-                renderedStreetColors[sl.street] = lineColor
+                renderedStreetColors[`${feature.id}::${sl.street}`] = lineColor
               })
 
               // Selecting/tapping a district's streets highlights them + opens the

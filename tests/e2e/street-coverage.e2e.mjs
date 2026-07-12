@@ -46,7 +46,14 @@ async function main() {
 
   // 3. City-centre street coloured: Hlavná sat beyond row 1000, so it was one
   //    of the streets the owner saw uncoloured on the live demo.
-  const hlavnaColor = await page.evaluate(() => (window.__soStreetColors ?? {})['Hlavná'])
+  // __soStreetColors is keyed by `${district_id}::${street}` (VLA-12 — plain
+  // street-name keys collide across districts), so look up by suffix rather
+  // than hardcoding the district's DB-generated UUID.
+  const hlavnaColor = await page.evaluate(() => {
+    const colors = window.__soStreetColors ?? {}
+    const key = Object.keys(colors).find((k) => k.endsWith('::Hlavná'))
+    return key ? colors[key] : undefined
+  })
   assert(
     typeof hlavnaColor === 'string' && hlavnaColor.startsWith('hsl('),
     `"Hlavná" is drawn with an hsl district colour, got ${JSON.stringify(hlavnaColor)}`
