@@ -50,6 +50,16 @@
 -- user-edited); config row inserted ON CONFLICT DO NOTHING so a live-tuned
 -- threshold survives a re-run of this migration.
 --
+-- JOIN BY CODE, NOT NAME (review fix): skolske_obvody.municipalities.name is
+-- NOT unique across PSK (0050_shared_municipality_areas.sql's own
+-- investigation found 16 duplicated names), and diacritics between sources
+-- can disagree. municipalities.code (UNIQUE, WFS idn4) holds the same ŠÚSR
+-- municipality-code numbering as the Atlas's own obec_kod column — verified
+-- live for all 32 rows below (e.g. Prešov 524140, Kendice 524638). The
+-- validation block below aborts the whole migration loudly if any obec_kod
+-- fails to resolve to EXACTLY one municipalities row, instead of the old
+-- name join's failure mode of silently dropping/misjoining a row.
+--
 -- Apply: python3 scripts/apply_sql.py scripts/sql/0052_atlas_roma_share.sql
 
 CREATE TABLE IF NOT EXISTS skolske_obvody.atlas_roma_share (
@@ -77,6 +87,44 @@ CREATE TABLE IF NOT EXISTS skolske_obvody.atlas_roma_share_config (
 INSERT INTO skolske_obvody.atlas_roma_share_config (id, highlight_threshold_pct)
 VALUES (1, 20)
 ON CONFLICT (id) DO NOTHING;
+
+-- PRE-INSERT VALIDATION (review fix): abort the whole migration loudly if
+-- any obec_kod fails to resolve to EXACTLY one skolske_obvody.municipalities
+-- row (missing code, or an unexpected duplicate) instead of the join
+-- silently dropping/misjoining that row. Same pattern as
+-- 0041_demo_s2_address_overlap.sql's pre-insert check.
+DO $$
+DECLARE
+    v_bad text;
+BEGIN
+    SELECT string_agg(format('%s (obec_kod=%s, matched=%s)', v.obec_name, v.obec_kod, coalesce(m.c, 0)), '; ')
+      INTO v_bad
+    FROM (VALUES
+        ('Abranovce', 524158), ('Bzenov', 524263), ('Chmeľov', 524506),
+        ('Chminianske Jakubovany', 524531), ('Chmiňany', 524549), ('Drienov', 524352),
+        ('Drienovská Nová Ves', 524361), ('Fričovce', 524409), ('Hermanovce', 524468),
+        ('Kapušany', 524620), ('Kendice', 524638), ('Kojatice', 524654),
+        ('Lemešany', 524743), ('Lesíček', 524751), ('Malý Slivník', 524832),
+        ('Medzany', 556823), ('Mirkovce', 524883), ('Petrovany', 525014),
+        ('Prešov', 524140), ('Rokycany', 525111), ('Ruská Nová Ves', 525138),
+        ('Svinia', 525171), ('Terňa', 525294), ('Tuhrina', 525332),
+        ('Varhaňovce', 525383), ('Veľký Šariš', 525405), ('Víťaz', 525413),
+        ('Červenica', 524301), ('Šarišská Poruba', 525189), ('Šarišská Trstená', 525197),
+        ('Šindliar', 525251), ('Žehňa', 525499)
+    ) AS v(obec_name, obec_kod)
+    LEFT JOIN LATERAL (
+        SELECT count(*) AS c
+        FROM skolske_obvody.municipalities mu
+        WHERE mu.code = v.obec_kod::text
+    ) m ON true
+    WHERE coalesce(m.c, 0) <> 1;
+
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION
+            '0052 Atlas Roma-share import aborted: expected exactly ONE municipalities row per obec_kod; mismatch for: %',
+            v_bad;
+    END IF;
+END $$;
 
 TRUNCATE skolske_obvody.atlas_roma_share;
 
@@ -120,13 +168,16 @@ FROM (VALUES
     ('Šindliar', 525251, 547, '21%-30%', 21),
     ('Žehňa', 525499, 1221, '61%-70%', 61)
 ) AS v(obec_name, obec_kod, population, roma_share_band, roma_share_band_low)
-JOIN skolske_obvody.municipalities m ON m.name = v.obec_name;
+JOIN skolske_obvody.municipalities m ON m.code = v.obec_kod::text;
 
 -- Public view: only municipalities above the CONFIGURED threshold, real data
 -- throughout (no is_demo column — this table never carries demo rows).
 -- assigned_district_id/name resolve through the VZN shared-catchment view
 -- only (see comment above) — NULL is a true "not assigned in this dataset",
--- not a query failure.
+-- not a query failure. The okres filter is redundant against today's
+-- ingest (every row is hardcoded 'Prešov' above) but explicit here (review
+-- fix) so this view never silently starts showing other districts if
+-- atlas_roma_share is ever extended beyond Okres Prešov.
 DROP VIEW IF EXISTS public.so_atlas_roma_municipalities;
 CREATE VIEW public.so_atlas_roma_municipalities AS
 SELECT
@@ -149,6 +200,7 @@ FROM skolske_obvody.atlas_roma_share a
 JOIN skolske_obvody.municipalities m ON m.id = a.municipality_id
 CROSS JOIN skolske_obvody.atlas_roma_share_config cfg
 LEFT JOIN public.so_shared_municipality_areas shared ON shared.municipality_id = a.municipality_id
-WHERE a.roma_share_band_low > cfg.highlight_threshold_pct;
+WHERE a.roma_share_band_low > cfg.highlight_threshold_pct
+  AND a.okres = 'Prešov';
 
 GRANT SELECT ON public.so_atlas_roma_municipalities TO anon, authenticated, service_role;
