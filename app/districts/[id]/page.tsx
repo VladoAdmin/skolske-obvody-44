@@ -13,6 +13,7 @@ import type {
   SoDistrictAddressStats,
   SoDistrictStreetLine,
   SoFindingsPanelItem,
+  SoSharedMunicipalityArea,
 } from '@/lib/supabase/types'
 import { CONDITION_LABELS_SK } from '@/lib/compliance/labels'
 import { getColorClass, getColorSymbol, getColorLabel } from '@/lib/compliance/colors'
@@ -39,6 +40,7 @@ export default async function DistrictPage({ params }: Props) {
     { data: rawFindings },
     { data: rawAddressStats },
     { data: rawDistrictFindings },
+    { data: rawSharedMunicipalityAreas },
   ] = await Promise.all([
     sb.from('so_district_scorecard').select('*').eq('district_id', id),
     sb.from('so_district_map_features').select('*'),
@@ -64,6 +66,10 @@ export default async function DistrictPage({ params }: Props) {
         'finding_id,district_id,condition_code,condition_label_sk,severity,severity_rank,status,evidence_public_text,provenance_source,is_demo'
       )
       .eq('district_id', id),
+    // VLA-32: obce spoločného obvodu assigned to THIS district (VZN grades
+    // 5-9, or for some municipalities all of 1-9) — listed here since the
+    // map merged them into the district's own layer (no separate toggle).
+    sb.from('so_shared_municipality_areas').select('municipality_id,municipality_name,grade_range,building_count').eq('district_id', id),
   ])
 
   if (scorecardError) throw scorecardError
@@ -78,6 +84,7 @@ export default async function DistrictPage({ params }: Props) {
   const streetLines = rawStreetLines
   const addressStats = ((rawAddressStats ?? []) as SoDistrictAddressStats[])[0] ?? null
   const districtFindings = (rawDistrictFindings ?? []) as SoFindingsPanelItem[]
+  const sharedMunicipalityAreas = (rawSharedMunicipalityAreas ?? []) as SoSharedMunicipalityArea[]
 
   // Per-district scorecard summaries + open-findings counts for school-pin popups.
   // Step 1: findings are wiped, so open-findings is empty.
@@ -177,6 +184,33 @@ export default async function DistrictPage({ params }: Props) {
           )}
         </div>
       </div>
+
+      {/* VLA-32: obce spoločného obvodu assigned to this district (VZN
+          grades 5-9, or for some municipalities all of 1-9) — descriptive/
+          geographic only, never a § 44 verdict. The map shows these merged
+          into the district's own layer; this list is the text equivalent. */}
+      {sharedMunicipalityAreas.length > 0 && (
+        <section aria-labelledby="shared-municipalities-heading">
+          <h2 id="shared-municipalities-heading" className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+            Obce spoločného obvodu ({sharedMunicipalityAreas.length})
+          </h2>
+          <ul className="flex flex-wrap gap-2 text-xs">
+            {sharedMunicipalityAreas.map((area) => (
+              <li
+                key={area.municipality_id}
+                className="rounded-md border border-border bg-muted/30 px-2.5 py-1.5"
+              >
+                <span className="font-medium text-foreground">{area.municipality_name}</span>
+                <span className="text-muted-foreground">
+                  {' — ročníky: '}
+                  {area.grade_range ?? 'neuvedené vo VZN'}
+                  {area.building_count ? ` · aproximácia z ${area.building_count} budov OSM` : ''}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {Boolean(streetLinesError) && (
         <Alert variant="destructive">
