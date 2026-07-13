@@ -7,6 +7,7 @@ import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
 import { relativeTime } from '@/lib/format/dates'
 import { EVIDENCE_TRAIL_LABELS_SK, getConditionLabel } from '@/lib/compliance/labels'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useDemoMode } from '@/lib/demo-mode/context'
 
 interface FindingsTableProps {
   findings: FindingPublic[]
@@ -83,6 +84,14 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export function FindingsTable({ findings, totalCount, page, pageSize, filterQuery }: FindingsTableProps) {
+  const { demoMode } = useDemoMode()
+  // VLA-34: real-only mode drops every is_demo=true finding client-side, off
+  // the already-fetched page — no refetch. totalCount/pagination still come
+  // from the server's unfiltered count (a second server round-trip just to
+  // recompute pagination for the toggle flip is what the ticket says to
+  // avoid), so the summary line below says so explicitly in real-only mode
+  // instead of implying start–end/totalCount still matches what's on screen.
+  const visibleFindings = demoMode ? findings : findings.filter((f) => !f.is_demo)
   const [openId, setOpenId] = useState<string | null>(null)
 
   // Deep link from the map legend: /findings#f-<finding_id> auto-expands the
@@ -105,7 +114,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
     return `/findings?${params.toString()}`
   }
 
-  if (findings.length === 0) {
+  if (visibleFindings.length === 0) {
     return (
       <div className="rounded-lg border border-border p-8 text-center text-sm text-muted-foreground">
         Žiadne nálezy pre tieto filtre.
@@ -120,13 +129,15 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Zobrazujem {start}–{end} z {totalCount} nálezov
+        {demoMode
+          ? `Zobrazujem ${start}–${end} z ${totalCount} nálezov`
+          : `Zobrazujem ${visibleFindings.length} reálnych nálezov na tejto strane (len reálne dáta — DEMO záznamy skryté)`}
       </p>
 
       {/* Card stack — only on xs (< sm, < 640px). Tapping a card expands the
           full reason inline; the district link stays a separate control. */}
       <div className="block sm:hidden space-y-2">
-        {findings.map((finding) => {
+        {visibleFindings.map((finding) => {
           const open = openId === finding.finding_id
           return (
             <div
@@ -202,7 +213,7 @@ export function FindingsTable({ findings, totalCount, page, pageSize, filterQuer
             </TableRow>
           </TableHeader>
           <TableBody>
-            {findings.map((finding) => {
+            {visibleFindings.map((finding) => {
               const open = openId === finding.finding_id
               const hasReason = Boolean(
                 finding.evidence_public_text || finding.evidence_trail ||

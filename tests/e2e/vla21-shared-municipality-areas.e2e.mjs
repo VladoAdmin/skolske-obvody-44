@@ -120,16 +120,15 @@ async function main() {
     `Gregorovce's polygon hue (${gregorovceHue}) matches its owning district's street hue (${bajkalskaHue})`
   )
 
-  // ── [UAT-5] legend + layer-control checkbox name this layer ─────────────
+  // ── [UAT-5] legend names this layer; VLA-32: NO separate layer-control ──
+  // entry — areas merged into each owning district's own toggle/group.
   const legendText = await page.locator('text=Legenda:').locator('xpath=..').innerText()
   assert(legendText.includes('Obce spoločného obvodu'), 'static legend names the shared-municipality-areas layer')
+  assert(legendText.includes('aproximácia'), 'static legend line labels this layer as an OSM-building approximation, not the cadastral boundary')
 
   await page.locator('.leaflet-control-layers').hover()
   const checkboxLabel = page.locator('.leaflet-control-layers label', { hasText: 'Obce spoločného obvodu' })
-  assert((await checkboxLabel.count()) === 1, 'layer-control checkbox for the shared-municipality-areas layer present')
-  const checkboxText = await checkboxLabel.innerText()
-  assert(checkboxText.includes(String(EXPECTED_AREA_COUNT)), `layer-control checkbox shows the area count, got: ${checkboxText}`)
-  assert(legendText.includes('aproximácia'), 'static legend line labels this layer as an OSM-building approximation, not the cadastral boundary')
+  assert((await checkboxLabel.count()) === 0, 'VLA-32: no standalone layer-control checkbox for shared-municipality areas — merged into each district\'s own toggle')
 
   // ── standing gate: zero console errors ───────────────────────────────────
   const totalErrors = tracker.report()

@@ -473,6 +473,19 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               linesByDistrict.set(sl.district_id, arr)
             }
 
+            // VLA-32: group shared-municipality catchment areas by their
+            // owning district so each one renders INSIDE that district's own
+            // featureGroup (districtLayersRef) instead of a separate,
+            // independently-toggleable layer — same on/off toggle, same
+            // colour as the district's streets.
+            const areasByDistrict = new Map<string, SoSharedMunicipalityArea[]>()
+            for (const area of sharedMunicipalityAreas) {
+              if (!area.geom_geojson) continue
+              const arr = areasByDistrict.get(area.district_id) ?? []
+              arr.push(area)
+              areasByDistrict.set(area.district_id, arr)
+            }
+
             // Per-district § 44 evidence legend — built ONLY from engine findings
             // rows (condition_label_sk, severity, evidence_public_text, is_demo).
             // No client-side verdict/colour logic: severity class + label come
@@ -568,7 +581,8 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               const hue = getDistrictHue(index)
               const lineColor = `hsl(${hue}, 65%, 42%)`
               const lines = linesByDistrict.get(feature.id) ?? []
-              if (lines.length === 0) return
+              const areas = areasByDistrict.get(feature.id) ?? []
+              if (lines.length === 0 && areas.length === 0) return
 
               const districtGroup = L.featureGroup()
 
@@ -609,6 +623,72 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
                 layer.addTo(districtGroup)
                 renderedSegments++
                 renderedStreetColors[`${feature.id}::${sl.street}`] = lineColor
+              })
+
+              // VLA-32: shared-municipality catchment areas (VZN grades 5-9,
+              // or for some municipalities all of 1-9, pooled into this
+              // district's catchment beyond its seat municipality, e.g. ZŠ
+              // Bajkalská + Gregorovce/Hubošovce/Uzovce) render INSIDE this
+              // same districtGroup — filled in the district's own hue, one
+              // on/off toggle with the streets, no separate layer-control
+              // entry. geom_geojson is the OSM-building-derived inhabited
+              // area (VLA-31); building_count labels this as an
+              // approximation, never fabricated precision. grade_range comes
+              // straight from the VZN-parsed data
+              // (districts.metadata->'shared_municipality_grades'), never
+              // invented client-side; NULL renders as "neuvedené".
+              const fillColor = `hsl(${hue}, 65%, 55%)`
+              const strokeColor = `hsl(${hue}, 70%, 32%)`
+              areas.forEach((area) => {
+                // DB-sourced labels go through Leaflet's innerHTML-based
+                // popup/tooltip rendering — escape them (same XSS precedent
+                // as the longest-routes popup, PR #4 review).
+                const districtName = escapeHtml(area.district_name)
+                const muniName = escapeHtml(area.municipality_name)
+                const gradeEscaped = area.grade_range ? escapeHtml(area.grade_range) : null
+                const gradeHtml = gradeEscaped
+                  ? `<p style="margin:4px 0">Ročníky: <strong>${gradeEscaped}</strong></p>`
+                  : `<p style="margin:4px 0;color:#6b7280">Ročníky: neuvedené vo VZN</p>`
+                const provenanceHtml = area.building_count
+                  ? `<p style="margin:4px 0;color:#6b7280;font-size:11px">Obývaná oblasť — aproximácia z ${area.building_count} budov OSM</p>`
+                  : ''
+                const popupHtml =
+                  `<div style="font-size:12px;line-height:1.45;max-width:260px">` +
+                  `<strong>${muniName}</strong><br/>` +
+                  `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">Spoločný školský obvod</span>` +
+                  `<p style="margin:4px 0">Škola: <strong>${districtName}</strong></p>` +
+                  gradeHtml +
+                  provenanceHtml +
+                  `</div>`
+                const areaLayer = L.geoJSON(area.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
+                  style: {
+                    color: strokeColor,
+                    weight: 1.5,
+                    fillColor,
+                    fillOpacity: 0.35,
+                    className: 'so-shared-municipality-area',
+                  },
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  pane: 'sharedMunicipalities' as any,
+                })
+                areaLayer.bindTooltip(
+                  `${muniName} — ${districtName}${gradeEscaped ? ` (${gradeEscaped})` : ''}`,
+                  { sticky: true }
+                )
+                areaLayer.bindPopup(popupHtml, { maxWidth: 280, autoPan: true, autoPanPadding: [20, 20] })
+                areaLayer.addTo(districtGroup)
+                // districtGroup.bindPopup() below wires its OWN unconditional
+                // click→openPopup listener (Leaflet Layer.bindPopup) — that
+                // listener fires for ANY click that bubbles up to
+                // districtGroup, including one that already opened this
+                // area's own popup a moment earlier in the same propagation
+                // chain, clobbering it. Sever the event-propagation link
+                // (NOT the group membership — add/remove/toggle/setStyle/
+                // getBounds all go through the separate _layers registry
+                // and are unaffected) so an area click stays local to its
+                // own popup/tooltip and never reaches districtGroup's
+                // click listeners at all.
+                areaLayer.removeEventParent(districtGroup)
               })
 
               // Selecting/tapping a district's streets highlights them + opens the
@@ -1023,72 +1103,11 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             layer.addTo(longestRoutesGroup)
           })
           containerRef.current?.setAttribute('data-longest-routes', String(longestRoutes.length))
-
-          // (D5) VLA-21 — shared-municipality catchment areas (VZN grades
-          // 5-9, or for some municipalities all of 1-9, pooled into a
-          // district's catchment beyond its seat municipality, e.g. ZŠ
-          // Bajkalská + Gregorovce/Hubošovce/Uzovce). Rendered as the real
-          // municipality polygon (PSK WFS), filled in the OWNING district's
-          // colour so it visually reads as "part of this district's
-          // catchment" — same hue as that district's streets, drawn as a
-          // genuinely separate layer/source (own pane), NOT baked into the
-          // district street layer, since a municipality boundary and a
-          // district street catchment are administratively different
-          // objects. Descriptive/geographic only — never feeds the § 44
-          // semaphore. grade_range comes straight from the VZN-parsed data
-          // (districts.metadata->'shared_municipality_grades'), never
-          // invented client-side; a NULL is shown as "neuvedené", never
-          // silently omitted.
-          //
-          // VLA-31: geom_geojson is now the OSM-building-derived inhabited
-          // area, not the full cadastral polygon — building_count labels
-          // this explicitly as an approximation so the shape's precision
-          // isn't overclaimed.
-          const sharedMuniGroup = L.featureGroup()
-          sharedMunicipalityAreas.forEach((area) => {
-            if (!area.geom_geojson) return
-            const distIdx = districtIndexMap.get(area.district_id) ?? 0
-            const hue = getDistrictHue(distIdx)
-            const fillColor = `hsl(${hue}, 65%, 55%)`
-            const strokeColor = `hsl(${hue}, 70%, 32%)`
-            // DB-sourced labels go through Leaflet's innerHTML-based popup/
-            // tooltip rendering — escape them (same XSS precedent as the
-            // longest-routes popup, PR #4 review).
-            const districtName = escapeHtml(area.district_name)
-            const muniName = escapeHtml(area.municipality_name)
-            const gradeEscaped = area.grade_range ? escapeHtml(area.grade_range) : null
-            const gradeHtml = gradeEscaped
-              ? `<p style="margin:4px 0">Ročníky: <strong>${gradeEscaped}</strong></p>`
-              : `<p style="margin:4px 0;color:#6b7280">Ročníky: neuvedené vo VZN</p>`
-            const provenanceHtml = area.building_count
-              ? `<p style="margin:4px 0;color:#6b7280;font-size:11px">Obývaná oblasť — aproximácia z ${area.building_count} budov OSM</p>`
-              : ''
-            const popupHtml =
-              `<div style="font-size:12px;line-height:1.45;max-width:260px">` +
-              `<strong>${muniName}</strong><br/>` +
-              `<span style="display:inline-block;margin:3px 0;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe">Spoločný školský obvod</span>` +
-              `<p style="margin:4px 0">Škola: <strong>${districtName}</strong></p>` +
-              gradeHtml +
-              provenanceHtml +
-              `</div>`
-            const layer = L.geoJSON(area.geom_geojson as unknown as GeoJSON.GeoJsonObject, {
-              style: {
-                color: strokeColor,
-                weight: 1.5,
-                fillColor,
-                fillOpacity: 0.35,
-                className: 'so-shared-municipality-area',
-              },
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              pane: 'sharedMunicipalities' as any,
-            })
-            layer.bindTooltip(
-              `${muniName} — ${districtName}${gradeEscaped ? ` (${gradeEscaped})` : ''}`,
-              { sticky: true }
-            )
-            layer.bindPopup(popupHtml, { maxWidth: 280, autoPan: true, autoPanPadding: [20, 20] })
-            layer.addTo(sharedMuniGroup)
-          })
+          // VLA-32: shared-municipality areas are no longer a standalone
+          // group/layer — each one now lives inside its owning district's
+          // own featureGroup (built in the features.forEach loop above), so
+          // it shares that district's on/off toggle instead of a separate
+          // layer-control entry. Count kept for the E2E gate (VLA-21/31).
           containerRef.current?.setAttribute('data-shared-municipality-areas', String(sharedMunicipalityAreas.length))
 
           // (D6) VLA-33 — REAL Atlas rómskych komunít 2019 municipality
@@ -1163,9 +1182,6 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           if (longestRoutes.length > 0) {
             overlays[`5 najdlhších trás (${longestRoutes.length}, Google Maps)`] = longestRoutesGroup
           }
-          if (sharedMunicipalityAreas.length > 0) {
-            overlays[`Obce spoločného obvodu (${sharedMunicipalityAreas.length})`] = sharedMuniGroup
-          }
           if (atlasRomaMunicipalities.length > 0) {
             overlays[`Segregovaná menšina — Atlas ÚSVRK 2019 (${atlasRomaMunicipalities.length}, reálne dáta)`] = atlasRomaGroup
           }
@@ -1186,19 +1202,26 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           schoolsGroup.addTo(map)
           coverageGapsGroup.addTo(map)
           barriersGroup.addTo(map)
-          sharedMuniGroup.addTo(map)
 
-          const fitToDistricts = () => {
+          // animate defaults to true for the user-triggered Home-reset button
+          // below. The initial fit on a fresh mount passes animate:false — a
+          // brand-new map has no prior view to ease from, AND the VLA-34 demo
+          // toggle remounts this whole component on every flip (key change),
+          // so an animated fitBounds here left a pending CSS transitionend
+          // callback that fired after a rapid second toggle had already torn
+          // the map down (map.remove() clears _mapPane, then the stale
+          // _onZoomTransitionEnd handler threw reading _leaflet_pos on it).
+          const fitToDistricts = (animate = true) => {
             try {
               const bounds = districtsGroup.getBounds()
               if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [20, 20] })
+                map.fitBounds(bounds, { padding: [20, 20], animate })
                 return
               }
             } catch { /* fall through */ }
-            map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
+            map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM, { animate })
           }
-          fitToDistricts()
+          fitToDistricts(false)
 
           // Home / reset-view: default extent + default layers, clear selection.
           // VLA-33: atlasRomaGroup joins the OFF-by-default analytical overlays
@@ -1214,17 +1237,15 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
             if (!map.hasLayer(schoolsGroup)) schoolsGroup.addTo(map)
             if (!map.hasLayer(coverageGapsGroup)) coverageGapsGroup.addTo(map)
             if (!map.hasLayer(barriersGroup)) barriersGroup.addTo(map)
-            if (!map.hasLayer(sharedMuniGroup)) sharedMuniGroup.addTo(map)
             fitToDistricts()
           }
 
-          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup, barriersGroup, longestRoutesGroup, sharedMuniGroup, atlasRomaGroup]
+          layersRef.current.psk = [districtsGroup, schoolsGroup, coverageGapsGroup, mrkGroup, housePointsGroup, barriersGroup, longestRoutesGroup, atlasRomaGroup]
         } else {
-          const [districtsGroup, schoolsGroup, coverageGapsGroup, , , barriersGroup, , sharedMuniGroup] = layersRef.current.psk
+          const [districtsGroup, schoolsGroup, coverageGapsGroup, , , barriersGroup] = layersRef.current.psk
           districtsGroup.addTo(map)
           schoolsGroup.addTo(map)
           if (coverageGapsGroup) coverageGapsGroup.addTo(map)
-          if (sharedMuniGroup) sharedMuniGroup.addTo(map)
           if (barriersGroup) barriersGroup.addTo(map)
           if (features.length > 0) {
             try {
