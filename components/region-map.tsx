@@ -2,7 +2,7 @@
 
 // SSR-safe wrapper: dynamically imports the Leaflet client component
 import dynamic from 'next/dynamic'
-import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoSharedMunicipalityArea } from '@/lib/supabase/types'
+import type { DistrictMapFeature, SoSchoolMarker, SoMrkOverlay, SoMrkLocality, SoPskMunicipality, SoHousePoint, SoHouseDot, SoDistrictStreetLine, SoFindingsPanelItem, SoStreetCoverageGap, SoBarrier, SoDistrictLongestRoute, SoSharedMunicipalityArea, SoAtlasRomaMunicipality } from '@/lib/supabase/types'
 import type { DistrictPopupSummary } from '@/lib/compliance/school-popup'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDemoMode } from '@/lib/demo-mode/context'
@@ -24,6 +24,8 @@ interface RegionMapProps {
   longestRoutes?: SoDistrictLongestRoute[]
   // VLA-21: shared-municipality catchment areas (VZN grades 5-9 / 1-9)
   sharedMunicipalityAreas?: SoSharedMunicipalityArea[]
+  // VLA-33: REAL Atlas rómskych komunít 2019 data, Okres Prešov, above threshold
+  atlasRomaMunicipalities?: SoAtlasRomaMunicipality[]
   findings?: SoFindingsPanelItem[]
   districtSummaries?: Record<string, DistrictPopupSummary>
   initialMode?: 'sk' | 'psk'
@@ -37,7 +39,7 @@ const RegionMapDynamic = dynamic(
   }
 )
 
-export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], coverageGaps = [], barriers = [], longestRoutes = [], sharedMunicipalityAreas = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
+export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], municipalities = [], streetLines = [], housePoints = [], houseDots = [], coverageGaps = [], barriers = [], longestRoutes = [], sharedMunicipalityAreas = [], atlasRomaMunicipalities = [], findings = [], districtSummaries = {}, initialMode = 'sk' }: RegionMapProps) {
   const { demoMode } = useDemoMode()
 
   // VLA-34: real-only mode drops every is_demo=true row client-side, off the
@@ -48,6 +50,8 @@ export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], 
   // `key` on toggle is the only way to make the map actually re-derive its
   // layers from the filtered data without invasively rewriting that effect's
   // caching.
+  // atlasRomaMunicipalities is REAL (non-demo) data and is not gated by
+  // demoMode — it has no is_demo column (VLA-33).
   const visibleMrkLocalities = demoMode ? mrkLocalities : mrkLocalities.filter((l) => !l.is_demo)
   const visibleBarriers = demoMode ? barriers : barriers.filter((b) => !b.is_demo)
   const visibleHousePoints = demoMode ? housePoints : housePoints.filter((p) => !p.is_demo)
@@ -69,6 +73,7 @@ export function RegionMap({ features, schools, mrkOverlays, mrkLocalities = [], 
       barriers={visibleBarriers}
       longestRoutes={longestRoutes}
       sharedMunicipalityAreas={sharedMunicipalityAreas}
+      atlasRomaMunicipalities={atlasRomaMunicipalities}
       findings={visibleFindings}
       districtSummaries={districtSummaries}
       initialMode={initialMode}
