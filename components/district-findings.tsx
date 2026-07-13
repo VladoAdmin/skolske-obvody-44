@@ -1,6 +1,9 @@
+'use client'
+
 import type { SoFindingsPanelItem } from '@/lib/supabase/types'
 import { getSeverityClass, getSeverityLabel } from '@/lib/format/severity'
 import { ProvenanceLink } from './provenance-link'
+import { useDemoMode } from '@/lib/demo-mode/context'
 
 interface DistrictFindingsProps {
   findings: SoFindingsPanelItem[]
@@ -11,9 +14,12 @@ interface DistrictFindingsProps {
 // client-side severity/colour logic, same helpers the map legend (Checkpoint 2)
 // uses. Demo scenarios stay visibly tagged so they never read as live findings.
 export function DistrictFindings({ findings }: DistrictFindingsProps) {
-  if (findings.length === 0) return null
+  const { demoMode } = useDemoMode()
+  // VLA-34: real-only mode drops every is_demo=true finding client-side.
+  const visibleFindings = demoMode ? findings : findings.filter((f) => !f.is_demo)
+  if (visibleFindings.length === 0) return null
 
-  const sorted = [...findings].sort((a, b) => b.severity_rank - a.severity_rank)
+  const sorted = [...visibleFindings].sort((a, b) => b.severity_rank - a.severity_rank)
 
   return (
     <section aria-labelledby="findings-heading">

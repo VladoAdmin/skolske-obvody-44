@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { SoFindingsPanelItem, DistrictMapFeature } from '@/lib/supabase/types'
 import { EVIDENCE_TRAIL_LABELS_SK } from '@/lib/compliance/labels'
+import { useDemoMode } from '@/lib/demo-mode/context'
 import {
   EVENT_FLYTO,
   EVENT_SELECT_DISTRICT,
@@ -34,6 +35,10 @@ const SEVERITY_BADGE: Record<SeverityFilter, string> = {
 const ALL_SEVERITIES: SeverityFilter[] = ['critical', 'high', 'medium']
 
 export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
+  const { demoMode } = useDemoMode()
+  // VLA-34: real-only mode drops every is_demo=true finding client-side —
+  // already-fetched data, no refetch.
+  const visibleFindings = demoMode ? findings : findings.filter((f) => !f.is_demo)
   const [activeFilters, setActiveFilters] = useState<Set<SeverityFilter>>(
     new Set(ALL_SEVERITIES)
   )
@@ -112,7 +117,7 @@ export function FindingsPanel({ findings, features = [] }: FindingsPanelProps) {
     }
   }
 
-  const filtered = findings
+  const filtered = visibleFindings
     .filter((f) => activeFilters.has(f.severity as SeverityFilter))
     // Sprint M-3: demo findings sort to the top; within each group keep
     // severity_rank ascending (critical first). Stable for findings without

@@ -1140,17 +1140,25 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
           coverageGapsGroup.addTo(map)
           barriersGroup.addTo(map)
 
-          const fitToDistricts = () => {
+          // animate defaults to true for the user-triggered Home-reset button
+          // below. The initial fit on a fresh mount passes animate:false — a
+          // brand-new map has no prior view to ease from, AND the VLA-34 demo
+          // toggle remounts this whole component on every flip (key change),
+          // so an animated fitBounds here left a pending CSS transitionend
+          // callback that fired after a rapid second toggle had already torn
+          // the map down (map.remove() clears _mapPane, then the stale
+          // _onZoomTransitionEnd handler threw reading _leaflet_pos on it).
+          const fitToDistricts = (animate = true) => {
             try {
               const bounds = districtsGroup.getBounds()
               if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [20, 20] })
+                map.fitBounds(bounds, { padding: [20, 20], animate })
                 return
               }
             } catch { /* fall through */ }
-            map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM)
+            map.setView(PSK_CENTER, PSK_DEFAULT_ZOOM, { animate })
           }
-          fitToDistricts()
+          fitToDistricts(false)
 
           // Home / reset-view: default extent + default layers, clear selection.
           const allOverlayGroups = [mrkGroup, housePointsGroup, longestRoutesGroup]

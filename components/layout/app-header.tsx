@@ -12,6 +12,7 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+import { DemoModeToggle } from "@/components/demo-mode-toggle";
 
 const NAV_LINKS = [
   { href: "/", label: "Prehľad" },
@@ -102,6 +103,7 @@ export function AppHeader() {
         </div>
 
         <div className="flex items-center gap-4">
+          <DemoModeToggle />
           <span className="text-xs text-muted-foreground hidden lg:block">
             Zákon č. 321/2025 Z. z., § 44
           </span>
