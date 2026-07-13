@@ -186,10 +186,16 @@ async function fetchAtlasRomaMunicipalities(): Promise<SoAtlasRomaMunicipality[]
     const sb = createPublicClient()
     const { data, error } = await sb
       .from('so_atlas_roma_municipalities')
-      .select('*')
+      .select('municipality_name,roma_share_band,highlight_threshold_pct,population,source_name,downloaded_at,geom_geojson,assigned_district_name')
+      // Defensive: the view already filters on okres = 'Prešov' (VLA-33
+      // review fix); this repeats it so the client-facing query never
+      // silently starts showing other districts if the view is ever
+      // relaxed.
+      .eq('okres', 'Prešov')
     if (error) throw error
     return (data ?? []) as SoAtlasRomaMunicipality[]
-  } catch {
+  } catch (error) {
+    console.error('[map] Atlas Roma-share fetch failed:', error)
     return []
   }
 }

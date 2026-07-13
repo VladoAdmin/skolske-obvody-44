@@ -1133,7 +1133,7 @@ export function RegionMapClient({ features, schools, mrkLocalities = [], municip
               pane: 'atlasRoma' as any,
             })
             layer.bindTooltip(
-              `${muniName} — ${muni.roma_share_band} (Atlas ÚSVRK 2019)`,
+              `${muniName} — ${escapeHtml(muni.roma_share_band)} (Atlas ÚSVRK 2019)`,
               { sticky: true }
             )
             layer.bindPopup(popupHtml, { maxWidth: 290, autoPan: true, autoPanPadding: [20, 20] })
